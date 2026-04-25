@@ -1,0 +1,67 @@
+# ────────────────────────────────────────────────────────
+# bltcy.ai 第三方 API 配置
+# 把你的 key 填进 BLTCY_API_KEY 环境变量，或者直接替换下面的占位符
+# ────────────────────────────────────────────────────────
+
+default_provider: bltcy-anthropic
+
+providers:
+
+  # ── 方案 A：Anthropic 格式（推荐，支持 Claude 系列模型）──────────────
+  bltcy-anthropic:
+    name: anthropic
+    model: claude-sonnet-4-6        # 可换成 claude-opus-4-6 等
+    api_key: "${BLTCY_API_KEY}"
+    base_url: "https://api.bltcy.ai"   # Anthropic SDK 自动补 /v1/messages
+    max_tokens: 8192
+    temperature: 0.0
+    extra:
+      thinking:
+        enabled: true
+
+  # ── 方案 B：OpenAI 兼容格式（支持 GPT 系列模型）────────────────────
+  bltcy-openai:
+    name: openai-compatible
+    model: gpt-4o                   # 可换成 gpt-4o-mini 等
+    api_key: "${BLTCY_API_KEY}"
+    base_url: "https://api.bltcy.ai/v1"
+    max_tokens: 4096
+    temperature: 0.0
+
+  # ── 摘要用的便宜模型（上下文压缩时使用）──────────────────────────────
+  bltcy-mini:
+    name: openai-compatible
+    model: gpt-4o-mini
+    api_key: "${BLTCY_API_KEY}"
+    base_url: "https://api.bltcy.ai/v1"
+    max_tokens: 2048
+    temperature: 0.0
+
+engine:
+  max_rounds: 50
+
+compression:
+  token_window: 128000
+  auto_trigger_ratio: 0.65
+  micro_keep_recent: 6
+  summary_provider: bltcy-mini      # 用便宜模型做摘要，省 token
+
+storage:
+  backend: sqlite
+  path: ./harness.db
+
+# ── 工具配置 ─────────────────────────────────────────────────
+# 在这里开关工具、调整参数，不需要改代码
+tools:
+
+  # 全局启用的工具（注释掉某行 = 该工具对所有 skill 不可用）
+  enabled:
+    - read_file      # 读取本地文件内容
+    - search         # 在文件中正则搜索
+    - shell          # 执行系统命令（高风险，可注释掉禁用）
+
+  # 各工具的输出字符上限（超出部分自动存入外部引用）
+  limits:
+    read_file: 20000
+    search:    10000
+    shell:     15000

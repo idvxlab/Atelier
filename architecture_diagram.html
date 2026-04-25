@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>MyHarnessPy 整体架构图</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #eef0f4;
+      padding: 36px 32px 48px;
+    }
+
+    .page {
+      width: 980px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 800;
+      color: #1a1a2e;
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 28px;
+    }
+
+    /* ── layout ── */
+    .diagram {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .side {
+      width: 182px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ── generic layer card ── */
+    .layer {
+      border-radius: 12px;
+      padding: 12px 16px;
+    }
+
+    .layer-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: rgba(0, 0, 0, 0.38);
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+
+    /* ── chips ── */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .chip {
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: 7px;
+      padding: 5px 11px;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #2c2c4e;
+      border: 1px solid rgba(0, 0, 0, 0.07);
+      line-height: 1.35;
+    }
+
+    .chip small {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 400;
+      color: rgba(0, 0, 0, 0.38);
+      margin-top: 1px;
+    }
+
+    /* ── arrow ── */
+    .arrow {
+      display: flex;
+      justify-content: center;
+      color: #b0b4be;
+      font-size: 18px;
+      margin: -1px 0;
+    }
+
+    /* ── core highlight ── */
+    .core-wrapper {
+      border-radius: 14px;
+      padding: 3px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+    }
+
+    .core-inner {
+      border-radius: 11px;
+      background: linear-gradient(135deg, #eef2ff 0%, #f5eeff 100%);
+      padding: 12px 16px;
+    }
+
+    .core-loop-tag {
+      display: inline-block;
+      background: rgba(109, 40, 217, 0.09);
+      border: 1px solid rgba(109, 40, 217, 0.22);
+      color: #4c1d95;
+      border-radius: 7px;
+      padding: 4px 12px;
+      font-size: 11.5px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .core-flow {
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      border: 1px solid rgba(109, 40, 217, 0.1);
+    }
+
+    .core-flow-text {
+      font-size: 10.5px;
+      color: #4c1d95;
+      line-height: 1.7;
+      font-family: "Consolas", monospace;
+    }
+
+    .core-sub-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .core-sub {
+      background: rgba(255, 255, 255, 0.75);
+      border-radius: 8px;
+      padding: 7px 11px;
+      border: 1px solid rgba(100, 60, 200, 0.11);
+    }
+
+    .core-sub-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #4c1d95;
+    }
+
+    .core-sub-desc {
+      font-size: 9.5px;
+      color: #555;
+      margin-top: 2px;
+      line-height: 1.45;
+    }
+
+    /* ── layer color themes ── */
+    .l-entry {
+      background: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%);
+    }
+
+    .l-session {
+      background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);
+    }
+
+    .l-cap {
+      background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
+    }
+
+    .l-exec {
+      background: linear-gradient(135deg, #fce7f3 0%, #fdf4ff 100%);
+    }
+
+    .l-state {
+      background: linear-gradient(135deg, #fef3c7 0%, #fff7ed 100%);
+    }
+
+    .l-model {
+      background: linear-gradient(135deg, #f1f3f5 0%, #e8eaed 100%);
+    }
+
+    /* ── session layer internal grid ── */
+    .session-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      margin-top: 2px;
+    }
+
+    .session-sub {
+      background: rgba(255, 255, 255, 0.65);
+      border-radius: 7px;
+      padding: 6px 10px;
+      border: 1px solid rgba(59, 130, 246, 0.1);
+    }
+
+    .session-sub-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1e40af;
+    }
+
+    .session-sub-desc {
+      font-size: 9.5px;
+      color: #555;
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+
+    /* ── side cards ── */
+    .side-card {
+      border-radius: 11px;
+      padding: 11px 13px;
+    }
+
+    .side-card-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .side-row {
+      margin-bottom: 8px;
+    }
+
+    .side-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .side-row-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 2px;
+    }
+
+    .side-row-desc {
+      font-size: 10px;
+      color: #555;
+      line-height: 1.45;
+    }
+
+    /* security sidebar special style */
+    .sc-sec {
+      background: linear-gradient(160deg, #fff1f2, #fdf4ff);
+      border: 1px solid rgba(239, 68, 68, 0.15);
+    }
+
+    .sc-sec .side-card-title {
+      color: rgba(185, 28, 28, 0.6);
+    }
+
+    .sc-orange {
+      background: linear-gradient(135deg, #fff7ed, #fef9ec);
+      border: 1px solid rgba(251, 146, 60, 0.18);
+    }
+
+    .sc-orange .side-card-title {
+      color: rgba(146, 64, 14, 0.65);
+    }
+
+    .sc-blue {
+      background: linear-gradient(135deg, #e0f2fe, #dbeafe);
+      border: 1px solid rgba(59, 130, 246, 0.14);
+    }
+
+    .sc-blue .side-card-title {
+      color: rgba(29, 78, 216, 0.65);
+    }
+
+    /* security boundary label */
+    .sec-boundary-label {
+      text-align: center;
+      font-size: 9.5px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      color: rgba(185, 28, 28, 0.5);
+      text-transform: uppercase;
+      padding: 5px 0 3px;
+      border-bottom: 1px dashed rgba(239, 68, 68, 0.25);
+      margin-bottom: 8px;
+    }
+
+    /* security item row */
+    .sec-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(239, 68, 68, 0.07);
+    }
+
+    .sec-item:last-child {
+      border-bottom: none;
+    }
+
+    .sec-badge {
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(239, 68, 68, 0.1);
+      color: #b91c1c;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-top: 1px;
+      letter-spacing: 0.3px;
+    }
+
+    .sec-desc {
+      font-size: 10px;
+      color: #555;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+
+    <h1>MyHarness 整体架构图</h1>
+
+    <div class="diagram">
+
+      <!-- ══ MAIN COLUMN ══ -->
+      <div class="main">
+
+        <!-- 1. Entry Layer -->
+        <div class="layer l-entry">
+          <div class="layer-label">1 · 入口层 &nbsp;Entry Layer</div>
+          <div class="chips">
+            <div class="chip">CLI / TUI<small>cli.py · 交互式命令行</small></div>
+            <div class="chip">Web UI<small>static/index.html · SPA</small></div>
+            <div class="chip">REST Client<small>curl · 脚本 · API 调用</small></div>
+          </div>
+        </div>
+
+        <div class="arrow">↓</div>
+
+        <!-- 2. Session & Routing Layer -->
+        <div class="layer l-session">
+          <div class="layer-label">2 · 会话与路由层 &nbsp;Session &amp; Routing Layer</div>
+          <div class="session-grid">
+            <div class="session-sub">
+              <div class="session-sub-title">GW</div>
+              <div class="session-sub-desc">api/rest.py + api/ws.py<br>HTTP / WebSocket 协议转换<br>统一为内部会话格式</div>
+            </div>
+            <div class="session-sub">
+              <div class="session-sub-title">SessionRunner</div>
+              <div class="session-sub-desc">engine/engine.py<br>路由消息给 Agent<br>管理会话生命周期</div>
+            </div>
+            <div class="session-sub">
+              <div class="session-sub-title">SessionStore</div>
+              <div class="session-sub-desc">storage/session.py<br>会话持久化与恢复<br>SQLite / Memory 双后端</div>
+            </div>
+            <div class="session-sub">
+              <div class="session-sub-title">CommandGuards</div>
+              <div class="session-sub-desc">state_machine.py<br>/cancel · 状态校验<br>Persona 权限路由</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow">↓</div>
+
+        <!-- 3. Agent Runtime Core -->
+        <div class="core-wrapper">
+          <div class="core-inner">
+            <div class="layer-label" style="color:rgba(76,29,149,0.45)">3 · Agent Runtime Core</div>
+            <div class="core-loop-tag">AIAgent 主循环 &nbsp;·&nbsp; loop.py</div>
+            <div class="core-flow">
+              <div class="core-flow-text">
+                接收消息 → PROMPT 组装 → 调模型 → 执行工具<br>
+                → 回填结果 → 压缩上下文 → 持久化状态 → 返回输出
+              </div>
+            </div>
+            <div class="core-sub-grid">
+              <div class="core-sub">
+                <div class="core-sub-title">PROMPT</div>
+                <div class="core-sub-desc">skills.py<br>load_persona() + Skill 摘要追加<br>系统提示词组装</div>
+              </div>
+              <div class="core-sub">
+                <div class="core-sub-title">COMPRESS</div>
+                <div class="core-sub-desc">compression.py<br>Micro：清空旧 ToolResult<br>Auto：LLM 摘要 + 重注入</div>
+              </div>
+              <div class="core-sub">
+                <div class="core-sub-title">LoopDetector</div>
+                <div class="core-sub-desc">loop_detector.py<br>SHA-1 指纹 + 滑动窗口<br>重复模式注入突破提示</div>
+              </div>
+              <div class="core-sub">
+                <div class="core-sub-title">MsgValidator</div>
+                <div class="core-sub-desc">types/messages.py<br>ToolCall ↔ ToolResult<br>ID 强制配对校验</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow">↓</div>
+
+        <!-- 4. Capability Layer -->
+        <div class="layer l-cap">
+          <div class="layer-label">4 · 能力层 &nbsp;Capability Layer</div>
+          <div class="chips">
+            <div class="chip">工具系统<small>registry + executor · 统一调用框架</small></div>
+            <div class="chip">Skills<small>skills/*/SKILL.md · 程序性记忆</small></div>
+            <div class="chip">Persistent Memory<small>SQLite 历史 + 压缩摘要作长期记忆</small></div>
+          </div>
+        </div>
+
+        <div class="arrow">↓</div>
+
+        <!-- 5. Execution Backends -->
+        <div class="layer l-exec">
+          <div class="layer-label">5 · 执行层 &nbsp;Execution Backends &nbsp;— 统一 tool runtime</div>
+          <div class="chips">
+            <div class="chip">Terminal<small>asyncio 子进程 · 参数数组防注入</small></div>
+            <div class="chip">FileSystem<small>读取 + 正则搜索 · 路径遍历防护</small></div>
+            <div class="chip">External API<small>shell 扩展 / 自定义工具</small></div>
+            <div class="chip">Sub-agents<small>待扩展</small></div>
+          </div>
+        </div>
+
+        <div class="arrow">↓</div>
+
+        <!-- 6. State Layer -->
+        <div class="layer l-state">
+          <div class="layer-label">6 · 状态层 &nbsp;State &amp; Persistence</div>
+          <div class="chips">
+            <div class="chip">SQLite<small>sessions + checkpoints 双表</small></div>
+            <div class="chip">JSONL Messages<small>完整消息序列化存储</small></div>
+            <div class="chip">MemoryStore<small>测试 / 临时会话</small></div>
+            <div class="chip">Checkpoints<small>轮级快照 · 支持回滚</small></div>
+          </div>
+        </div>
+
+        <div class="arrow">↓</div>
+
+        <!-- 7. Model / Provider Layer -->
+        <div class="layer l-model">
+          <div class="layer-label">7 · 模型层 &nbsp;Model / Provider Layer</div>
+          <div class="chips">
+            <div class="chip">Provider Runtime Resolver<small>llm/registry.py · 统一认证 + base URL + API mode</small></div>
+            <div class="chip">anthropic_messages<small>AnthropicProvider · Extended Thinking</small></div>
+          </div>
+        </div>
+
+      </div><!-- /main -->
+
+      <!-- ══ SIDE COLUMN ══ -->
+
+
+    </div><!-- /diagram -->
+  </div><!-- /page -->
+</body>
+
+</html>

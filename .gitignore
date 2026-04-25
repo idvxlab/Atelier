@@ -1,0 +1,24 @@
+# 环境变量 — 永远不提交
+.env
+.env.*
+!.env.example
+
+# 数据库
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+
+# pytest
+.pytest_cache/
