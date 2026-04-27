@@ -23,6 +23,7 @@ from typing import Any, Callable, Awaitable
 from harness.llm.base import TokenCallback
 
 MessageListener = Callable[["Message"], Awaitable[None]]
+StateListener = Callable[[], Awaitable[None]]
 
 from harness.types.messages import Message, TextBlock
 from harness.engine.state_machine import StateMachine, EngineState
@@ -85,9 +86,10 @@ class AgentEngine:
         self._state_lock = asyncio.Lock()
         self._cancel_event = asyncio.Event()
         self._intervention_queue: asyncio.Queue[Message] = asyncio.Queue()
-        self._last_error: str = ""   # 存储最近一次错误信息
+        self._last_error: str = ""
         self._message_listeners: list[MessageListener] = []
         self._token_listeners: list[TokenCallback] = []
+        self._state_listeners: list[StateListener] = []
 
         # Inject system prompt if provided
         if config.system_prompt:
@@ -125,6 +127,17 @@ class AgentEngine:
         """Unregister a previously added token listener."""
         try:
             self._token_listeners.remove(listener)
+        except ValueError:
+            pass
+
+    def add_state_listener(self, listener: StateListener) -> None:
+        """Register a callback invoked when engine state changes (e.g. RUNNING → COMPLETED)."""
+        self._state_listeners.append(listener)
+
+    def remove_state_listener(self, listener: StateListener) -> None:
+        """Unregister a previously added state listener."""
+        try:
+            self._state_listeners.remove(listener)
         except ValueError:
             pass
 
@@ -210,6 +223,14 @@ class AgentEngine:
     # Internal
     # ──────────────────────────────────────────────────────────────────
 
+    async def _notify_state_listeners(self) -> None:
+        """Notify all registered state listeners. Called outside the state lock."""
+        for listener in list(self._state_listeners):
+            try:
+                await listener()
+            except Exception:
+                pass
+
     async def _run_loop_guarded(self) -> None:
         """
         Wraps ReactLoop.run() and guarantees state is restored on all paths.
@@ -229,6 +250,7 @@ class AgentEngine:
                     "state_transition", "triggered-executed",
                     detail={"to": EngineState.COMPLETED.name},
                 )
+            await self._notify_state_listeners()
 
         except asyncio.CancelledError:
             async with self._state_lock:
@@ -237,6 +259,7 @@ class AgentEngine:
                     "state_transition", "triggered-executed",
                     detail={"to": EngineState.WAITING_INPUT.name, "via": "cancel"},
                 )
+            await self._notify_state_listeners()
             # Do not re-raise — we handled it gracefully
 
         except Exception as exc:
@@ -247,6 +270,7 @@ class AgentEngine:
             self._emitter.emit_error(
                 "engine_loop_error", str(exc),
             )
+            await self._notify_state_listeners()
 
         finally:
             # Always clear the cancel signal and persist messages
@@ -271,15 +295,8 @@ class AgentEngine:
 
     async def _on_token(self, text: str) -> None:
         """Called by ReactLoop for each streamed text token."""
-        import sys
-        listeners = list(self._token_listeners)
-        print(
-            f"[ENGINE] _on_token: {text!r}  listeners={len(listeners)}",
-            flush=True, file=sys.stderr,
-        )
-        for listener in listeners:
+        for listener in list(self._token_listeners):
             try:
                 await listener(text)
             except Exception as exc:
-                print(f"[ENGINE] listener error: {exc}", flush=True, file=sys.stderr)
-                pass
+                self._emitter.emit_error("token_listener_error", str(exc))

@@ -7,7 +7,6 @@ as they arrive from the engine.
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.routing import APIRouter
@@ -18,6 +17,9 @@ from harness.types.messages import Message
 
 router = APIRouter()
 
+_THINKING_START = "\x00THINKING\x00"
+_THINKING_TOKEN_PREFIX = "\x00THINKING_TOKEN\x00"
+
 
 @router.websocket("/ws/{session_id}")
 async def session_websocket(websocket: WebSocket, session_id: str) -> None:
@@ -25,10 +27,12 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
     Stream messages for a session over WebSocket.
 
     Protocol (server → client):
-      {"type": "token",   "data": "<text chunk>"}         ← streamed tokens
-      {"type": "message", "data": <serialized Message>}   ← full message on completion
-      {"type": "state",   "data": {"state": "RUNNING", "is_running": true}}
-      {"type": "error",   "data": {"detail": "..."}}
+      {"type": "token",          "data": "<text chunk>"}        ← streamed text tokens
+      {"type": "thinking"}                                       ← thinking phase started
+      {"type": "thinking_token", "data": "<thinking chunk>"}    ← streamed thinking tokens
+      {"type": "message",        "data": <serialized Message>}  ← full message on completion
+      {"type": "state",          "data": <snapshot>}            ← state change or ping response
+      {"type": "error",          "data": {"detail": "..."}}
 
     Protocol (client → server):
       {"type": "message", "text": "..."}   → send user message
@@ -52,21 +56,29 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
         )
 
     async def push_token(text: str) -> None:
-        """Fires for each streamed text token (or a thinking-start sentinel)."""
-        import sys
-        if text == "\x00THINKING\x00":
-            print(f"[WS] thinking_start session={session_id}", flush=True, file=sys.stderr)
+        """Fires for each streamed token or sentinel."""
+        if text == _THINKING_START:
             await websocket.send_text(json.dumps({"type": "thinking"}))
+        elif text.startswith(_THINKING_TOKEN_PREFIX):
+            chunk = text[len(_THINKING_TOKEN_PREFIX):]
+            await websocket.send_text(
+                json.dumps({"type": "thinking_token", "data": chunk})
+            )
         else:
-            print(f"[WS] push_token session={session_id}: {text!r}", flush=True, file=sys.stderr)
             await websocket.send_text(
                 json.dumps({"type": "token", "data": text})
             )
 
-    import sys
-    print(f"[WS] session={session_id} connected, registering listeners", flush=True, file=sys.stderr)
+    async def push_state() -> None:
+        """Fires when engine state changes (RUNNING → COMPLETED/ERROR/WAITING_INPUT)."""
+        snapshot = await engine.get_snapshot()
+        await websocket.send_text(
+            json.dumps({"type": "state", "data": snapshot})
+        )
+
     engine.add_message_listener(push_message)
     engine.add_token_listener(push_token)
+    engine.add_state_listener(push_state)
     try:
         while True:
             raw = await websocket.receive_text()
@@ -108,3 +120,4 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
     finally:
         engine.remove_message_listener(push_message)
         engine.remove_token_listener(push_token)
+        engine.remove_state_listener(push_state)

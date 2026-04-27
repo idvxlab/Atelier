@@ -114,17 +114,16 @@ class AnthropicProvider(LLMProvider):
                                 in_thinking = False
                         elif etype == "content_block_delta":
                             delta = getattr(event, "delta", None)
-                            # text_delta has .text attribute; thinking_delta has .thinking
+                            # text_delta has .text; thinking_delta has .thinking
                             text = getattr(delta, "text", None)
                             if text and not in_thinking:
-                                import sys
-                                print(f"[STREAM:anthropic] token: {text!r}", flush=True, file=sys.stderr)
                                 await on_token(text)
+                            thinking_chunk = getattr(delta, "thinking", None)
+                            if thinking_chunk and in_thinking:
+                                await on_token("\x00THINKING_TOKEN\x00" + thinking_chunk)
                 else:
                     # No thinking: simpler text_stream is sufficient
                     async for text in stream.text_stream:
-                        import sys
-                        print(f"[STREAM:anthropic] token: {text!r}", flush=True, file=sys.stderr)
                         await on_token(text)
             # get_final_message() must be called inside the context manager
             response = await stream.get_final_message()

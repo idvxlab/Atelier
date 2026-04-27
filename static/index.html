@@ -585,10 +585,46 @@
     /* thinking */
     .thinking-block {
       color: var(--text-muted);
-      font-style: italic;
       font-size: 13px;
-      padding: 6px 10px;
       border-left: 2px solid var(--border);
+      margin: 4px 0;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .thinking-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-style: italic;
+      user-select: none;
+    }
+
+    .thinking-header:hover {
+      background: var(--surface2);
+    }
+
+    .thinking-toggle {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--accent);
+      font-style: normal;
+      white-space: nowrap;
+    }
+
+    .thinking-body {
+      padding: 0 10px 8px 10px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-style: normal;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .thinking-body.collapsed {
+      display: none;
     }
 
     /* typing dots */
@@ -1009,9 +1045,10 @@
     let overview = { skills: [], personas: [], providers: [], default_provider: '' };
     let currentConfigFile = null;  // { type: 'skill'|'persona'|'yaml', name: string }
     let allSessions = [];
-    let ws = null;           // active WebSocket
-    let streamEl = null;     // current streaming bubble DOM node
-    let streamText = '';     // accumulated token text
+    let ws = null;               // active WebSocket
+    let streamEl = null;         // current streaming bubble DOM node
+    let streamText = '';         // accumulated text token text
+    let streamThinkingText = ''; // accumulated thinking token text
     let streamIsThinking = false;
 
     // ── Boot ─────────────────────────────────────────────────────────────
@@ -1262,7 +1299,7 @@
     // ── WebSocket streaming ───────────────────────────────────────────────
     function connectWS(sessionId) {
       disconnectWS();
-      streamEl = null; streamText = ''; streamIsThinking = false;
+      streamEl = null; streamText = ''; streamThinkingText = ''; streamIsThinking = false;
       const wsUrl = location.origin.replace(/^http/, 'ws') + '/ws/' + sessionId;
       ws = new WebSocket(wsUrl);
       ws.onmessage = handleWsFrame;
@@ -1272,7 +1309,7 @@
     function disconnectWS() {
       if (ws) { ws.onclose = null; ws.close(); ws = null; }
       if (streamEl) { streamEl.remove(); streamEl = null; }
-      streamText = ''; streamIsThinking = false;
+      streamText = ''; streamThinkingText = ''; streamIsThinking = false;
     }
 
     function handleWsFrame(ev) {
@@ -1285,11 +1322,30 @@
         ensureStreamEl(container);
         streamIsThinking = true;
         streamText = '';
+        streamThinkingText = '';
         streamEl.querySelector('.msg-bubble').innerHTML =
           '<em style="color:var(--text-muted);font-style:italic">💭 正在思考…</em>';
 
+      } else if (frame.type === 'thinking_token') {
+        streamThinkingText += frame.data;
+        ensureStreamEl(container);
+        const bubble = streamEl.querySelector('.msg-bubble');
+        // Build scrollable structure on first token
+        let thinkBody = bubble.querySelector('.thinking-stream-body');
+        if (!thinkBody) {
+          bubble.innerHTML =
+            '<em style="color:var(--text-muted);font-style:italic">💭 思考中…</em>' +
+            '<div class="thinking-stream-body" style="max-height:160px;overflow-y:auto;' +
+            'font-size:12px;color:var(--text-muted);white-space:pre-wrap;' +
+            'padding:4px 0;margin-top:4px;line-height:1.6"></div>';
+          thinkBody = bubble.querySelector('.thinking-stream-body');
+        }
+        thinkBody.textContent = streamThinkingText;
+        thinkBody.scrollTop = thinkBody.scrollHeight;
+        container.scrollTop = container.scrollHeight;
+
       } else if (frame.type === 'token') {
-        if (streamIsThinking) { streamIsThinking = false; streamText = ''; }
+        if (streamIsThinking) { streamIsThinking = false; streamText = ''; streamThinkingText = ''; }
         ensureStreamEl(container);
         streamText += frame.data;
         streamEl.querySelector('.msg-bubble').textContent = streamText;
@@ -1331,7 +1387,7 @@
     function renderSnapshot(snap) {
       // Remove streaming bubble only when the engine finishes — while still running,
       // the bubble is owned by the WS token stream and must not be cleared by polling.
-      if (streamEl && !snap.is_running) { streamEl.remove(); streamEl = null; streamText = ''; streamIsThinking = false; }
+      if (streamEl && !snap.is_running) { streamEl.remove(); streamEl = null; streamText = ''; streamThinkingText = ''; streamIsThinking = false; }
 
       const msgs = snap.last_messages || [];
       const meta = snap.meta || {};
@@ -1412,7 +1468,21 @@
 
         if (thinkBlocks.length) {
           thinkBlocks.forEach(tb => {
-            const el = div('thinking-block', `💭 ${escHtml(tb.thinking.slice(0, 200))}${tb.thinking.length > 200 ? '…' : ''}`);
+            const el = document.createElement('div');
+            el.className = 'thinking-block';
+            el.innerHTML =
+              `<div class="thinking-header">` +
+              `<span>💭 思考过程</span>` +
+              `<span style="font-size:11px">(${tb.thinking.length} 字)</span>` +
+              `<span class="thinking-toggle">展开 ▼</span>` +
+              `</div>` +
+              `<div class="thinking-body collapsed">${escHtml(tb.thinking)}</div>`;
+            el.querySelector('.thinking-header').addEventListener('click', () => {
+              const body = el.querySelector('.thinking-body');
+              const toggle = el.querySelector('.thinking-toggle');
+              const collapsed = body.classList.toggle('collapsed');
+              toggle.textContent = collapsed ? '展开 ▼' : '收起 ▲';
+            });
             container.appendChild(el);
           });
         }
