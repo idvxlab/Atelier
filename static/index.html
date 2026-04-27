@@ -1009,6 +1009,10 @@
     let overview = { skills: [], personas: [], providers: [], default_provider: '' };
     let currentConfigFile = null;  // { type: 'skill'|'persona'|'yaml', name: string }
     let allSessions = [];
+    let ws = null;           // active WebSocket
+    let streamEl = null;     // current streaming bubble DOM node
+    let streamText = '';     // accumulated token text
+    let streamIsThinking = false;
 
     // ── Boot ─────────────────────────────────────────────────────────────
     async function boot() {
@@ -1155,6 +1159,7 @@
     // ── Session management ────────────────────────────────────────────────
     async function switchSession(id) {
       stopPolling();
+      disconnectWS();
       currentSessionId = id;
       lastMsgCount = 0;
       renderSessionsList();
@@ -1166,6 +1171,8 @@
         renderSnapshot(snap);
         if (snap.is_running) startPolling();
       } catch (e) { toast('加载会话失败: ' + e.message, true); }
+
+      connectWS(id);
     }
 
     function showChatArea() {
@@ -1181,6 +1188,7 @@
       try {
         await api(`/sessions/${currentSessionId}`, 'DELETE');
         stopPolling();
+        disconnectWS();
         currentSessionId = null;
         lastMsgCount = 0;
         document.getElementById('messages').classList.add('hidden');
@@ -1215,7 +1223,9 @@
 
       try {
         await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
-        startPolling();
+        doPoll(); // immediately render the user message in the UI
+        // Only start polling if WS is not connected — WS state frame will trigger doPoll when done.
+        if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
         document.getElementById('cancel-btn').classList.remove('hidden');
       } catch (e) {
         toast('发送失败: ' + e.message, true);
@@ -1249,6 +1259,62 @@
       document.getElementById('cancel-btn').classList.add('hidden');
     }
 
+    // ── WebSocket streaming ───────────────────────────────────────────────
+    function connectWS(sessionId) {
+      disconnectWS();
+      streamEl = null; streamText = ''; streamIsThinking = false;
+      const wsUrl = location.origin.replace(/^http/, 'ws') + '/ws/' + sessionId;
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = handleWsFrame;
+      ws.onclose = () => { ws = null; if (currentSessionId) startPolling(); }; // fallback if WS drops
+    }
+
+    function disconnectWS() {
+      if (ws) { ws.onclose = null; ws.close(); ws = null; }
+      if (streamEl) { streamEl.remove(); streamEl = null; }
+      streamText = ''; streamIsThinking = false;
+    }
+
+    function handleWsFrame(ev) {
+      let frame;
+      try { frame = JSON.parse(ev.data); } catch { return; }
+      const container = document.getElementById('messages');
+      if (!container) return;
+
+      if (frame.type === 'thinking') {
+        ensureStreamEl(container);
+        streamIsThinking = true;
+        streamText = '';
+        streamEl.querySelector('.msg-bubble').innerHTML =
+          '<em style="color:var(--text-muted);font-style:italic">💭 正在思考…</em>';
+
+      } else if (frame.type === 'token') {
+        if (streamIsThinking) { streamIsThinking = false; streamText = ''; }
+        ensureStreamEl(container);
+        streamText += frame.data;
+        streamEl.querySelector('.msg-bubble').textContent = streamText;
+        container.scrollTop = container.scrollHeight;
+
+      } else if (frame.type === 'state') {
+        if (!frame.data?.is_running) {
+          doPoll();   // render final snapshot (clears streamEl, appends complete messages)
+        }
+
+      } else if (frame.type === 'error') {
+        toast('引擎错误: ' + (frame.data?.detail || JSON.stringify(frame.data)), true);
+      }
+    }
+
+    function ensureStreamEl(container) {
+      if (streamEl) return;
+      streamEl = document.createElement('div');
+      streamEl.className = 'msg assistant';
+      streamEl.innerHTML = '<div class="msg-role">Assistant</div><div class="msg-bubble"></div>';
+      const dots = document.getElementById('typing-dots');
+      if (dots) container.insertBefore(streamEl, dots);
+      else container.appendChild(streamEl);
+    }
+
     async function doPoll() {
       if (!currentSessionId) { stopPolling(); return; }
       try {
@@ -1263,6 +1329,10 @@
 
     // ── Rendering ─────────────────────────────────────────────────────────
     function renderSnapshot(snap) {
+      // Remove streaming bubble only when the engine finishes — while still running,
+      // the bubble is owned by the WS token stream and must not be cleared by polling.
+      if (streamEl && !snap.is_running) { streamEl.remove(); streamEl = null; streamText = ''; streamIsThinking = false; }
+
       const msgs = snap.last_messages || [];
       const meta = snap.meta || {};
 

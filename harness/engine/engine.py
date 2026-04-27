@@ -18,7 +18,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Awaitable
+
+from harness.llm.base import TokenCallback
+
+MessageListener = Callable[["Message"], Awaitable[None]]
 
 from harness.types.messages import Message, TextBlock
 from harness.engine.state_machine import StateMachine, EngineState
@@ -35,7 +39,7 @@ class EngineConfig:
     task_goal: str = ""
 
 
-def _serialize_message(msg: Message) -> dict[str, Any]:
+def serialize_message(msg: Message) -> dict[str, Any]:
     """Convert a Message to a JSON-serialisable dict for API responses."""
     blocks = []
     for b in msg.content:
@@ -82,6 +86,8 @@ class AgentEngine:
         self._cancel_event = asyncio.Event()
         self._intervention_queue: asyncio.Queue[Message] = asyncio.Queue()
         self._last_error: str = ""   # 存储最近一次错误信息
+        self._message_listeners: list[MessageListener] = []
+        self._token_listeners: list[TokenCallback] = []
 
         # Inject system prompt if provided
         if config.system_prompt:
@@ -100,6 +106,28 @@ class AgentEngine:
     # Public API (called by REST layer or tests)
     # ──────────────────────────────────────────────────────────────────
 
+    def add_message_listener(self, listener: MessageListener) -> None:
+        """Register a callback invoked for every new message (real-time push)."""
+        self._message_listeners.append(listener)
+
+    def remove_message_listener(self, listener: MessageListener) -> None:
+        """Unregister a previously added listener."""
+        try:
+            self._message_listeners.remove(listener)
+        except ValueError:
+            pass
+
+    def add_token_listener(self, listener: TokenCallback) -> None:
+        """Register a callback invoked for each streamed text token."""
+        self._token_listeners.append(listener)
+
+    def remove_token_listener(self, listener: TokenCallback) -> None:
+        """Unregister a previously added token listener."""
+        try:
+            self._token_listeners.remove(listener)
+        except ValueError:
+            pass
+
     async def get_snapshot(self) -> dict[str, Any]:
         """
         Frontend polling endpoint — returns state + last 20 messages atomically.
@@ -112,7 +140,7 @@ class AgentEngine:
                 "is_running": self._sm.state == EngineState.RUNNING,
                 "last_error": self._last_error,
                 "last_messages": [
-                    _serialize_message(m) for m in self._messages[-20:]
+                    serialize_message(m) for m in self._messages[-20:]
                 ],
             }
 
@@ -193,6 +221,7 @@ class AgentEngine:
                 cancel_event=self._cancel_event,
                 intervention_queue=self._intervention_queue,
                 on_message=self._on_message,
+                on_token=self._on_token,
             )
             async with self._state_lock:
                 self._sm.transition(EngineState.COMPLETED)
@@ -233,3 +262,24 @@ class AgentEngine:
         """Called by ReactLoop for every new message (assistant or tool)."""
         async with self._state_lock:
             self._messages.append(msg)
+        # Notify listeners outside the lock — they may do I/O (e.g. WebSocket send)
+        for listener in list(self._message_listeners):
+            try:
+                await listener(msg)
+            except Exception:
+                pass  # never let a broken listener crash the loop
+
+    async def _on_token(self, text: str) -> None:
+        """Called by ReactLoop for each streamed text token."""
+        import sys
+        listeners = list(self._token_listeners)
+        print(
+            f"[ENGINE] _on_token: {text!r}  listeners={len(listeners)}",
+            flush=True, file=sys.stderr,
+        )
+        for listener in listeners:
+            try:
+                await listener(text)
+            except Exception as exc:
+                print(f"[ENGINE] listener error: {exc}", flush=True, file=sys.stderr)
+                pass

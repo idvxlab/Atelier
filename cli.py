@@ -22,26 +22,13 @@ from dotenv import load_dotenv
 load_dotenv(override=False)
 
 from harness.config import HarnessConfig
-from harness.engine.compression import CompressionConfig, ContextCompressor
-from harness.engine.engine import AgentEngine, EngineConfig
-from harness.engine.loop import ReactLoop
-from harness.llm.registry import build_provider
-from harness.observability.events import EventEmitter
+from harness.engine.engine import AgentEngine
+from harness.factory import build_engine
 from harness.skills import (
     load_persona, load_skill_content,
     list_skills, list_personas,
-    build_skill_system_addendum,
 )
 from harness.storage.backends.memory import MemorySessionStore
-from harness.tools.builtin import (
-    READ_FILE_SCHEMA, read_file_tool,
-    SEARCH_SCHEMA, search_tool,
-    SHELL_SCHEMA, shell_tool,
-    USE_SKILL_SCHEMA, use_skill_tool,
-)
-from harness.tools.executor import ToolExecutor
-from harness.tools.overflow import OverflowStore
-from harness.tools.registry import ToolRegistry
 from harness.types.messages import TextBlock, ToolCallBlock, ToolResultBlock
 
 # ── ANSI 颜色（Windows 终端支持） ─────────────────────────────────────
@@ -128,81 +115,13 @@ def _print_banner(provider: str, model: str, persona_name: str = "") -> None:
 def _build_engine(cfg: HarnessConfig, provider_name: str,
                   system_prompt: str, session_id: str,
                   allowed_tools: list[str] | None = None) -> AgentEngine:
-    provider_cfg = cfg.providers[provider_name]
-    emitter = EventEmitter(session_id)
-    llm = build_provider(provider_cfg)
-
-    comp_cfg = cfg.compression
-    if comp_cfg.summary_provider and comp_cfg.summary_provider in cfg.providers:
-        summarizer = build_provider(cfg.providers[comp_cfg.summary_provider])
-    else:
-        summarizer = llm
-
-    # Append skill descriptions so agent knows what skills are available
-    skills = list_skills()
-    full_system = system_prompt + build_skill_system_addendum(skills)
-
-    compressor = ContextCompressor(
-        summarizer=summarizer,
-        config=CompressionConfig(
-            token_window=comp_cfg.token_window,
-            auto_trigger_ratio=comp_cfg.auto_trigger_ratio,
-            micro_keep_recent=comp_cfg.micro_keep_recent,
-            system_identity=full_system,
-        ),
-    )
-
-    ALL_TOOLS = {
-        "read_file": (READ_FILE_SCHEMA, read_file_tool),
-        "search":    (SEARCH_SCHEMA,    search_tool),
-        "shell":     (SHELL_SCHEMA,     shell_tool),
-    }
-
-    global_enabled = cfg.tools.enabled
-    if allowed_tools is not None:
-        if global_enabled is not None:
-            tools_to_load = [t for t in allowed_tools if t in global_enabled]
-        else:
-            tools_to_load = allowed_tools
-    else:
-        tools_to_load = global_enabled if global_enabled is not None else list(ALL_TOOLS.keys())
-
-    registry = ToolRegistry()
-    for name in tools_to_load:
-        if name in ALL_TOOLS:
-            schema, handler = ALL_TOOLS[name]
-            registry.register(schema, handler)
-        else:
-            print(_color(f"  ⚠  未知工具: {name}，已跳过", YELLOW))
-
-    # use_skill always registered if skills exist
-    if skills:
-        registry.register(USE_SKILL_SCHEMA, use_skill_tool)
-
-    overflow = OverflowStore()
-    executor = ToolExecutor(
-        registry=registry,
-        overflow=overflow,
-        emitter=emitter,
-        limits=cfg.tools.limits,
-    )
-
-    loop = ReactLoop(
-        llm=llm,
-        tool_registry=registry,
-        tool_executor=executor,
-        compressor=compressor,
-        emitter=emitter,
-        max_rounds=cfg.engine.max_rounds,
-    )
-    return AgentEngine(
-        config=EngineConfig(
-            session_id=session_id,
-            system_prompt=full_system,
-        ),
-        loop=loop,
+    return build_engine(
+        session_id=session_id,
+        provider_cfg=cfg.providers[provider_name],
+        harness_cfg=cfg,
         session_store=MemorySessionStore(),
-        emitter=emitter,
+        system_prompt=system_prompt,
+        allowed_tools=allowed_tools,
     )
 
 

@@ -4,7 +4,7 @@ from typing import Any
 
 import anthropic
 
-from harness.llm.base import LLMConfig, LLMProvider
+from harness.llm.base import LLMConfig, LLMProvider, TokenCallback
 from harness.types.messages import (
     Message,
     TextBlock,
@@ -68,6 +68,68 @@ class AnthropicProvider(LLMProvider):
             if block.type == "text":
                 return block.text
         return ""
+
+    async def stream_chat(
+        self,
+        messages: list[Message],
+        tools: list[ToolSchema] | None = None,
+        on_token: TokenCallback | None = None,
+    ) -> Message:
+        system_text, remaining = self._split_system(messages)
+        kwargs: dict[str, Any] = {
+            "model": self.config.model,
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+            "messages": remaining,
+        }
+        if system_text:
+            kwargs["system"] = system_text
+        if tools:
+            kwargs["tools"] = [self._to_anthropic_tool(t) for t in tools]
+
+        # Extended thinking: same as chat() — text_stream still yields text tokens
+        # (thinking blocks are NOT yielded by text_stream, so on_token stays clean)
+        thinking_cfg = self._thinking_params()
+        if thinking_cfg.get("enabled"):
+            kwargs["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": thinking_cfg.get("budget_tokens", 5000),
+            }
+
+        async with self._client.messages.stream(**kwargs) as stream:
+            if on_token is not None:
+                if thinking_cfg.get("enabled"):
+                    # With thinking: use raw events so we can detect the thinking phase
+                    # and emit a sentinel before text tokens start.
+                    # "\x00THINKING\x00" → ws.py maps this to {"type": "thinking"} frame.
+                    in_thinking = False
+                    async for event in stream:
+                        etype = getattr(event, "type", "")
+                        if etype == "content_block_start":
+                            btype = getattr(getattr(event, "content_block", None), "type", "")
+                            if btype == "thinking" and not in_thinking:
+                                in_thinking = True
+                                await on_token("\x00THINKING\x00")  # thinking-start sentinel
+                            elif btype == "text":
+                                in_thinking = False
+                        elif etype == "content_block_delta":
+                            delta = getattr(event, "delta", None)
+                            # text_delta has .text attribute; thinking_delta has .thinking
+                            text = getattr(delta, "text", None)
+                            if text and not in_thinking:
+                                import sys
+                                print(f"[STREAM:anthropic] token: {text!r}", flush=True, file=sys.stderr)
+                                await on_token(text)
+                else:
+                    # No thinking: simpler text_stream is sufficient
+                    async for text in stream.text_stream:
+                        import sys
+                        print(f"[STREAM:anthropic] token: {text!r}", flush=True, file=sys.stderr)
+                        await on_token(text)
+            # get_final_message() must be called inside the context manager
+            response = await stream.get_final_message()
+
+        return self._from_anthropic_response(response)
 
     # ------------------------------------------------------------------
     # Conversion: internal -> Anthropic format

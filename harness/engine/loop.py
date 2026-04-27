@@ -26,7 +26,7 @@ from harness.types.messages import (
 )
 from harness.engine.compression import ContextCompressor
 from harness.engine.loop_detector import LoopDetector
-from harness.llm.base import LLMProvider
+from harness.llm.base import LLMProvider, TokenCallback
 from harness.tools.registry import ToolRegistry
 from harness.tools.executor import ToolExecutor
 from harness.observability.events import EventEmitter
@@ -58,6 +58,7 @@ class ReactLoop:
         cancel_event: asyncio.Event,
         intervention_queue: asyncio.Queue[Message],
         on_message: OnMessageCallback,
+        on_token: TokenCallback | None = None,
     ) -> None:
         """
         Main ReAct cycle. `messages` is the live list owned by AgentEngine.
@@ -98,7 +99,7 @@ class ReactLoop:
                 "llm_call", "triggered-executed",
                 detail={"round": round_idx, "msg_count": len(messages)},
             )
-            reply: Message = await self._chat_or_cancel(messages, tools, cancel_event)
+            reply: Message = await self._chat_or_cancel(messages, tools, cancel_event, on_token)
             reply.round_index = round_idx
 
             # ── 5. No tool calls → done ────────────────────────────────────
@@ -175,12 +176,16 @@ class ReactLoop:
         messages: list[Message],
         tools: list,
         cancel_event: asyncio.Event,
+        on_token: TokenCallback | None = None,
     ) -> Message:
         """
         Run the LLM call concurrently with a cancel-event watcher.
+        Uses stream_chat when on_token is provided; chat otherwise.
         If cancel fires before the LLM responds, abort the LLM task immediately.
         """
-        llm_task = asyncio.ensure_future(self._llm.chat(messages, tools))
+        llm_task = asyncio.ensure_future(
+            self._llm.stream_chat(messages, tools, on_token)
+        )
         cancel_task = asyncio.ensure_future(cancel_event.wait())
         try:
             done, pending = await asyncio.wait(

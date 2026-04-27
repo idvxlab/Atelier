@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Streaming Debug</title>
+<style>
+  body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
+  #log  { white-space: pre-wrap; border: 1px solid #444; padding: 10px; height: 300px;
+          overflow-y: auto; margin-bottom: 10px; font-size: 13px; }
+  #out  { white-space: pre-wrap; border: 1px solid #2a6; padding: 10px; min-height: 60px;
+          background: #0d1f0d; color: #6f6; font-size: 14px; }
+  input { width: 60%; padding: 6px; background: #222; color: #eee; border: 1px solid #555; }
+  button { padding: 6px 14px; margin-left: 6px; cursor: pointer; }
+  .tok  { color: #6df; }
+  .msg  { color: #fd6; }
+  .err  { color: #f66; }
+  .info { color: #aaa; }
+</style>
+</head>
+<body>
+<h3>WebSocket Stream Tester</h3>
+
+<div>
+  <input id="msg" value="请用中文介绍一下自己，50字左右。" />
+  <button onclick="run()">发送</button>
+  <button onclick="clearLog()">清除</button>
+</div>
+<br>
+
+<b>实时 token 流：</b>
+<div id="out"></div>
+<br>
+
+<b>帧日志：</b>
+<div id="log"></div>
+
+<script>
+const BASE = window.location.origin;
+let ws = null;
+
+function log(cls, text) {
+  const el = document.getElementById('log');
+  const line = document.createElement('span');
+  line.className = cls;
+  line.textContent = `[${new Date().toISOString().slice(11,23)}] ${text}\n`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('out').textContent = '';
+}
+
+async function run() {
+  const userMsg = document.getElementById('msg').value.trim();
+  if (!userMsg) return;
+
+  // 重置输出
+  document.getElementById('out').textContent = '';
+
+  // 1. 创建 session
+  log('info', `POST ${BASE}/sessions ...`);
+  let sessionId;
+  try {
+    const r = await fetch(`${BASE}/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: '', persona: '' }),
+    });
+    if (!r.ok) { log('err', `创建 session 失败: ${r.status} ${await r.text()}`); return; }
+    const data = await r.json();
+    sessionId = data.session_id;
+    log('info', `Session created: ${sessionId}`);
+  } catch (e) {
+    log('err', `fetch 错误: ${e}`); return;
+  }
+
+  // 2. 连接 WebSocket
+  const wsUrl = `${BASE.replace('http', 'ws')}/ws/${sessionId}`;
+  log('info', `Connecting WS: ${wsUrl}`);
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    log('info', 'WS connected, sending message...');
+    ws.send(JSON.stringify({ type: 'message', text: userMsg }));
+  };
+
+  ws.onmessage = (ev) => {
+    let frame;
+    try { frame = JSON.parse(ev.data); } catch { log('err', `bad JSON: ${ev.data}`); return; }
+
+    const t = frame.type;
+    if (t === 'thinking') {
+      document.getElementById('out').textContent = '💭 正在思考...';
+      log('info', 'THINKING started (waiting for text tokens...)');
+
+    } else if (t === 'token') {
+      // Clear "thinking" placeholder on first real token
+      const outEl = document.getElementById('out');
+      if (outEl.textContent.startsWith('💭')) outEl.textContent = '';
+      outEl.textContent += frame.data;
+      log('tok', `TOKEN: ${JSON.stringify(frame.data)}`);
+
+    } else if (t === 'message') {
+      const role = frame.data?.role;
+      const text = (frame.data?.content || [])
+        .filter(b => b.type === 'text').map(b => b.text).join('');
+      log('msg', `MESSAGE role=${role}: ${text.slice(0, 80)}`);
+
+    } else if (t === 'state') {
+      const st = frame.data?.state;
+      const running = frame.data?.is_running;
+      log('info', `STATE: ${st} is_running=${running}`);
+      if (!running && (st === 'COMPLETED' || st === 'WAITING_INPUT')) {
+        log('info', '--- done ---');
+        ws.close();
+      }
+
+    } else if (t === 'error') {
+      log('err', `ERROR: ${JSON.stringify(frame.data)}`);
+    } else {
+      log('info', `OTHER: ${ev.data.slice(0, 100)}`);
+    }
+  };
+
+  ws.onerror = (e) => log('err', `WS error: ${e}`);
+  ws.onclose = (e) => log('info', `WS closed code=${e.code}`);
+}
+</script>
+</body>
+</html>

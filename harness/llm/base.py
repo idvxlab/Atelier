@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Awaitable
 
 from harness.types.messages import Message
 from harness.types.tools import ToolSchema
+
+TokenCallback = Callable[[str], Awaitable[None]]
 
 
 @dataclass
@@ -35,6 +37,16 @@ class LLMProvider(ABC):
     @abstractmethod
     async def complete(self, prompt: str) -> str:
         """Single-turn completion — used by the context compressor."""
+
+    async def stream_chat(
+        self,
+        messages: list[Message],
+        tools: list[ToolSchema] | None = None,
+        on_token: TokenCallback | None = None,
+    ) -> Message:
+        """Streaming chat. Providers that support it override this.
+        Default: falls back to chat() (no token-by-token delivery)."""
+        return await self.chat(messages, tools)
 
     def _thinking_params(self) -> dict[str, Any]:
         """Extract thinking config from extra. Used by concrete implementations."""

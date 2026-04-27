@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyHarness 整体架构图</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #EAECF0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 32px 16px 48px;
+    }
+
+    .diagram {
+      width: 840px;
+      background: #fff;
+      border-radius: 14px;
+      padding: 28px 26px 32px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.13);
+    }
+
+    .diagram-title {
+      text-align: center;
+      font-size: 21px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 22px;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── connector arrows between layers ── */
+    .v-arrow {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 18px;
+      color: #BDBDBD;
+      font-size: 20px;
+      user-select: none;
+    }
+
+    /* ── each row / layer ── */
+    .layer {
+      display: flex;
+      border-radius: 9px;
+      overflow: hidden;
+      border: 1.5px solid rgba(0,0,0,0.07);
+      position: relative;
+    }
+
+    /* ── left label strip ── */
+    .label {
+      min-width: 82px;
+      width: 82px;
+      padding: 12px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 3px;
+      border-right: 1.5px solid rgba(0,0,0,0.07);
+    }
+
+    .badge {
+      width: 21px; height: 21px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+      color: #fff;
+      margin-bottom: 3px;
+    }
+
+    .lname-cn {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #111;
+      line-height: 1.3;
+    }
+    .lname-en {
+      font-size: 9px;
+      color: rgba(0,0,0,0.45);
+      line-height: 1.35;
+    }
+    .ldesc {
+      font-size: 9px;
+      color: rgba(0,0,0,0.4);
+      margin-top: 1px;
+      line-height: 1.4;
+    }
+
+    /* ── content area ── */
+    .content {
+      flex: 1;
+      padding: 11px 13px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      flex-wrap: wrap;
+    }
+
+    /* ── small component box ── */
+    .cb {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.11);
+      border-radius: 6px;
+      padding: 7px 11px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 72px;
+      text-align: center;
+    }
+    .cb .ico { display: none; }
+    .cb .t   { font-size: 11px; font-weight: 600; color: #111; white-space: nowrap; }
+    .cb .s   { font-size: 9.5px; color: #666; line-height: 1.4; }
+
+    /* ── wide component box ── */
+    .wb {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.11);
+      border-radius: 6px;
+      padding: 9px 13px;
+      flex: 1;
+      min-width: 135px;
+    }
+    .wb .t { font-size: 12px; font-weight: 600; color: #111; margin-bottom: 3px; }
+    .wb .s { font-size: 10px; color: #555; line-height: 1.5; }
+
+    /* ====================================================
+       LAYER 1 — Entry  (pink)
+    ==================================================== */
+    .l-entry { background: #FDEEF1; border-color: rgba(255,150,170,0.25); }
+    .l-entry .label { background: #FFC9D4; }
+    .l-entry .badge { background: #F06292; }
+
+    /* ====================================================
+       LAYER 2 — Session  (teal)
+    ==================================================== */
+    .l-session { background: #E5F8F9; border-color: rgba(77,208,225,0.2); }
+    .l-session .label { background: #B2EBF2; }
+    .l-session .badge { background: #26C6DA; }
+
+    /* ====================================================
+       LAYER 3 — Agent Core  (yellow / highlighted)
+    ==================================================== */
+    .l-agent { background: #FFFDE7; border: 2px solid #FFD740 !important; }
+    .l-agent .label { background: #FFF59D; border-right: 2px solid #FFD740; }
+    .l-agent .badge { background: #FFA000; }
+
+    /* agent-specific layout */
+    .agent-inner {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      padding: 11px 13px;
+    }
+
+    .flow-strip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      background: rgba(255,255,255,0.65);
+      border: 1px solid rgba(255,193,7,0.45);
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-bottom: 9px;
+    }
+    .fs { /* flow step */
+      background: #fff;
+      border: 1px solid #FFB300;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 10.5px;
+      color: #5D4037;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .fa { color: #FFB300; font-size: 15px; font-weight: 700; line-height: 1; }
+
+    .agent-comps {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* ====================================================
+       LAYER 4 — Capability  (green)
+    ==================================================== */
+    .l-cap { background: #F1F8E9; border-color: rgba(100,200,110,0.2); }
+    .l-cap .label { background: #C8E6C9; }
+    .l-cap .badge { background: #66BB6A; }
+
+    /* ====================================================
+       LAYER 5 — Execution  (blue)
+    ==================================================== */
+    .l-exec { background: #E8F4FD; border-color: rgba(66,165,245,0.2); }
+    .l-exec .label { background: #BBDEFB; }
+    .l-exec .badge { background: #42A5F5; }
+
+    /* ====================================================
+       LAYER 6 — State & Persistence  (orange)
+    ==================================================== */
+    .l-state { background: #FFF8E1; border-color: rgba(255,160,0,0.2); }
+    .l-state .label { background: #FFE082; }
+    .l-state .badge { background: #FF8F00; }
+
+    /* ====================================================
+       LAYER 7 — Model / Provider  (purple)
+    ==================================================== */
+    .l-model { background: #F6EEFA; border-color: rgba(171,71,188,0.2); }
+    .l-model .label { background: #E1BEE7; }
+    .l-model .badge { background: #AB47BC; }
+
+    /* provider runtime box */
+    .pb {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.11);
+      border-radius: 6px;
+      padding: 9px 13px;
+      min-width: 185px;
+    }
+    .pb .t { font-size: 12px; font-weight: 600; color: #111; margin-bottom: 5px; }
+    .pb .tags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .tag {
+      background: #F3E5F5;
+      border: 1px solid #CE93D8;
+      border-radius: 3px;
+      padding: 1px 7px;
+      font-size: 10px;
+      color: #6A1B9A;
+    }
+  </style>
+</head>
+<body>
+<div class="diagram">
+
+  <div class="diagram-title">MyHarness 整体架构图</div>
+
+  <!-- ① Entry -->
+  <div class="layer l-entry">
+    <div class="label">
+      <div class="badge">①</div>
+      <div class="lname-cn">入口层</div>
+      <div class="ldesc">多种输入方式<br>适配层支持</div>
+    </div>
+    <div class="content">
+      <div class="cb">
+        <div class="t">CLI/TUI</div>
+        <div class="s">命令行/终端界面</div>
+      </div>
+      <div class="cb">
+        <div class="t">Web UI</div>
+        <div class="s">浏览器界面</div>
+      </div>
+      <div class="cb">
+        <div class="t">REST Client</div>
+        <div class="s">RESTful 客户端</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="v-arrow">↓</div>
+
+  <!-- ② Session & Routing -->
+  <div class="layer l-session">
+    <div class="label">
+      <div class="badge">②</div>
+      <div class="lname-cn">会话与路由层</div>
+      <div class="lname-en">Session &amp; Routing Layer</div>
+    </div>
+    <div class="content">
+      <div class="cb">
+        <div class="t">管理器</div>
+      </div>
+      <div class="cb">
+        <div class="t">Gin</div>
+        <div class="s">框架</div>
+      </div>
+      <div class="cb">
+        <div class="t">SessionRunner</div>
+        <div class="s">执行器</div>
+      </div>
+      <div class="cb">
+        <div class="t">SessionStore</div>
+        <div class="s">存储</div>
+      </div>
+      <div class="cb">
+        <div class="t">CommandGuards</div>
+        <div class="s">命令守卫</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="v-arrow">↓</div>
+
+  <!-- ③ Agent Core -->
+  <div class="layer l-agent">
+    <div class="label">
+      <div class="badge">③</div>
+
+      <div class="lname-cn">Agent 核心</div>
+      <div class="lname-en">Agent Runtime Core</div>
+    </div>
+    <div class="agent-inner">
+      <!-- Flow strip -->
+      <div class="flow-strip">
+        <span class="fs">接收到 PROMPT 包</span>
+        <span class="fa">→</span>
+        <span class="fs">context 解析</span>
+        <span class="fa">→</span>
+        <span class="fs">决定一轮工具调用</span>
+        <span class="fa">→</span>
+        <span class="fs">执行工具</span>
+        <span class="fa">→</span>
+        <span class="fs">输出结果</span>
+        <span class="fa">→</span>
+        <span class="fs">返回</span>
+      </div>
+      <!-- Sub-components -->
+      <div class="agent-comps">
+        <div class="cb">
+          <div class="t">Prompt 管理</div>
+        </div>
+        <div class="cb">
+          <div class="t">Context 管理</div>
+          <div class="s">2.7 万 token<br>消息窗口</div>
+        </div>
+        <div class="cb">
+          <div class="t">LLM Wrapper</div>
+        </div>
+        <div class="cb">
+          <div class="t">ToolDetective</div>
+          <div class="s">工具探测器</div>
+        </div>
+        <div class="cb">
+          <div class="t">MessageTracker</div>
+          <div class="s">消息追踪器</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="v-arrow">↓</div>
+
+  <!-- ④ Capability -->
+  <div class="layer l-cap">
+    <div class="label">
+      <div class="badge">④</div>
+      <div class="lname-cn">能力层</div>
+      <div class="lname-en">Capability Layer</div>
+    </div>
+    <div class="content">
+      <div class="wb">
+        <div class="t">工具系统 Tools</div>
+        <div class="s">基本工具调用 / 跟踪<br>工具参数解析引擎</div>
+      </div>
+      <div class="wb">
+        <div class="t">Skills</div>
+        <div class="s">技能描述 + 加载系统</div>
+      </div>
+      <div class="wb">
+        <div class="t">Persistent Memory</div>
+        <div class="s">跨会话记忆</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="v-arrow">↓</div>
+
+  <!-- ⑤ Execution -->
+  <div class="layer l-exec">
+    <div class="label">
+      <div class="badge">⑤</div>
+      <div class="lname-cn">执行层</div>
+      <div class="lname-en">Execution Layer</div>
+    </div>
+    <div class="content">
+      <div class="wb">
+        <div class="t">Terminal</div>
+        <div class="s">终端命令执行</div>
+      </div>
+      <div class="wb">
+        <div class="t">FileSystem</div>
+        <div class="s">文件系统操作</div>
+      </div>
+      <div class="wb">
+        <div class="t">External API</div>
+        <div class="s">外部接口调用</div>
+      </div>
+      <div class="wb">
+        <div class="t">Sub-agents</div>
+        <div class="s">子代理</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="v-arrow">↓</div>
+
+  <!-- ⑥ State & Persistence -->
+  <div class="layer l-state">
+    <div class="label">
+      <div class="badge">⑥</div>
+      <div class="lname-cn">状态与持久化</div>
+      <div class="lname-en">State &amp; Persistence</div>
+    </div>
+    <div class="content">
+      <div class="wb">
+        <div class="t">SQLite</div>
+        <div class="s">会话 / 消息存储</div>
+      </div>
+      <div class="wb">
+        <div class="t">LLM Messages</div>
+        <div class="s">对话历史</div>
+      </div>
+      <div class="wb">
+        <div class="t">Files / Cache</div>
+        <div class="s">文件与缓存</div>
+      </div>
+      <div class="wb">
+        <div class="t">CheckPoints</div>
+        <div class="s">断点 / 快照</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="v-arrow">↓</div>
+
+  <!-- ⑦ Model / Provider -->
+  <div class="layer l-model">
+    <div class="label">
+      <div class="badge">⑦</div>
+      <div class="lname-cn">模型层</div>
+      <div class="lname-en">Provider Layer</div>
+    </div>
+    <div class="content">
+      <div class="pb">
+        <div class="t">Provider Runtime Mutator</div>
+        <div class="tags">
+          <span class="tag">OpenAI</span>
+          <span class="tag">Anthropic</span>
+          <span class="tag">Gemini</span>
+          <span class="tag">Local</span>
+        </div>
+      </div>
+      <div class="wb">
+        <div class="t">Anthropic Manager</div>
+        <div class="s">claude-opus-4<br>claude-sonnet-4-6</div>
+      </div>
+      <div class="wb">
+        <div class="t">OpenAI Manager</div>
+        <div class="s">gpt-4o<br>o1-preview</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

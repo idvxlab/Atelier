@@ -109,6 +109,12 @@ class _MockLLM:
     async def chat(self, messages, tools=None):
         return Message(role="assistant", content=[TextBlock(text=self._text)])
 
+    async def stream_chat(self, messages, tools=None, on_token=None):
+        if on_token:
+            for word in self._text.split():
+                await on_token(word + " ")
+        return await self.chat(messages, tools)
+
     async def complete(self, prompt: str) -> str:
         return "Summary."
 
@@ -160,6 +166,8 @@ async def test_engine_cancel():
         async def chat(self, messages, tools=None):
             await asyncio.sleep(10)  # blocks until cancelled
             return Message(role="assistant", content=[TextBlock(text="Never")])
+        async def stream_chat(self, messages, tools=None, on_token=None):
+            return await self.chat(messages, tools)
         async def complete(self, prompt):
             return ""
 

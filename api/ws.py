@@ -13,6 +13,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.routing import APIRouter
 
 from api.rest import _get_engine, _engines
+from harness.engine.engine import serialize_message
+from harness.types.messages import Message
 
 router = APIRouter()
 
@@ -23,7 +25,8 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
     Stream messages for a session over WebSocket.
 
     Protocol (server → client):
-      {"type": "message", "data": <serialized Message>}
+      {"type": "token",   "data": "<text chunk>"}         ← streamed tokens
+      {"type": "message", "data": <serialized Message>}   ← full message on completion
       {"type": "state",   "data": {"state": "RUNNING", "is_running": true}}
       {"type": "error",   "data": {"detail": "..."}}
 
@@ -42,6 +45,28 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
 
     engine = _engines[session_id]
 
+    async def push_message(msg: Message) -> None:
+        """Fires for every completed message (assistant reply or tool result)."""
+        await websocket.send_text(
+            json.dumps({"type": "message", "data": serialize_message(msg)})
+        )
+
+    async def push_token(text: str) -> None:
+        """Fires for each streamed text token (or a thinking-start sentinel)."""
+        import sys
+        if text == "\x00THINKING\x00":
+            print(f"[WS] thinking_start session={session_id}", flush=True, file=sys.stderr)
+            await websocket.send_text(json.dumps({"type": "thinking"}))
+        else:
+            print(f"[WS] push_token session={session_id}: {text!r}", flush=True, file=sys.stderr)
+            await websocket.send_text(
+                json.dumps({"type": "token", "data": text})
+            )
+
+    import sys
+    print(f"[WS] session={session_id} connected, registering listeners", flush=True, file=sys.stderr)
+    engine.add_message_listener(push_message)
+    engine.add_token_listener(push_token)
     try:
         while True:
             raw = await websocket.receive_text()
@@ -80,3 +105,6 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
 
     except WebSocketDisconnect:
         pass
+    finally:
+        engine.remove_message_listener(push_message)
+        engine.remove_token_listener(push_token)

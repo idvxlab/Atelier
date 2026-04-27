@@ -5,7 +5,7 @@ from typing import Any
 
 import openai
 
-from harness.llm.base import LLMConfig, LLMProvider
+from harness.llm.base import LLMConfig, LLMProvider, TokenCallback
 from harness.types.messages import (
     Message,
     TextBlock,
@@ -60,6 +60,67 @@ class OpenAIProvider(LLMProvider):
         )
         choice = response.choices[0]
         return choice.message.content or ""
+
+    async def stream_chat(
+        self,
+        messages: list[Message],
+        tools: list[ToolSchema] | None = None,
+        on_token: TokenCallback | None = None,
+    ) -> Message:
+        oai_messages = self._to_openai_messages(messages)
+        kwargs: dict[str, Any] = {
+            "model": self.config.model,
+            "messages": oai_messages,
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+            "stream": True,
+        }
+        if tools:
+            kwargs["tools"] = [self._to_openai_tool(t) for t in tools]
+            kwargs["tool_choice"] = "auto"
+
+        text_parts: list[str] = []
+        # idx -> {id, name, args}
+        tool_calls_raw: dict[int, dict[str, str]] = {}
+
+        response = await self._client.chat.completions.create(**kwargs)
+        async for chunk in response:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                if on_token is not None:
+                    await on_token(delta.content)
+                text_parts.append(delta.content)
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tool_calls_raw:
+                        tool_calls_raw[idx] = {"id": "", "name": "", "args": ""}
+                    if tc_delta.id:
+                        tool_calls_raw[idx]["id"] += tc_delta.id
+                    if tc_delta.function and tc_delta.function.name:
+                        tool_calls_raw[idx]["name"] += tc_delta.function.name
+                    if tc_delta.function and tc_delta.function.arguments:
+                        tool_calls_raw[idx]["args"] += tc_delta.function.arguments
+
+        content: list[Any] = []
+        if text_parts:
+            content.append(TextBlock(text="".join(text_parts)))
+        for idx in sorted(tool_calls_raw):
+            raw = tool_calls_raw[idx]
+            try:
+                tool_input = json.loads(raw["args"])
+            except (json.JSONDecodeError, ValueError):
+                tool_input = {"_raw": raw["args"]}
+            content.append(
+                ToolCallBlock(
+                    tool_call_id=raw["id"],
+                    tool_name=raw["name"],
+                    tool_input=tool_input,
+                )
+            )
+        return Message(role="assistant", content=content)
 
     # ------------------------------------------------------------------
     # Conversion: internal -> OpenAI format
