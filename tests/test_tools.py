@@ -1,13 +1,18 @@
 """Tests for the tools layer."""
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from harness.tools.registry import ToolRegistry
 from harness.tools.executor import ToolExecutor, LIMITS
 from harness.tools.overflow import OverflowStore
-from harness.tools.builtin.shell import shell_tool
+from harness.tools.builtin.shell import SHELL_SCHEMA, shell_tool
 from harness.tools.builtin.read_file import read_file_tool
+from harness.tools.builtin.glob_tool import glob_tool
+from harness.llm.base import LLMConfig
+from harness.llm.openai_provider import OpenAIProvider
 from harness.types.messages import ToolCallBlock
 from harness.types.tools import ToolSchema, ToolParam
 from harness.observability.events import EventEmitter
@@ -45,6 +50,16 @@ class TestToolRegistry:
     def test_get_unknown_returns_none(self):
         reg = ToolRegistry()
         assert reg.get("nonexistent") is None
+
+
+def test_openai_tool_schema_includes_array_items():
+    provider = OpenAIProvider(LLMConfig(model="gpt-4o", api_key="sk-test"))
+
+    tool = provider._to_openai_tool(SHELL_SCHEMA)
+
+    command_schema = tool["function"]["parameters"]["properties"]["command"]
+    assert command_schema["type"] == "array"
+    assert command_schema["items"] == {"type": "string"}
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -146,8 +161,22 @@ async def test_shell_tool_accepts_string():
 
 @pytest.mark.asyncio
 async def test_shell_tool_timeout():
-    result = await shell_tool(command=["sleep", "10"], timeout=0.1)
+    result = await shell_tool(
+        command=[sys.executable, "-c", "import time; time.sleep(10)"],
+        timeout=0.1,
+    )
     assert "timed out" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_glob_tool_returns_files_only(tmp_path):
+    (tmp_path / "actual.py").write_text("print('hello')\n", encoding="utf-8")
+    (tmp_path / "folder.py").mkdir()
+
+    result = await glob_tool(pattern="*.py", path=str(tmp_path))
+
+    assert "actual.py" in result
+    assert "folder.py" not in result
 
 
 @pytest.mark.asyncio

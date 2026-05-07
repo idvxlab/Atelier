@@ -23,7 +23,7 @@ load_dotenv(override=False)
 
 from harness.config import HarnessConfig
 from harness.engine.engine import AgentEngine
-from harness.factory import build_engine
+from harness.factory import build_engine, build_engine_with_mcp
 from harness.skills import (
     load_persona, load_skill_content,
     list_skills, list_personas,
@@ -112,16 +112,40 @@ def _print_banner(provider: str, model: str, persona_name: str = "") -> None:
     print()
 
 
-def _build_engine(cfg: HarnessConfig, provider_name: str,
-                  system_prompt: str, session_id: str,
-                  allowed_tools: list[str] | None = None) -> AgentEngine:
-    return build_engine(
-        session_id=session_id,
-        provider_cfg=cfg.providers[provider_name],
-        harness_cfg=cfg,
-        session_store=MemorySessionStore(),
-        system_prompt=system_prompt,
-        allowed_tools=allowed_tools,
+async def _build_engine(
+    cfg: HarnessConfig,
+    provider_name: str,
+    system_prompt: str,
+    session_id: str,
+    allowed_tools: list[str] | None = None,
+) -> tuple[AgentEngine, list]:
+    """
+    Build an engine.
+
+    If cfg.mcp_servers is non-empty, we also connect MCP servers and register
+    their tools. Returns (engine, mcp_clients).
+    """
+    if cfg.mcp_servers:
+        engine, mcp_clients = await build_engine_with_mcp(
+            session_id=session_id,
+            provider_cfg=cfg.providers[provider_name],
+            harness_cfg=cfg,
+            session_store=MemorySessionStore(),
+            system_prompt=system_prompt,
+            allowed_tools=allowed_tools,
+        )
+        return engine, mcp_clients
+
+    return (
+        build_engine(
+            session_id=session_id,
+            provider_cfg=cfg.providers[provider_name],
+            harness_cfg=cfg,
+            session_store=MemorySessionStore(),
+            system_prompt=system_prompt,
+            allowed_tools=allowed_tools,
+        ),
+        [],
     )
 
 
@@ -204,8 +228,9 @@ async def run_cli(provider_name: str, system_prompt: str,
     _print_banner(provider_name, model, persona_name=persona_name)
 
     session_id = str(uuid.uuid4())[:8]
-    engine = _build_engine(cfg, provider_name, system_prompt, session_id,
-                           allowed_tools=allowed_tools)
+    engine, mcp_clients = await _build_engine(
+        cfg, provider_name, system_prompt, session_id, allowed_tools=allowed_tools
+    )
     prev_count = 0
 
     try:
@@ -224,26 +249,25 @@ async def run_cli(provider_name: str, system_prompt: str,
                 break
 
             if user_input.lower() == "/reset":
+                for c in list(mcp_clients):
+                    try:
+                        await c.close()
+                    except Exception:
+                        pass
                 session_id = str(uuid.uuid4())[:8]
-                engine = _build_engine(cfg, provider_name, system_prompt, session_id,
-                                       allowed_tools=allowed_tools)
+                engine, mcp_clients = await _build_engine(
+                    cfg, provider_name, system_prompt, session_id, allowed_tools=allowed_tools
+                )
                 prev_count = 0
                 print(_color(f"  [新会话已开启: {session_id}]", YELLOW))
                 continue
 
             if user_input.lower() == "/tools":
-                _TOOL_DESC = {
-                    "read_file": "读取文件内容",
-                    "search":    "正则搜索文件",
-                    "shell":     "执行系统命令",
-                    "use_skill": "加载 skill 说明",
-                }
-                active = allowed_tools if allowed_tools is not None else ["read_file", "search", "shell"]
-                active_with_skill = active + ["use_skill"]
                 print(_color("  可用工具：", CYAN))
-                for t in active_with_skill:
-                    desc = _TOOL_DESC.get(t, t)
-                    print(f"    {t:<12} — {desc}")
+                schemas = sorted(engine.tool_schemas, key=lambda s: s.name)
+                for s in schemas:
+                    desc = s.description or ""
+                    print(f"    {s.name:<22} — {desc}")
                 continue
 
             if user_input.lower() == "/state":
@@ -299,6 +323,12 @@ async def run_cli(provider_name: str, system_prompt: str,
 
     except KeyboardInterrupt:
         print(_color("\n\n  已中止。再见！", DIM))
+    finally:
+        for c in list(mcp_clients):
+            try:
+                await c.close()
+            except Exception:
+                pass
 
 
 def main() -> None:

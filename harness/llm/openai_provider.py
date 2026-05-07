@@ -191,6 +191,8 @@ class OpenAIProvider(LLMProvider):
             }
             if param.enum:
                 prop["enum"] = param.enum
+            if param.items:
+                prop["items"] = param.items
             properties[param.name] = prop
             if param.required:
                 required.append(param.name)

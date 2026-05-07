@@ -12,6 +12,21 @@ from dotenv import load_dotenv
 load_dotenv(override=False)
 
 
+def _expand_env_ref(value: str) -> str:
+    """Expand a simple ${ENV_VAR} reference; leave literal values unchanged."""
+    if value.startswith("${") and value.endswith("}"):
+        env_var = value[2:-1]
+        return os.environ.get(env_var, "")
+    return value
+
+
+def _first_env(names: list[str]) -> str:
+    for name in names:
+        if value := os.environ.get(name):
+            return value
+    return ""
+
+
 @dataclass
 class ProviderConfig:
     name: str          # "openai" | "anthropic" | "openai-compatible"
@@ -61,6 +76,13 @@ class ToolsSettings:
 
 
 @dataclass
+class MCPServerConfig:
+    """Configuration for a single MCP Server."""
+    transport: str          # currently only "stdio" is supported
+    command: list[str]      # executable + arguments to launch the server
+
+
+@dataclass
 class HarnessConfig:
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
     default_provider: str = ""
@@ -68,6 +90,7 @@ class HarnessConfig:
     compression: CompressionSettings = field(default_factory=CompressionSettings)
     storage: StorageSettings = field(default_factory=StorageSettings)
     tools: ToolsSettings = field(default_factory=ToolsSettings)
+    mcp_servers: dict[str, MCPServerConfig] = field(default_factory=dict)
 
     @classmethod
     def from_yaml(cls, path: str) -> "HarnessConfig":
@@ -76,16 +99,18 @@ class HarnessConfig:
 
         providers: dict[str, ProviderConfig] = {}
         for pname, pcfg in raw.get("providers", {}).items():
-            # Expand ${ENV_VAR} in api_key
-            api_key = pcfg.get("api_key", "")
-            if api_key.startswith("${") and api_key.endswith("}"):
-                env_var = api_key[2:-1]
-                api_key = os.environ.get(env_var, "")
+            # Expand ${ENV_VAR} in api_key, with optional fallback env aliases.
+            api_key = _expand_env_ref(pcfg.get("api_key", ""))
+            api_key_env = pcfg.get("api_key_env", [])
+            if isinstance(api_key_env, str):
+                api_key_env = [api_key_env]
+            if not api_key:
+                api_key = _first_env(list(api_key_env))
             providers[pname] = ProviderConfig(
                 name=pcfg.get("name", pname),
                 model=pcfg["model"],
                 api_key=api_key,
-                base_url=pcfg.get("base_url", ""),
+                base_url=_expand_env_ref(pcfg.get("base_url", "")),
                 timeout=float(pcfg.get("timeout", 60.0)),
                 max_tokens=int(pcfg.get("max_tokens", 4096)),
                 temperature=float(pcfg.get("temperature", 0.0)),
@@ -102,6 +127,13 @@ class HarnessConfig:
             limits={**_DEFAULT_LIMITS, **tools_raw.get("limits", {})},
         )
 
+        mcp_servers: dict[str, MCPServerConfig] = {}
+        for sname, scfg in raw.get("mcp_servers", {}).items():
+            mcp_servers[sname] = MCPServerConfig(
+                transport=scfg.get("transport", "stdio"),
+                command=list(scfg.get("command", [])),
+            )
+
         return cls(
             providers=providers,
             default_provider=raw.get("default_provider", ""),
@@ -109,12 +141,31 @@ class HarnessConfig:
             compression=CompressionSettings(**comp_raw) if comp_raw else CompressionSettings(),
             storage=StorageSettings(**storage_raw) if storage_raw else StorageSettings(),
             tools=tools_cfg,
+            mcp_servers=mcp_servers,
         )
 
     @classmethod
     def from_env(cls) -> "HarnessConfig":
         """Build a minimal config from well-known environment variables."""
         providers: dict[str, ProviderConfig] = {}
+
+        if key := _first_env(
+            [
+                "THREE_SIX_ONE_API_KEY",
+                "THREESIXONE_API_KEY",
+                "API_361_KEY",
+                "361API_API_KEY",
+            ]
+        ):
+            providers["361api-openai"] = ProviderConfig(
+                name="openai-compatible",
+                model=os.environ.get("THREE_SIX_ONE_MODEL", "gpt-4o"),
+                api_key=key,
+                base_url=os.environ.get(
+                    "THREE_SIX_ONE_BASE_URL",
+                    "https://www.361api.com/v1",
+                ),
+            )
 
         if key := os.environ.get("OPENAI_API_KEY"):
             providers["openai"] = ProviderConfig(

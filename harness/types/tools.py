@@ -7,10 +7,11 @@ from typing import Any, Callable, Awaitable
 @dataclass
 class ToolParam:
     name: str
-    type: str          # "string" | "integer" | "boolean" | "object" | "array"
+    type: str          # "string" | "integer" | "number" | "boolean" | "object" | "array"
     description: str
     required: bool = True
     enum: list[Any] = field(default_factory=list)
+    items: dict[str, Any] | None = None
 
 
 @dataclass
