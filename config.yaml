@@ -1,11 +1,46 @@
 # ────────────────────────────────────────────────────────
-# bltcy.ai 第三方 API 配置
-# 把你的 key 填进 BLTCY_API_KEY 环境变量，或者直接替换下面的占位符
+# 第三方 API 配置
+# 361API 走 OpenAI 兼容接口；把 key 放进 .env 或系统环境变量：
+# THREE_SIX_ONE_API_KEY=sk-...
+# 如果你已经写成 OPENAI_API_KEY=sk-...，下面的 api_key_env 也会自动识别。
+# 原 bltcy.ai 配置保留在下方，可按需切换 default_provider。
 # ────────────────────────────────────────────────────────
 
-default_provider: bltcy-anthropic
+default_provider: 361api-openai
 
 providers:
+
+  # ── 361API：OpenAI 兼容格式（New API / 中转站）──────────────────────
+  361api-openai:
+    name: openai-compatible
+    model: gpt-4o                   # 可换成 361API 控制台里可用的模型名
+    api_key: "${THREE_SIX_ONE_API_KEY}"
+    api_key_env:
+      - THREE_SIX_ONE_API_KEY
+      - THREESIXONE_API_KEY
+      - API_361_KEY
+      - 361API_API_KEY
+      - OPENAI_API_KEY
+      - BLTCY_API_KEY                # 兼容旧 .env.example 已写入这个变量名的情况
+    base_url: "https://www.361api.com/v1"
+    max_tokens: 4096
+    temperature: 0.0
+
+  # ── 361API：摘要用的便宜模型（上下文压缩时使用）──────────────────────
+  361api-mini:
+    name: openai-compatible
+    model: gpt-4o-mini              # 可换成 361API 支持的低成本模型
+    api_key: "${THREE_SIX_ONE_API_KEY}"
+    api_key_env:
+      - THREE_SIX_ONE_API_KEY
+      - THREESIXONE_API_KEY
+      - API_361_KEY
+      - 361API_API_KEY
+      - OPENAI_API_KEY
+      - BLTCY_API_KEY                # 兼容旧 .env.example 已写入这个变量名的情况
+    base_url: "https://www.361api.com/v1"
+    max_tokens: 2048
+    temperature: 0.0
 
   # ── 方案 A：Anthropic 格式（推荐，支持 Claude 系列模型）──────────────
   bltcy-anthropic:
@@ -44,7 +79,7 @@ compression:
   token_window: 128000
   auto_trigger_ratio: 0.65
   micro_keep_recent: 6
-  summary_provider: bltcy-mini      # 用便宜模型做摘要，省 token
+  summary_provider: 361api-mini     # 用便宜模型做摘要，省 token
 
 storage:
   backend: sqlite
@@ -59,9 +94,36 @@ tools:
     - read_file      # 读取本地文件内容
     - search         # 在文件中正则搜索
     - shell          # 执行系统命令（高风险，可注释掉禁用）
+    - glob           # 按文件名模式查找文件
+    - grep           # 带上下文行的内容搜索
+    - powershell     # 执行 PowerShell 脚本（Windows: pwsh/powershell，Linux/Mac: pwsh）
 
   # 各工具的输出字符上限（超出部分自动存入外部引用）
   limits:
     read_file: 20000
     search:    10000
     shell:     15000
+
+# ── MCP Server 配置 ───────────────────────────────────────────────
+# 每个 key 是 Server 的别名（也用作工具名前缀，例如 filesystem__read_file）
+# transport 目前只支持 stdio
+# command   启动 Server 的完整命令（列表形式）
+#
+# 使用前请先安装对应的 npm 包，例如：
+#   npm install -g @modelcontextprotocol/server-filesystem
+# 或使用 npx 免安装直接运行（如下示例）。
+#
+mcp_servers:
+  filesystem:
+    transport: stdio
+    command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."]
+#
+# 取消注释以上段落即可启用 MCP filesystem server。
+#
+# 启用后，在 CLI 里输入 /tools 应能看到：
+#   filesystem__read_file / filesystem__list_directory / filesystem__write_file ...
+#
+#   # 示例：Git MCP Server
+#   git:
+#     transport: stdio
+#     command: ["npx", "-y", "@modelcontextprotocol/server-git", "--repository", "."]

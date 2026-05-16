@@ -60,6 +60,7 @@ def _build_engine(llm=None) -> AgentEngine:
         loop=loop,
         session_store=MemorySessionStore(),
         emitter=emitter,
+        tool_registry=registry,
     )
 
 

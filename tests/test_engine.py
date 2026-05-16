@@ -144,6 +144,7 @@ def _build_engine(reply_text: str = "Done.") -> AgentEngine:
         loop=loop,
         session_store=store,
         emitter=emitter,
+        tool_registry=registry,
     )
 
 
@@ -192,6 +193,7 @@ async def test_engine_cancel():
         loop=loop,
         session_store=store,
         emitter=emitter,
+        tool_registry=registry,
     )
 
     await engine.send_message("Start.")

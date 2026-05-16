@@ -30,6 +30,8 @@ from harness.engine.state_machine import StateMachine, EngineState
 from harness.engine.loop import ReactLoop
 from harness.storage.session import SessionStore
 from harness.observability.events import EventEmitter
+from harness.tools.registry import ToolRegistry
+from harness.types.tools import ToolSchema
 
 
 @dataclass
@@ -75,11 +77,13 @@ class AgentEngine:
         loop: ReactLoop,
         session_store: SessionStore,
         emitter: EventEmitter,
+        tool_registry: ToolRegistry,
     ) -> None:
         self._config = config
         self._loop = loop
         self._session_store = session_store
         self._emitter = emitter
+        self._tool_registry = tool_registry
 
         self._sm = StateMachine()
         self._messages: list[Message] = []
@@ -103,6 +107,11 @@ class AgentEngine:
     @property
     def session_id(self) -> str:
         return self._config.session_id
+
+    @property
+    def tool_schemas(self) -> list[ToolSchema]:
+        """Current tool schemas available to the agent."""
+        return self._tool_registry.schemas()
 
     # ──────────────────────────────────────────────────────────────────
     # Public API (called by REST layer or tests)
