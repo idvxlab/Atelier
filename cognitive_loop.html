@@ -1,1027 +1,348 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
   <meta charset="UTF-8">
-  <title>MyHarnessPy — 感知·思考·行动·反馈 认知循环</title>
+  <title>MyHarnessPy 自主进化 — 四维规划</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-      background: #eef0f4;
-      padding: 36px 32px 56px;
+      background: #fff;
+      padding: 20px 24px;
     }
+    .page { width: 740px; margin: 0 auto; }
 
-    .page {
-      width: 1020px;
-      margin: 0 auto;
-    }
+    h1 { text-align: center; font-size: 15px; font-weight: 700; color: #111; margin-bottom: 3px; }
+    .subtitle { text-align: center; font-size: 10px; color: #aaa; margin-bottom: 12px; }
 
-    /* ── Header ── */
-    h1 {
-      text-align: center;
-      font-size: 22px;
-      font-weight: 800;
-      color: #1a1a2e;
-      margin-bottom: 5px;
-    }
-
-    .subtitle {
-      text-align: center;
-      font-size: 12px;
-      color: #888;
-      margin-bottom: 30px;
-    }
-
-    /* ── Loop summary bar ── */
-    .loop-bar {
+    /* ── cycle bar ── */
+    .cycle {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 0;
-      margin-bottom: 28px;
-      background: white;
-      border-radius: 12px;
-      padding: 14px 20px;
-      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
-    }
-
-    .loop-node {
-      flex: 1;
-      text-align: center;
-      padding: 10px 6px;
+      background: #fafafa;
+      border: 1px solid #e8e8ea;
       border-radius: 8px;
-      cursor: default;
-    }
-
-    .loop-node-zh {
-      font-size: 17px;
-      font-weight: 800;
-      margin-bottom: 2px;
-    }
-
-    .loop-node-en {
-      font-size: 10px;
-      font-weight: 500;
-      opacity: 0.55;
-    }
-
-    .loop-arrow {
-      font-size: 18px;
-      color: #bbb;
-      padding: 0 6px;
-      flex-shrink: 0;
-    }
-
-    .loop-return {
-      width: 100%;
-      text-align: center;
-      margin-top: 8px;
-      font-size: 10.5px;
-      color: #9ca3af;
-      border-top: 1px dashed #dde0e6;
-      padding-top: 8px;
-      letter-spacing: 0.3px;
-    }
-
-    .ln-p {
-      background: #dbeafe22;
-      color: #1d4ed8;
-    }
-
-    .ln-t {
-      background: #ede9fe22;
-      color: #5b21b6;
-    }
-
-    .ln-a {
-      background: #d1fae522;
-      color: #065f46;
-    }
-
-    .ln-f {
-      background: #fce7f322;
-      color: #9d174d;
-    }
-
-    /* ── Four column grid ── */
-    .four-col {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      margin-bottom: 24px;
-    }
-
-    /* ── Node card ── */
-    .node-card {
-      border-radius: 14px;
-      overflow: hidden;
-      background: white;
-      box-shadow: 0 1px 8px rgba(0, 0, 0, 0.07);
-    }
-
-    .node-header {
-      padding: 14px 16px 10px;
-    }
-
-    .node-header-zh {
-      font-size: 20px;
-      font-weight: 800;
-      margin-bottom: 2px;
-    }
-
-    .node-header-en {
-      font-size: 11px;
-      font-weight: 500;
-      opacity: 0.5;
-      margin-bottom: 6px;
-    }
-
-    .node-header-desc {
-      font-size: 11px;
-      line-height: 1.5;
-      opacity: 0.75;
-    }
-
-    .nh-p {
-      background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-    }
-
-    .nh-t {
-      background: linear-gradient(135deg, #ede9fe, #ddd6fe);
-    }
-
-    .nh-a {
-      background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-    }
-
-    .nh-f {
-      background: linear-gradient(135deg, #fce7f3, #fbcfe8);
-    }
-
-    .nh-p .node-header-zh {
-      color: #1e3a8a;
-    }
-
-    .nh-t .node-header-zh {
-      color: #3b0764;
-    }
-
-    .nh-a .node-header-zh {
-      color: #064e3b;
-    }
-
-    .nh-f .node-header-zh {
-      color: #831843;
-    }
-
-    /* ── Section within card ── */
-    .node-body {
-      padding: 12px 14px 14px;
-    }
-
-    .section {
+      padding: 9px 16px;
       margin-bottom: 12px;
     }
-
-    .section:last-child {
-      margin-bottom: 0;
-    }
-
-    .sec-title {
-      font-size: 9.5px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.7px;
-      color: #9ca3af;
-      margin-bottom: 5px;
-    }
-
-    .row {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-      padding: 3.5px 0;
-      border-bottom: 1px solid #f3f4f6;
-      font-size: 11px;
-    }
-
-    .row:last-child {
-      border-bottom: none;
-    }
-
-    .row-tag {
-      font-size: 9.5px;
-      font-weight: 700;
-      padding: 1px 5px;
-      border-radius: 4px;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .row-val {
-      color: #374151;
+    .cn {
       flex: 1;
-      line-height: 1.4;
+      text-align: center;
+      padding: 4px 2px;
+      border-radius: 6px;
     }
-
-    .row-code {
-      font-family: "Consolas", monospace;
-      font-size: 10.5px;
-      color: #374151;
-    }
-
-    /* tag colors */
-    .t-src {
-      background: #dbeafe;
-      color: #1e40af;
-    }
-
-    .t-key {
-      background: #ede9fe;
-      color: #4c1d95;
-    }
-
-    .t-out {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .t-mod {
-      background: #fef3c7;
-      color: #92400e;
-    }
-
-    .t-guard {
-      background: #fce7f3;
-      color: #9d174d;
-    }
-
-    .t-rule {
-      background: #f1f5f9;
-      color: #475569;
-    }
-
-    .t-tool {
-      background: #ecfdf5;
-      color: #047857;
-    }
-
-    .t-ch {
-      background: #fdf4ff;
-      color: #7e22ce;
-    }
-
-    .t-ext {
-      background: #fff7ed;
-      color: #c2410c;
-    }
-
-    .t-int {
-      background: #fafafa;
-      color: #374151;
-      border: 1px solid #e5e7eb;
-    }
-
-    /* ── Code block ── */
-    .code-block {
-      background: #1e2030;
-      border-radius: 8px;
-      padding: 10px 12px;
+    .cn-zh { font-size: 14px; font-weight: 800; }
+    .cn-en { font-size: 9px; font-weight: 500; opacity: 0.5; display: block; margin-top: 1px; }
+    .c-arr { font-size: 16px; color: #ccc; padding: 0 4px; flex-shrink: 0; }
+    .cn-p .cn-zh { color: #1d4ed8; }
+    .cn-t .cn-zh { color: #4338ca; }
+    .cn-a .cn-zh { color: #047857; }
+    .cn-f .cn-zh { color: #be123c; }
+    .cycle-q {
+      width: 100%;
+      text-align: center;
+      font-size: 9px;
+      color: #999;
+      border-top: 1px dashed #e0e0e0;
+      padding-top: 6px;
       margin-top: 6px;
-      overflow-x: auto;
     }
 
-    .code-block code {
-      font-family: "Consolas", "Courier New", monospace;
-      font-size: 9.5px;
-      color: #c9d1d9;
-      line-height: 1.6;
-      white-space: pre;
-      display: block;
-    }
-
-    .kw {
-      color: #ff79c6;
-    }
-
-    .cls {
-      color: #8be9fd;
-    }
-
-    .fn {
-      color: #50fa7b;
-    }
-
-    .str {
-      color: #f1fa8c;
-    }
-
-    .cmt {
-      color: #6272a4;
-    }
-
-    .num {
-      color: #bd93f9;
-    }
-
-    /* ── Data flow section ── */
-    .dataflow {
-      background: white;
-      border-radius: 14px;
-      padding: 20px 24px;
-      box-shadow: 0 1px 8px rgba(0, 0, 0, 0.07);
-      margin-bottom: 24px;
-    }
-
-    .df-title {
-      font-size: 13px;
-      font-weight: 800;
-      color: #1a1a2e;
-      margin-bottom: 14px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #f0f2f5;
-    }
-
-    .df-steps {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .df-step {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 9px 0;
-      border-bottom: 1px solid #f3f4f6;
-    }
-
-    .df-step:last-child {
-      border-bottom: none;
-    }
-
-    .df-num {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      font-weight: 800;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-    .df-content {
-      flex: 1;
-    }
-
-    .df-who {
-      font-size: 10px;
-      font-weight: 700;
-      color: #6b7280;
-      margin-bottom: 2px;
-    }
-
-    .df-what {
-      font-size: 11.5px;
-      color: #1a1a2e;
-      font-weight: 600;
-      margin-bottom: 2px;
-    }
-
-    .df-detail {
-      font-size: 10.5px;
-      color: #6b7280;
-      line-height: 1.4;
-    }
-
-    .df-code {
-      font-family: "Consolas", monospace;
-      font-size: 10px;
-      color: #5b21b6;
-      background: #f5f3ff;
-      border-radius: 4px;
-      padding: 1px 5px;
-    }
-
-    .sn-p {
-      background: #dbeafe;
-      color: #1d4ed8;
-    }
-
-    .sn-t {
-      background: #ede9fe;
-      color: #5b21b6;
-    }
-
-    .sn-a {
-      background: #d1fae5;
-      color: #047857;
-    }
-
-    .sn-f {
-      background: #fce7f3;
-      color: #9d174d;
-    }
-
-    .sn-x {
-      background: #f3f4f6;
-      color: #374151;
-    }
-
-    /* ── Principle cards ── */
-    .principles {
+    /* ── 2x2 grid ── */
+    .grid4 {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-    }
-
-    .principle-card {
-      background: white;
-      border-radius: 11px;
-      padding: 14px 15px;
-      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.06);
-    }
-
-    .pc-title {
-      font-size: 11.5px;
-      font-weight: 800;
-      color: #1a1a2e;
-      margin-bottom: 4px;
-    }
-
-    .pc-desc {
-      font-size: 10.5px;
-      color: #6b7280;
-      line-height: 1.5;
-    }
-
-    .pc-border-p {
-      border-top: 3px solid #3b82f6;
-    }
-
-    .pc-border-t {
-      border-top: 3px solid #7c3aed;
-    }
-
-    .pc-border-a {
-      border-top: 3px solid #10b981;
-    }
-
-    .pc-border-f {
-      border-top: 3px solid #ec4899;
-    }
-
-    /* ── Section headings ── */
-    .section-heading {
-      font-size: 13px;
-      font-weight: 800;
-      color: #374151;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
+      grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
 
-    .section-heading::before {
-      content: "";
-      display: inline-block;
-      width: 4px;
-      height: 14px;
-      border-radius: 2px;
-      background: linear-gradient(to bottom, #667eea, #764ba2);
+    /* ── phase card ── */
+    .pcard {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
     }
+    .pcard-head {
+      padding: 9px 12px 8px;
+      border-bottom: 1px solid #eee;
+    }
+    .pcard-title {
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 2px;
+    }
+    .pcard-q {
+      font-size: 9.5px;
+      color: #666;
+      line-height: 1.4;
+    }
+    /* head color themes */
+    .ph-p { background: #eff6ff; border-bottom-color: #bfdbfe; }
+    .ph-p .pcard-title { color: #1e3a8a; }
+    .ph-t { background: #eef2ff; border-bottom-color: #c7d2fe; }
+    .ph-t .pcard-title { color: #312e81; }
+    .ph-a { background: #f0fdf4; border-bottom-color: #a7f3d0; }
+    .ph-a .pcard-title { color: #064e3b; }
+    .ph-f { background: #fff1f2; border-bottom-color: #fecdd3; }
+    .ph-f .pcard-title { color: #881337; }
+
+    .pcard-body { padding: 8px 10px 10px; }
+
+    /* ── section within card ── */
+    .sec-label {
+      font-size: 8.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #bbb;
+      margin: 7px 0 4px;
+    }
+    .sec-label:first-child { margin-top: 0; }
+
+    /* ── module rows ── */
+    .mod {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 3.5px 0;
+      border-bottom: 1px solid #f4f4f5;
+      font-size: 10.5px;
+    }
+    .mod:last-child { border-bottom: none; }
+    .mod-name {
+      font-weight: 700;
+      color: #1a1a1a;
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-width: 100px;
+    }
+    .mod-desc { color: #555; line-height: 1.4; font-size: 10px; }
+
+    /* ── impl tag ── */
+    .tag {
+      display: inline-block;
+      font-size: 7.5px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin-left: 3px;
+      vertical-align: middle;
+    }
+    .new  { background: #dcfce7; color: #166534; }
+    .ext  { background: #fef9c3; color: #854d0e; }
+    .hook { background: #ede9fe; color: #4c1d95; }
+
+    /* ── harness dependency chips ── */
+    .deps { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+    .dep {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 600;
+      color: #475569;
+      padding: 2px 6px;
+    }
+
+    /* ── bottom cycle note ── */
+    .cycle-close {
+      margin-top: 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      border: 1px dashed #c7d2fe;
+      background: #fafaff;
+      border-radius: 7px;
+      padding: 8px 12px;
+    }
+    .cycle-close-icon { font-size: 20px; color: #6366f1; flex-shrink: 0; line-height: 1.3; }
+    .cycle-close-text { font-size: 9.5px; color: #555; line-height: 1.6; }
+    .cycle-close-text strong { color: #4338ca; font-weight: 700; }
   </style>
 </head>
-
 <body>
-  <div class="page">
+<div class="page">
 
-    <h1>MyHarnessPy — 感知 · 思考 · 行动 · 反馈</h1>
-    <div class="subtitle">Agent 认知循环与实现细节 &nbsp;|&nbsp; harness/ 核心模块映射</div>
+  <h1>MyHarness 自主进化 — 四维模块规划</h1>
+  <div class="subtitle">将"元认知进化循环"映射到感知→思考→行动→反馈四个维度，每块说明新增模块与复用的 harness 设计</div>
 
-    <!-- ══ Loop Summary Bar ══ -->
-    <div class="loop-bar">
-      <div class="loop-node ln-p">
-        <div class="loop-node-zh" style="color:#1d4ed8">感知</div>
-        <div class="loop-node-en">Perception</div>
+  <!-- cycle bar -->
+  <div class="cycle">
+    <div class="cn cn-p"><span class="cn-zh">感知</span><span class="cn-en">Perception</span></div>
+    <div class="c-arr">→</div>
+    <div class="cn cn-t"><span class="cn-zh">思考</span><span class="cn-en">Thinking</span></div>
+    <div class="c-arr">→</div>
+    <div class="cn cn-a"><span class="cn-zh">行动</span><span class="cn-en">Action</span></div>
+    <div class="c-arr">→</div>
+    <div class="cn cn-f"><span class="cn-zh">反馈</span><span class="cn-en">Feedback</span></div>
+    <div class="cycle-q">进化飞轮：反馈结果写回感知层 → 触发下一轮推理 → 能力持续累积</div>
+  </div>
+
+  <!-- 2x2 grid -->
+  <div class="grid4">
+
+    <!-- ① 感知 -->
+    <div class="pcard">
+      <div class="pcard-head ph-p">
+        <div class="pcard-title">① 感知 · Perception</div>
+        <div class="pcard-q">系统如何观测自身运行状态与能力边界？</div>
       </div>
-      <div class="loop-arrow">→</div>
-      <div class="loop-node ln-t">
-        <div class="loop-node-zh" style="color:#5b21b6">思考</div>
-        <div class="loop-node-en">Thinking</div>
-      </div>
-      <div class="loop-arrow">→</div>
-      <div class="loop-node ln-a">
-        <div class="loop-node-zh" style="color:#047857">行动</div>
-        <div class="loop-node-en">Action</div>
-      </div>
-      <div class="loop-arrow">→</div>
-      <div class="loop-node ln-f">
-        <div class="loop-node-zh" style="color:#9d174d">反馈</div>
-        <div class="loop-node-en">Feedback</div>
-      </div>
-      <div style="width:100%;grid-column:1/-1"></div>
-      <div class="loop-return" style="width:100%">ToolResultBlock 成为下一轮感知输入 &nbsp;→&nbsp; 循环继续，直到无工具调用（TextBlock only）为止
-      </div>
-    </div>
+      <div class="pcard-body">
 
-    <!-- ══ Four Node Cards ══ -->
-    <div class="section-heading">四个环节 — 模块映射详解</div>
-    <div class="four-col">
+        <div class="sec-label">新增模块</div>
 
-      <!-- 感知 -->
-      <div class="node-card">
-        <div class="node-header nh-p">
-          <div class="node-header-zh">感知</div>
-          <div class="node-header-en">Perception</div>
-          <div class="node-header-desc">所有进入 Agent 的信息<br>最终都转化为 Message 对象</div>
+        <div class="mod">
+          <div class="mod-name">EventCollector<span class="tag ext">扩展</span></div>
+          <div class="mod-desc">订阅 EventEmitter 事件流，结构化采集延迟 / Token 用量 / 工具调用频次 / 压缩触发率</div>
         </div>
-        <div class="node-body">
-
-          <div class="section">
-            <div class="sec-title">核心载体</div>
-            <div class="row">
-              <span class="row-tag t-key">载体</span>
-              <span class="row-val row-code">_messages: list[Message]</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-key">单元</span>
-              <span class="row-val">TextBlock / ThinkingBlock / ToolCallBlock / ToolResultBlock</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-key">属性</span>
-              <span class="row-val row-code">round_index, is_compressed</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title">感知来源</div>
-            <div class="row">
-              <span class="row-tag t-src">输入</span>
-              <span class="row-val">用户文本消息<br><span class="row-code">engine.send_message(text)</span></span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-src">历史</span>
-              <span class="row-val">SQLite 持久化消息恢复<br><span class="row-code">storage.load(session_id)</span></span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-src">系统</span>
-              <span class="row-val">Persona 系统提示词<br><span class="row-code">load_persona().system_prompt</span></span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-src">技能</span>
-              <span class="row-val">Skill 摘要列表（常驻提示词）<br><span
-                  class="row-code">build_skill_system_addendum()</span></span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-src">回路</span>
-              <span class="row-val">上一轮工具输出（ToolResultBlock）<br>行动 → 感知 的核心回路</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-src">摘要</span>
-              <span class="row-val">压缩摘要重注入<br><span class="row-code">compression.auto_compress()</span></span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-src">主动</span>
-              <span class="row-val">文件读取 / 正则搜索<br>Agent 主动扩展感知范围</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title">感知约束</div>
-            <div class="row">
-              <span class="row-tag t-rule">窗口</span>
-              <span class="row-val">token_window: 128,000<br>超限触发压缩</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-rule">顺序</span>
-              <span class="row-val">消息顺序不可破坏<br>ToolCall 必须紧跟 ToolResult</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-rule">重注入</span>
-              <span class="row-val">压缩后系统提示词与任务目标<br>必须重新注入，防 AI 失忆</span>
-            </div>
-          </div>
-
-          <div class="code-block"><code><span class="cmt"># engine/engine.py</span>
-<span class="kw">async def</span> <span class="fn">send_message</span>(self, text):
-    <span class="kw">async with</span> self._state_lock:
-        <span class="kw">if</span> self.state == RUNNING:
-            <span class="cmt"># 进入干预队列</span>
-            self._intervention_queue
-                .put_nowait(text)
-        <span class="kw">else</span>:
-            <span class="cmt"># 直接追加为感知输入</span>
-            self._messages.append(
-                Message(role=<span class="str">"user"</span>, ...)
-            )</code></div>
-
+        <div class="mod">
+          <div class="mod-name">FailureClassifier<span class="tag new">新增</span></div>
+          <div class="mod-desc">每次会话结束后分类失败模式：LoopDetected · ToolError · ContextOverflow · ToolNotFound · MaxRoundHit</div>
         </div>
-      </div>
-
-      <!-- 思考 -->
-      <div class="node-card">
-        <div class="node-header nh-t">
-          <div class="node-header-zh">思考</div>
-          <div class="node-header-en">Thinking</div>
-          <div class="node-header-desc">将感知输入转化为<br>决策输出的推理过程</div>
+        <div class="mod">
+          <div class="mod-name">SessionReplayer<span class="tag hook">接 Checkpoint</span></div>
+          <div class="mod-desc">从 SQLite Checkpoint 逐轮还原历史消息序列，供离线模式挖掘与根因分析</div>
         </div>
-        <div class="node-body">
-
-          <div class="section">
-            <div class="sec-title">核心入口</div>
-            <div class="row">
-              <span class="row-tag t-key">触发</span>
-              <span class="row-val row-code">loop.py Step 4<br>provider.chat(messages, tools)</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-key">输入</span>
-              <span class="row-val">完整 _messages + 可用工具列表</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-out">输出A</span>
-              <span class="row-val">ToolCallBlock — 决定调用工具</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-out">输出B</span>
-              <span class="row-val">TextBlock — 直接回复用户</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-out">输出C</span>
-              <span class="row-val">ThinkingBlock（Anthropic）<br>链式思考，可观测</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title">思考增强</div>
-            <div class="row">
-              <span class="row-tag t-ext">推理链</span>
-              <span class="row-val">Extended Thinking<br>budget_tokens: 5000<br>完整推理过程暴露</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-ext">技能</span>
-              <span class="row-val">Skill 自主选择<br>描述在提示词中，模型自主<br>决定 use_skill(name)</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-ext">工具</span>
-              <span class="row-val">每轮 registry.discover()<br>不缓存，支持动态注册</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title">思考约束</div>
-            <div class="row">
-              <span class="row-tag t-guard">权限</span>
-              <span class="row-val">Persona.allowed_tools<br>限定可调用工具范围</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-guard">反死循环</span>
-              <span class="row-val">LoopDetector<br>SHA-1 指纹 + 5轮滑动窗口<br>重复 → 注入突破提示</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-guard">取消</span>
-              <span class="row-val">cancel_event 竞争等待<br>LLM 调用可被毫秒级中断</span>
-            </div>
-          </div>
-
-          <div class="code-block"><code><span class="cmt"># engine/loop.py — Step 4</span>
-<span class="kw">async def</span> <span class="fn">_run_one_round</span>(self):
-    <span class="cmt"># tools 每轮重新发现</span>
-    tools = registry.discover()
-
-    <span class="cmt"># 与取消信号竞争</span>
-    done, _ = <span class="kw">await</span> asyncio.wait([
-        provider.chat(msgs, tools),
-        cancel_event.wait()
-    ], return_when=FIRST_COMPLETED)
-
-    assistant_msg = done.pop().result()
-    <span class="kw">return</span> assistant_msg  <span class="cmt"># → 行动</span></code></div>
-
-        </div>
-      </div>
-
-      <!-- 行动 -->
-      <div class="node-card">
-        <div class="node-header nh-a">
-          <div class="node-header-zh">行动</div>
-          <div class="node-header-en">Action</div>
-          <div class="node-header-desc">将思考决策转化为<br>具体工具调用的执行过程</div>
-        </div>
-        <div class="node-body">
-
-          <div class="section">
-            <div class="sec-title">执行机制</div>
-            <div class="row">
-              <span class="row-tag t-key">并发</span>
-              <span class="row-val row-code">asyncio.gather(*calls)<br>同轮多工具真并发</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-key">触发</span>
-              <span class="row-val">LLM 输出含 ToolCallBlock<br>则进入执行流程</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-key">产出</span>
-              <span class="row-val row-code">ToolResultBlock<br>is_error / is_overflow_ref</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title">内置工具</div>
-            <div class="row">
-              <span class="row-tag t-tool">shell</span>
-              <span class="row-val">asyncio 子进程<br>参数数组，防命令注入<br>上限 15,000 字符</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-tool">read_file</span>
-              <span class="row-val">支持 offset / limit<br>路径遍历防护<br>上限 20,000 字符</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-tool">search</span>
-              <span class="row-val">正则文件搜索<br>超时保护<br>上限 10,000 字符</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-tool">use_skill</span>
-              <span class="row-val">按需加载 SKILL.md 全文<br>仅读取，无执行权限<br>无输出上限</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title">安全与溢出处理</div>
-            <div class="row">
-              <span class="row-tag t-guard">溢出</span>
-              <span class="row-val">输出 > 上限<br>→ OverflowStore 存储<br>→ 返回 ref:&lt;id&gt; 引用</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-guard">注入</span>
-              <span class="row-val">shell 命令参数数组传递<br>禁止字符串拼接构造命令</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-guard">错误</span>
-              <span class="row-val">工具异常 → is_error=True<br>不中断循环，继续下一步</span>
-            </div>
-          </div>
-
-          <div class="code-block"><code><span class="cmt"># tools/executor.py</span>
-<span class="kw">async def</span> <span class="fn">execute_all</span>(self, calls):
-    results = <span class="kw">await</span> asyncio.gather(
-        *[self._exec(c) <span class="kw">for</span> c <span class="kw">in</span> calls]
-    )
-    <span class="kw">for</span> raw, call <span class="kw">in</span> zip(results, calls):
-        <span class="kw">if</span> len(raw) > limit:
-            ref = overflow_store.put(raw)
-            yield ToolResultBlock(
-                content=<span class="str">f"ref:{ref}"</span>,
-                is_overflow_ref=<span class="num">True</span>
-            )
-        <span class="kw">else</span>:
-            yield ToolResultBlock(raw)</code></div>
-
-        </div>
-      </div>
-
-      <!-- 反馈 -->
-      <div class="node-card">
-        <div class="node-header nh-f">
-          <div class="node-header-zh">反馈</div>
-          <div class="node-header-en">Feedback</div>
-          <div class="node-header-desc">行动结果回路给感知<br>同时向用户实时推送</div>
-        </div>
-        <div class="node-body">
-
-          <div class="section">
-            <div class="sec-title">内部反馈（→ 下轮感知）</div>
-            <div class="row">
-              <span class="row-tag t-key">核心</span>
-              <span class="row-val">ToolResultBlock 追加到 _messages<br>立即成为下一轮感知输入</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-key">原子性</span>
-              <span class="row-val">assistant_msg + tool_result_msg<br>一次性 atomic append<br>保证消息协议完整性</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-key">干预</span>
-              <span class="row-val">loop 结束后 drain<br>intervention_queue<br>用户 RUNNING 中消息注入</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-key">校验</span>
-              <span class="row-val">validate_message_sequence()<br>追加前强制验证<br>ToolCall ↔ ToolResult 配对</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title">外部反馈（→ 用户可见）</div>
-            <div class="row">
-              <span class="row-tag t-ch">实时</span>
-              <span class="row-val">WebSocket 推送<br>每条新消息立即发送<br><span class="row-code">ws.py on_message()</span></span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-ch">轮询</span>
-              <span class="row-val">GET /sessions/{id}/state<br>前端定时拉取<br>返回最近 20 条消息</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-ch">状态</span>
-              <span class="row-val">state: RUNNING / WAITING<br>is_running: bool<br>实时状态通知</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title">持久与可观测</div>
-            <div class="row">
-              <span class="row-tag t-mod">持久化</span>
-              <span class="row-val">loop 结束 → storage.save()<br>SQLite 完整消息写库</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-mod">日志</span>
-              <span class="row-val">EventEmitter 结构化日志<br>llm_call / tool_call /<br>compression / loop_detected</span>
-            </div>
-            <div class="row">
-              <span class="row-tag t-mod">快照</span>
-              <span class="row-val">Checkpoint 轮级快照<br>支持回滚到任意轮次</span>
-            </div>
-          </div>
-
-          <div class="code-block"><code><span class="cmt"># engine/loop.py — Step 9</span>
-<span class="cmt"># Atomic append: 协议不可破坏</span>
-validate_message_sequence(
-    msgs + [assistant, tool_result]
-)
-on_message(assistant_msg)   <span class="cmt"># → ws 推送</span>
-on_message(tool_result_msg) <span class="cmt"># → ws 推送</span>
-
-<span class="cmt"># Step 10: drain 干预队列</span>
-<span class="kw">while</span> <span class="kw">not</span> queue.empty():
-    txt = queue.get_nowait()
-    on_message(Message(<span class="str">"user"</span>, txt))</code></div>
-
-        </div>
-      </div>
-
-    </div><!-- /four-col -->
-
-    <!-- ══ Complete Data Flow ══ -->
-    <div class="dataflow">
-      <div class="df-title">完整数据流 — 一轮 ReAct 循环的全路径</div>
-      <div class="df-steps">
-
-        <div class="df-step">
-          <div class="df-num sn-x">0</div>
-          <div class="df-content">
-            <div class="df-who">Entry Layer</div>
-            <div class="df-what">用户发送消息</div>
-            <div class="df-detail">POST /sessions/{id}/messages &nbsp;或&nbsp; WebSocket {type:"message", text:"..."}
-            </div>
-          </div>
+        <div class="mod">
+          <div class="mod-name">SelfModelStore<span class="tag new">新增</span></div>
+          <div class="mod-desc">维护动态自我画像 JSON：擅长任务 / 薄弱环节 / 技能缺口优先级榜单</div>
         </div>
 
-        <div class="df-step">
-          <div class="df-num sn-p">P</div>
-          <div class="df-content">
-            <div class="df-who">感知 · engine/engine.py</div>
-            <div class="df-what">消息进入感知层</div>
-            <div class="df-detail">
-              若 state == WAITING_INPUT → 追加为 Message(role="user") → 转换状态 RUNNING → fire <span
-                class="df-code">_run_loop_guarded()</span><br>
-              若 state == RUNNING → 入队 <span class="df-code">_intervention_queue</span>（等待本轮结束后注入）
-            </div>
-          </div>
-        </div>
-
-        <div class="df-step">
-          <div class="df-num sn-p">P</div>
-          <div class="df-content">
-            <div class="df-who">感知 · engine/loop.py Step 2</div>
-            <div class="df-what">上下文压缩检查</div>
-            <div class="df-detail">
-              估算当前 token 数。若 &gt; 65% window → Auto compress（LLM 摘要 + 重注入系统提示）。若消息数 &gt; 24 → Micro compress（清空旧
-              ToolResult 内容）
-            </div>
-          </div>
-        </div>
-
-        <div class="df-step">
-          <div class="df-num sn-p">P</div>
-          <div class="df-content">
-            <div class="df-who">感知 · engine/loop.py Step 3</div>
-            <div class="df-what">工具列表发现</div>
-            <div class="df-detail"><span class="df-code">registry.discover()</span> 每轮重新扫描，返回当前可用工具的 ToolSchema 列表（不缓存）
-            </div>
-          </div>
-        </div>
-
-        <div class="df-step">
-          <div class="df-num sn-t">T</div>
-          <div class="df-content">
-            <div class="df-who">思考 · engine/loop.py Step 4</div>
-            <div class="df-what">LLM 推理</div>
-            <div class="df-detail">
-              <span class="df-code">provider.chat(messages, tools)</span> → 与 <span
-                class="df-code">cancel_event.wait()</span> 竞争。<br>
-              输出：assistant Message，含 ToolCallBlock（需要工具）或 TextBlock（直接回复）
-            </div>
-          </div>
-        </div>
-
-        <div class="df-step">
-          <div class="df-num sn-t">T</div>
-          <div class="df-content">
-            <div class="df-who">思考 · engine/loop.py Step 5–6</div>
-            <div class="df-what">结果判断 + 循环检测</div>
-            <div class="df-detail">
-              若无 ToolCallBlock → drain intervention_queue → return（本轮结束）<br>
-              若有 ToolCallBlock → LoopDetector 校验指纹：重复模式则注入突破提示后继续
-            </div>
-          </div>
-        </div>
-
-        <div class="df-step">
-          <div class="df-num sn-a">A</div>
-          <div class="df-content">
-            <div class="df-who">行动 · tools/executor.py Step 7</div>
-            <div class="df-what">并发工具执行</div>
-            <div class="df-detail">
-              <span class="df-code">asyncio.gather(*executor.execute_all(calls))</span> 同轮多工具并发。<br>
-              各工具异步执行：shell 子进程 / 文件读取 / 正则搜索 / skill 加载。超限输出 → OverflowStore → 引用 ID
-            </div>
-          </div>
-        </div>
-
-        <div class="df-step">
-          <div class="df-num sn-f">F</div>
-          <div class="df-content">
-            <div class="df-who">反馈 · engine/loop.py Step 8–9</div>
-            <div class="df-what">协议校验 + 原子追加</div>
-            <div class="df-detail">
-              <span class="df-code">validate_message_sequence()</span> 校验 ToolCall/ToolResult 配对 → 通过后原子追加 assistant_msg
-              + tool_result_msg → <span class="df-code">on_message()</span> 触发 WebSocket 推送
-            </div>
-          </div>
-        </div>
-
-        <div class="df-step">
-          <div class="df-num sn-f">F</div>
-          <div class="df-content">
-            <div class="df-who">反馈 → 感知 · 回路</div>
-            <div class="df-what">ToolResultBlock 成为下一轮感知输入</div>
-            <div class="df-detail">
-              追加到 _messages 的 ToolResultBlock 在下一轮 Step 4 的 <span class="df-code">provider.chat(messages, ...)</span>
-              中作为上下文被 LLM 读取，形成感知→思考→行动→反馈的闭合回路
-            </div>
-          </div>
-        </div>
-
-        <div class="df-step">
-          <div class="df-num sn-f">F</div>
-          <div class="df-content">
-            <div class="df-who">反馈 · storage/sqlite.py</div>
-            <div class="df-what">持久化</div>
-            <div class="df-detail">loop 结束后 <span class="df-code">storage.save(session_id, messages)</span>，完整消息历史写入
-              SQLite，支持会话恢复</div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- ══ Design Principles ══ -->
-    <div class="section-heading">四环路核心设计原则</div>
-    <div class="principles">
-      <div class="principle-card pc-border-p">
-        <div class="pc-title">感知 — 消息即真相</div>
-        <div class="pc-desc">
-          _messages 是唯一的信息载体，所有外部输入、历史、工具结果、系统指令统一转化为 Message 对象。没有隐式状态传递，一切感知均显式可追踪。
-        </div>
-      </div>
-      <div class="principle-card pc-border-t">
-        <div class="pc-title">思考 — 工具不缓存</div>
-        <div class="pc-desc">
-          每轮调用 registry.discover() 重新加载工具列表，不依赖缓存。支持运行时动态注册工具，且 LLM 始终看到最新可用能力。
-        </div>
-      </div>
-      <div class="principle-card pc-border-a">
-        <div class="pc-title">行动 — 安全并发</div>
-        <div class="pc-desc">
-          asyncio.gather() 实现同轮真并发；参数数组防止 shell 注入；硬上限 + OverflowStore 防止 token 爆炸；错误工具不中断整轮循环。
-        </div>
-      </div>
-      <div class="principle-card pc-border-f">
-        <div class="pc-title">反馈 — 原子性保证</div>
-        <div class="pc-desc">
-          assistant_msg 和 tool_result_msg 必须一次性原子追加，消息协议校验在追加前强制执行。WebSocket 推送与内部回路解耦，各自独立可靠。
+        <div class="sec-label">复用的 harness 设计</div>
+        <div class="deps">
+          <span class="dep">observability/EventEmitter</span>
+          <span class="dep">storage/sqlite 双表扩展</span>
+          <span class="dep">engine/Checkpoint</span>
+          <span class="dep">engine/LoopDetector 指纹</span>
         </div>
       </div>
     </div>
 
-  </div><!-- /page -->
+    <!-- ② 思考 -->
+    <div class="pcard">
+      <div class="pcard-head ph-t">
+        <div class="pcard-title">② 思考 · Thinking</div>
+        <div class="pcard-q">系统如何从感知数据推断缺陷并生成改进方案？</div>
+      </div>
+      <div class="pcard-body">
+
+        <div class="sec-label">新增模块</div>
+
+        <div class="mod">
+          <div class="mod-name">ArchIntrospector<span class="tag new">新增</span></div>
+          <div class="mod-desc">读取 config.yaml + skills/ + personas/，将当前架构序列化为 LLM 可理解的上下文，建立"自我认知"基础</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">CausalAnalyzer<span class="tag new">新增</span></div>
+          <div class="mod-desc">给定失败 trace，让 LLM 推理根因：缺工具 / Prompt 指令不足 / 压缩过早丢失目标 / 循环阈值偏低</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">CounterfactualReasoner<span class="tag new">新增</span></div>
+          <div class="mod-desc">假设"拥有技能 X / 工具 Y"后重新模拟失败会话，验证该假设能否消除失败并量化改善幅度</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">ProposalSynthesizer<span class="tag new">新增</span></div>
+          <div class="mod-desc">输出结构化 Proposal：type(skill|tool|prompt|config) + diff + rationale + risk_level</div>
+        </div>
+
+        <div class="sec-label">复用的 harness 设计</div>
+        <div class="deps">
+          <span class="dep">AnthropicProvider · Extended Thinking</span>
+          <span class="dep">harness/skills.py · load_persona</span>
+          <span class="dep">engine/compression.py</span>
+          <span class="dep">llm/registry · 统一认证</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ 行动 -->
+    <div class="pcard">
+      <div class="pcard-head ph-a">
+        <div class="pcard-title">③ 行动 · Action</div>
+        <div class="pcard-q">系统如何将推理出的方案安全地写入自身能力库？</div>
+      </div>
+      <div class="pcard-body">
+
+        <div class="sec-label">新增模块</div>
+
+        <div class="mod">
+          <div class="mod-name">IsolatedRunner<span class="tag new">新增</span></div>
+          <div class="mod-desc">在隔离子进程中启动携带 Proposal 的 Agent，重放历史失败会话，观察行为是否改善</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">SkillWriter<span class="tag hook">写入 skills/</span></div>
+          <div class="mod-desc">自动生成 / 更新 skills/*/SKILL.md，含 YAML frontmatter + 操作指南；热加载无需重启</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">PersonaEvolver<span class="tag hook">写入 personas/</span></div>
+          <div class="mod-desc">追加新技能摘要 / 修正错误指令到 personas/*.md；保留历史版本，仅追加不覆盖</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">ToolComposer<span class="tag new">新增</span></div>
+          <div class="mod-desc">生成新工具 Python 代码草稿，写入 tools/pending/ 待审核目录；人工 review 后手动注册</div>
+        </div>
+
+        <div class="sec-label">复用的 harness 设计</div>
+        <div class="deps">
+          <span class="dep">skills/ 热加载机制</span>
+          <span class="dep">tools/registry · 动态注册</span>
+          <span class="dep">storage/Checkpoint · 隔离基础</span>
+          <span class="dep">tools/executor · asyncio 安全执行</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ 反馈 -->
+    <div class="pcard">
+      <div class="pcard-head ph-f">
+        <div class="pcard-title">④ 反馈 · Feedback</div>
+        <div class="pcard-q">系统如何评估改进效果并决定固化或回滚？</div>
+      </div>
+      <div class="pcard-body">
+
+        <div class="sec-label">新增模块</div>
+
+        <div class="mod">
+          <div class="mod-name">BehaviorDiff<span class="tag new">新增</span></div>
+          <div class="mod-desc">量化新旧版本对比：任务成功率差 / Token 节省 / 平均轮数变化 / 工具调用效率</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">RegressionGuard<span class="tag hook">接 tests/</span></div>
+          <div class="mod-desc">自动运行现有测试套件；新版本不得使已通过的用例退化，失败则自动拒绝 Proposal</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">ApprovalGate<span class="tag new">新增</span></div>
+          <div class="mod-desc">risk_level=high → 强制人工确认；通过 REST 端点暴露审核接口；低风险可配置自动通过</div>
+        </div>
+        <div class="mod">
+          <div class="mod-name">EvolutionAuditLog<span class="tag new">新增</span></div>
+          <div class="mod-desc">不可删除的进化历史：时间 / Proposal 摘要 / 沙箱指标 / 审批人；供回溯与审计</div>
+        </div>
+
+        <div class="sec-label">复用的 harness 设计</div>
+        <div class="deps">
+          <span class="dep">storage/Checkpoint · 回滚引擎</span>
+          <span class="dep">storage/session · 审计存储</span>
+          <span class="dep">tests/ · 回归套件</span>
+          <span class="dep">api/rest · 审批端点</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /grid4 -->
+
+  <!-- 闭环说明 -->
+  <div class="cycle-close">
+    <div class="cycle-close-icon">↺</div>
+    <div class="cycle-close-text">
+      ④ 反馈验证通过 → SkillWriter / PersonaEvolver <strong>热写入，主循环无感知</strong>。
+      下一轮用户任务触发 EventCollector 继续采集，FailureClassifier 检测新模式，
+      <strong>SelfModel 随之更新</strong>，进入下一次"感知→思考→行动→反馈"进化飞轮。
+      整条元认知循环对核心 ReAct 引擎<strong>完全透明</strong>，可随时降级退出。
+    </div>
+  </div>
+
+</div>
 </body>
-
 </html>

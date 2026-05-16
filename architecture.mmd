@@ -1,0 +1,68 @@
+flowchart TD
+    subgraph L1["① 入口层 Entry Layer"]
+        direction LR
+        CLI["CLI / TUI\ncli.py"]
+        WEBUI["Web UI\nstatic/index.html"]
+        RESTC["REST Client\ncurl · 脚本"]
+    end
+
+    subgraph L2["② 会话与路由层 Session & Routing Layer"]
+        direction LR
+        GW["GW\napi/rest.py + ws.py\nHTTP/WebSocket 协议转换"]
+        SR["SessionRunner\nengine/engine.py\n消息路由 · 生命周期"]
+        SS["SessionStore\nstorage/session.py\nSQLite/Memory 双后端"]
+        CG["CommandGuards\nstate_machine.py\nPersona 权限路由"]
+    end
+
+    subgraph L3["③ Agent Runtime Core — ReAct 主循环 (engine/loop.py)"]
+        direction LR
+        PROMPT["PROMPT\nskills.py\nload_persona + Skill摘要"]
+        COMPRESS["COMPRESS\ncompression.py\nMicro/Auto 压缩策略"]
+        LOOPD["LoopDetector\nloop_detector.py\nSHA-1指纹+滑动窗口"]
+        MSGV["MsgValidator\ntypes/messages.py\nToolCall↔ToolResult配对"]
+    end
+
+    subgraph L4["④ 能力层 Capability Layer"]
+        direction LR
+        TOOLS["工具系统\ntools/registry+executor"]
+        SKILLS["Skills\nskills/*/SKILL.md"]
+        MEM["Persistent Memory\nSQLite历史+压缩摘要"]
+    end
+
+    subgraph L5["⑤ 执行层 Execution Backends"]
+        direction LR
+        TERM["Terminal\nasyncio子进程·防注入"]
+        FS["FileSystem\n读取+正则搜索"]
+        EAPI["External API\nshell扩展/自定义工具"]
+        SAGA["Sub-agents\n待扩展"]
+    end
+
+    subgraph L6["⑥ 状态层 State & Persistence"]
+        direction LR
+        SQLITE["SQLite\nsessions+checkpoints"]
+        JSONL["JSONL Messages\n完整消息序列化"]
+        MEMS["MemoryStore\n测试/临时会话"]
+        CKPT["Checkpoints\n轮级快照·支持回滚"]
+    end
+
+    subgraph L7["⑦ 模型层 Model / Provider Layer"]
+        direction LR
+        REG["Provider Runtime Resolver\nllm/registry.py"]
+        ANT["AnthropicProvider\nExtended Thinking"]
+        OAI["OpenAIProvider\n兼容接口"]
+    end
+
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+    L4 --> L5
+    L5 --> L6
+    L6 --> L7
+
+    style L3 fill:#f3f0ff,stroke:#7c3aed,stroke-width:2px
+    style L1 fill:#eef2ff,stroke:#818cf8
+    style L2 fill:#eff6ff,stroke:#60a5fa
+    style L4 fill:#f0fdf4,stroke:#34d399
+    style L5 fill:#fdf2f8,stroke:#f472b6
+    style L6 fill:#fffbeb,stroke:#fbbf24
+    style L7 fill:#f8fafc,stroke:#94a3b8

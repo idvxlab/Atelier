@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>MyHarnessPy 架构图</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #ffffff;
+      padding: 20px 24px;
+    }
+    .page { width: 740px; margin: 0 auto; }
+
+    h1 {
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 14px;
+      letter-spacing: 0.3px;
+    }
+
+    .layer {
+      border: 1px solid #ddd;
+      border-radius: 7px;
+      padding: 8px 12px 9px;
+      margin-bottom: 3px;
+      border-left-width: 3px;
+    }
+    .layer-title {
+      font-size: 9.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #999;
+      margin-bottom: 5px;
+    }
+
+    /* layer accent colors */
+    .l1 { border-left-color: #818cf8; }
+    .l2 { border-left-color: #60a5fa; }
+    .l3 { border-left-color: #a78bfa; border: 1.5px solid #c4b5fd; border-left: 3px solid #7c3aed; background: #faf9ff; }
+    .l4 { border-left-color: #34d399; }
+    .l5 { border-left-color: #f472b6; }
+    .l6 { border-left-color: #fbbf24; }
+    .l7 { border-left-color: #94a3b8; }
+
+    .l3 .layer-title { color: #7c3aed; }
+
+    /* chips */
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chip {
+      background: #f4f4f5;
+      border: 1px solid #e4e4e7;
+      border-radius: 5px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #222;
+      line-height: 1.3;
+    }
+    .chip small {
+      display: block;
+      font-size: 9px;
+      font-weight: 400;
+      color: #888;
+      margin-top: 1px;
+    }
+
+    /* 2-col grid for complex layers */
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .sub {
+      background: #f7f7f8;
+      border: 1px solid #e8e8ea;
+      border-radius: 5px;
+      padding: 5px 8px;
+    }
+    .sub-t {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #222;
+    }
+    .sub-d {
+      font-size: 9px;
+      color: #666;
+      margin-top: 1.5px;
+      line-height: 1.4;
+    }
+    .l3 .sub { background: #f0ecff; border-color: #ddd6fe; }
+    .l3 .sub-t { color: #4c1d95; }
+
+    /* flow text inside core */
+    .flow-text {
+      font-family: "Consolas", "Menlo", monospace;
+      font-size: 9.5px;
+      color: #5b21b6;
+      background: rgba(124,58,237,0.06);
+      border: 1px solid rgba(124,58,237,0.12);
+      border-radius: 5px;
+      padding: 5px 9px;
+      margin-bottom: 5px;
+      line-height: 1.6;
+    }
+
+    .arrow {
+      text-align: center;
+      color: #d1d5db;
+      font-size: 15px;
+      line-height: 1;
+      margin: 1px 0;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <h1>MyHarness 整体架构图</h1>
+
+  <!-- 1 -->
+  <div class="layer l1">
+    <div class="layer-title">① 入口层 · Entry Layer</div>
+    <div class="chips">
+      <div class="chip">CLI / TUI<small>cli.py · 交互式命令行</small></div>
+      <div class="chip">Web UI<small>static/index.html · SPA</small></div>
+      <div class="chip">REST Client<small>curl · 脚本 · 直接 API 调用</small></div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- 2 -->
+  <div class="layer l2">
+    <div class="layer-title">② 会话与路由层 · Session &amp; Routing Layer</div>
+    <div class="grid2">
+      <div class="sub">
+        <div class="sub-t">GW &nbsp;(api/rest.py + ws.py)</div>
+        <div class="sub-d">HTTP / WebSocket → 统一内部会话格式</div>
+      </div>
+      <div class="sub">
+        <div class="sub-t">SessionRunner &nbsp;(engine/engine.py)</div>
+        <div class="sub-d">消息路由 · 会话生命周期管理</div>
+      </div>
+      <div class="sub">
+        <div class="sub-t">SessionStore &nbsp;(storage/session.py)</div>
+        <div class="sub-d">持久化与恢复 · SQLite / Memory 双后端</div>
+      </div>
+      <div class="sub">
+        <div class="sub-t">CommandGuards &nbsp;(state_machine.py)</div>
+        <div class="sub-d">/cancel · 状态校验 · Persona 权限路由</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- 3 -->
+  <div class="layer l3">
+    <div class="layer-title">③ Agent Runtime Core · ReAct 主循环 (engine/loop.py)</div>
+    <div class="flow-text">接收消息 → PROMPT 组装 → 调用模型 → 执行工具 → 回填结果 → 压缩上下文 → 持久化状态 → 返回输出</div>
+    <div class="grid2">
+      <div class="sub">
+        <div class="sub-t">PROMPT &nbsp;(harness/skills.py)</div>
+        <div class="sub-d">load_persona() + Skill 摘要追加<br>系统提示词动态组装</div>
+      </div>
+      <div class="sub">
+        <div class="sub-t">COMPRESS &nbsp;(compression.py)</div>
+        <div class="sub-d">Micro：清空旧 ToolResult<br>Auto：LLM 摘要 + 重注入</div>
+      </div>
+      <div class="sub">
+        <div class="sub-t">LoopDetector &nbsp;(loop_detector.py)</div>
+        <div class="sub-d">SHA-1 指纹 + 滑动窗口<br>重复模式注入突破提示</div>
+      </div>
+      <div class="sub">
+        <div class="sub-t">MsgValidator &nbsp;(types/messages.py)</div>
+        <div class="sub-d">ToolCall ↔ ToolResult<br>ID 强制配对校验</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- 4 -->
+  <div class="layer l4">
+    <div class="layer-title">④ 能力层 · Capability Layer</div>
+    <div class="chips">
+      <div class="chip">工具系统<small>tools/registry + executor</small></div>
+      <div class="chip">Skills<small>skills/*/SKILL.md · 程序性记忆</small></div>
+      <div class="chip">Persistent Memory<small>SQLite 历史 + 压缩摘要</small></div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- 5 -->
+  <div class="layer l5">
+    <div class="layer-title">⑤ 执行层 · Execution Backends</div>
+    <div class="chips">
+      <div class="chip">Terminal<small>asyncio 子进程 · 参数数组防注入</small></div>
+      <div class="chip">FileSystem<small>读取 + 正则搜索 · 路径遍历防护</small></div>
+      <div class="chip">External API<small>shell 扩展 / 自定义工具</small></div>
+      <div class="chip">Sub-agents<small>待扩展</small></div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- 6 -->
+  <div class="layer l6">
+    <div class="layer-title">⑥ 状态层 · State &amp; Persistence</div>
+    <div class="chips">
+      <div class="chip">SQLite<small>sessions + checkpoints 双表</small></div>
+      <div class="chip">JSONL Messages<small>完整消息序列化存储</small></div>
+      <div class="chip">MemoryStore<small>测试 / 临时会话</small></div>
+      <div class="chip">Checkpoints<small>轮级快照 · 支持回滚</small></div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- 7 -->
+  <div class="layer l7">
+    <div class="layer-title">⑦ 模型层 · Model / Provider Layer</div>
+    <div class="chips">
+      <div class="chip">Provider Runtime Resolver<small>llm/registry.py · 统一认证 + base URL + API mode</small></div>
+      <div class="chip">AnthropicProvider<small>Extended Thinking 支持</small></div>
+      <div class="chip">OpenAIProvider<small>兼容接口</small></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
