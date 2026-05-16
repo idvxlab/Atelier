@@ -152,11 +152,17 @@ MCP 是最复杂的，遇到问题找我。
 
 ## 我的部分
 
-- `harness/factory.py` — 把 cli.py 和 rest.py 里重复的 build_engine 合并（你们做工具不需要动这块）
-- WebSocket 消息监听器 — 实时推送每条消息
-- LLM 流式输出
+- `harness/factory.py` — 把 cli.py 和 rest.py 里重复的 build_engine 合并 ✅
+- WebSocket 消息监听器 — 实时推送每条消息 ✅
+- LLM 流式输出 ✅
+- 思考过程（thinking）流式输出 ✅
 - 审批流（危险命令暂停等确认）
-- `spawn_agent` 工具（主 Agent 创建子 Agent）加上之后多agent的协作
+- `spawn_agent` 工具 ✅ — `harness/tools/builtin/spawn_agent.py`
+  - `spawn_agent`：主 Agent 创建子 Agent，串行等待完成，返回子 Agent 最终回复
+  - `spawn_agents`：并行创建多个子 Agent（`asyncio.gather`），全部完成后汇总结果
+  - 防递归：`MAX_SPAWN_DEPTH=3`，超出返回错误字符串
+  - `AgentEngine.run_to_completion(task)` — 子 Agent 专用方法，直接 await loop（不 fire-and-forget）
+  - 深度通过 `build_engine(spawn_depth=N)` 传递，按层自动递减可用深度
 
 ---
 

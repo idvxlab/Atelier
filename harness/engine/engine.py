@@ -203,6 +203,35 @@ class AgentEngine:
         # Fire-and-forget — all three outcome paths guarantee state restoration
         asyncio.create_task(self._run_loop_guarded())
 
+    async def run_to_completion(self, task: str) -> str:
+        """
+        Run a single task to completion (blocking). Intended for sub-agents.
+
+        Unlike send_message(), this awaits the loop directly instead of
+        creating a background task — the caller blocks until the engine reaches
+        COMPLETED, WAITING_INPUT (cancel), or ERROR.
+
+        Returns the final assistant text response, or "(no response)" if the
+        loop produced no text output.
+        """
+        user_msg = Message(role="user", content=[TextBlock(text=task)])
+        async with self._state_lock:
+            self._messages.append(user_msg)
+            self._sm.transition(EngineState.RUNNING)
+            self._emitter.emit(
+                "state_transition", "triggered-executed",
+                detail={"to": EngineState.RUNNING.name, "via": "run_to_completion"},
+            )
+        await self._run_loop_guarded()
+        # Return the last assistant text
+        for msg in reversed(self._messages):
+            if msg.role == "assistant":
+                texts = [b.text for b in msg.content
+                         if isinstance(b, TextBlock) and b.text]
+                if texts:
+                    return "\n".join(texts)
+        return "(no response)"
+
     async def cancel(self) -> None:
         """Signal the running loop to stop at the next round boundary."""
         self._cancel_event.set()

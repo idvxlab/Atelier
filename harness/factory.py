@@ -56,6 +56,7 @@ def build_engine(
     system_prompt: str = "",
     allowed_tools: list[str] | None = None,
     registry: ToolRegistry | None = None,
+    spawn_depth: int = 0,
 ) -> AgentEngine:
     """
     Build a fully wired AgentEngine for a session.
@@ -69,6 +70,8 @@ def build_engine(
         allowed_tools: Persona-level tool whitelist. None means use global config.
         registry:      Pre-built ToolRegistry (e.g. pre-populated with MCP tools).
                        When None, a fresh registry is created from ALL_TOOLS.
+        spawn_depth:   Current agent nesting depth (0 = top-level). Used to limit
+                       recursive sub-agent creation via spawn_agent/spawn_agents.
     """
     emitter = EventEmitter(session_id)
     llm = build_provider(provider_cfg)
@@ -111,6 +114,23 @@ def build_engine(
     # use_skill is always available if skills exist (not controlled by allowed_tools)
     if skills:
         registry.register(USE_SKILL_SCHEMA, use_skill_tool)
+
+    # spawn_agent / spawn_agents: registered conditionally by depth (not via ALL_TOOLS
+    # because they need runtime dependencies passed as closure args)
+    from harness.tools.builtin.spawn_agent import (
+        SPAWN_AGENT_SCHEMA, make_spawn_agent_tool,
+        SPAWN_AGENTS_SCHEMA, make_spawn_agents_tool,
+        MAX_SPAWN_DEPTH,
+    )
+    if spawn_depth < MAX_SPAWN_DEPTH:
+        registry.register(
+            SPAWN_AGENT_SCHEMA,
+            make_spawn_agent_tool(harness_cfg, provider_cfg, session_store, spawn_depth),
+        )
+        registry.register(
+            SPAWN_AGENTS_SCHEMA,
+            make_spawn_agents_tool(harness_cfg, provider_cfg, session_store, spawn_depth),
+        )
 
     overflow = OverflowStore()
     executor = ToolExecutor(

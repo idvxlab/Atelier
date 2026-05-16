@@ -5,6 +5,10 @@ from harness.tools.builtin.skill import use_skill_tool, USE_SKILL_SCHEMA
 from harness.tools.builtin.glob_tool import glob_tool, GLOB_SCHEMA
 from harness.tools.builtin.grep_tool import grep_tool, GREP_SCHEMA
 from harness.tools.builtin.powershell_tool import powershell_tool, POWERSHELL_SCHEMA
+from harness.tools.builtin.spawn_agent import (
+    SPAWN_AGENT_SCHEMA, make_spawn_agent_tool,
+    SPAWN_AGENTS_SCHEMA, make_spawn_agents_tool,
+)
 
 __all__ = [
     "shell_tool", "SHELL_SCHEMA",
@@ -14,4 +18,6 @@ __all__ = [
     "glob_tool", "GLOB_SCHEMA",
     "grep_tool", "GREP_SCHEMA",
     "powershell_tool", "POWERSHELL_SCHEMA",
+    "SPAWN_AGENT_SCHEMA", "make_spawn_agent_tool",
+    "SPAWN_AGENTS_SCHEMA", "make_spawn_agents_tool",
 ]
