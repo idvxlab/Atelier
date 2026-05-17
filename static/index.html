@@ -903,6 +903,45 @@
       color: var(--red);
       font-size: 13px;
     }
+
+    /* ── Approval flow ─────────────────────────────────────────────── */
+    #confirm-panel {
+      margin: 0 16px 10px;
+      padding: 12px 16px;
+      background: #2d2000;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+    }
+    .confirm-header {
+      color: #f59e0b;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .confirm-tool {
+      background: #111;
+      border-radius: 4px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .confirm-tool strong { color: #e5e7eb; }
+    .confirm-tool pre {
+      margin: 6px 0 0;
+      white-space: pre-wrap;
+      color: #9ca3af;
+      font-size: 12px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .confirm-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+    .btn-approve { background: #16a34a; color: #fff; border: none; }
+    .btn-approve:hover { background: #15803d; }
   </style>
 </head>
 
@@ -971,6 +1010,16 @@
         </div>
 
         <div id="error-banner" id="error-banner"></div>
+
+        <!-- Approval panel (shown when WAITING_CONFIRMATION) -->
+        <div id="confirm-panel" class="hidden">
+          <div class="confirm-header">⚠ Agent 请求执行高风险操作，请审批：</div>
+          <div id="confirm-tool-info"></div>
+          <div class="confirm-actions">
+            <button class="btn btn-danger btn-sm" onclick="denyAction()">拒绝</button>
+            <button class="btn btn-approve btn-sm" onclick="confirmAction()">允许执行</button>
+          </div>
+        </div>
 
         <!-- Messages or empty state -->
         <div id="messages-wrap" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
@@ -1239,6 +1288,26 @@
       } catch (e) { toast('关闭失败: ' + e.message, true); }
     }
 
+    async function confirmAction() {
+      if (!currentSessionId) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'confirm' }));
+      } else {
+        await api(`/sessions/${currentSessionId}/confirm`, 'POST');
+        doPoll();
+      }
+    }
+
+    async function denyAction() {
+      if (!currentSessionId) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'deny' }));
+      } else {
+        await api(`/sessions/${currentSessionId}/deny`, 'POST');
+        doPoll();
+      }
+    }
+
     async function cancelSession() {
       if (!currentSessionId) return;
       try {
@@ -1405,8 +1474,8 @@
         metaEl.classList.remove('hidden');
       }
 
-      // Running indicator
-      if (snap.is_running) {
+      // Running indicator (hide during confirmation — user sees the approval panel instead)
+      if (snap.is_running && snap.state !== 'WAITING_CONFIRMATION') {
         document.getElementById('running-indicator').classList.remove('hidden');
         document.getElementById('cancel-btn').classList.remove('hidden');
       }
@@ -1418,6 +1487,22 @@
         errBanner.textContent = '⚠ 引擎出错：' + (snap.last_error || '').split('\n').slice(-1)[0];
       } else {
         errBanner.style.display = 'none';
+      }
+
+      // Approval panel
+      const confirmPanel = document.getElementById('confirm-panel');
+      const confirmInfo = document.getElementById('confirm-tool-info');
+      if (snap.state === 'WAITING_CONFIRMATION' && snap.pending_approval?.length) {
+        confirmInfo.innerHTML = snap.pending_approval.map(t => {
+          const inputStr = JSON.stringify(t.input, null, 2);
+          return `<div class="confirm-tool"><strong>${escHtml(t.name)}</strong><pre>${escHtml(inputStr)}</pre></div>`;
+        }).join('');
+        confirmPanel.classList.remove('hidden');
+        // Remove typing dots while waiting for user input
+        const dotsEl = document.getElementById('typing-dots');
+        if (dotsEl) dotsEl.remove();
+      } else {
+        confirmPanel.classList.add('hidden');
       }
 
       // Render only new messages

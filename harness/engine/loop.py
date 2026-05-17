@@ -59,6 +59,7 @@ class ReactLoop:
         intervention_queue: asyncio.Queue[Message],
         on_message: OnMessageCallback,
         on_token: TokenCallback | None = None,
+        on_pre_execute: Callable[[list], Awaitable[bool]] | None = None,
     ) -> None:
         """
         Main ReAct cycle. `messages` is the live list owned by AgentEngine.
@@ -141,6 +142,11 @@ class ReactLoop:
                 )
                 await on_message(break_msg)
                 continue
+
+            # ── 6.5. Confirmation gate (dangerous tools pause here) ────────
+            if on_pre_execute is not None:
+                # Raises asyncio.CancelledError if user denies; returns True if approved
+                await on_pre_execute(tool_calls)
 
             # ── 7. Execute all tools concurrently ──────────────────────────
             results: list[ToolResultBlock] = await self._executor.execute_all(

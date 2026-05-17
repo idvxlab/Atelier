@@ -73,6 +73,8 @@ class ToolsSettings:
     # None 表示"未在 config.yaml 里配置"，CLI 会用全部内置工具
     enabled: list[str] | None = None
     limits: dict[str, int] = field(default_factory=lambda: dict(_DEFAULT_LIMITS))
+    # Tools that require user confirmation before execution (approval flow)
+    confirm_tools: list[str] = field(default_factory=lambda: ["shell", "powershell"])
 
 
 @dataclass
@@ -125,6 +127,7 @@ class HarnessConfig:
         tools_cfg = ToolsSettings(
             enabled=tools_raw.get("enabled", None),
             limits={**_DEFAULT_LIMITS, **tools_raw.get("limits", {})},
+            confirm_tools=tools_raw.get("confirm_tools", ["shell", "powershell"]),
         )
 
         mcp_servers: dict[str, MCPServerConfig] = {}

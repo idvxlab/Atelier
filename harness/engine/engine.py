@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Callable, Awaitable
+from typing import Any, Callable, Awaitable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from harness.types.messages import ToolCallBlock
 
 from harness.llm.base import TokenCallback
 
@@ -40,6 +43,7 @@ class EngineConfig:
     max_rounds: int = 50
     system_prompt: str = ""
     task_goal: str = ""
+    confirm_tools: frozenset[str] = field(default_factory=frozenset)
 
 
 def serialize_message(msg: Message) -> dict[str, Any]:
@@ -94,6 +98,11 @@ class AgentEngine:
         self._message_listeners: list[MessageListener] = []
         self._token_listeners: list[TokenCallback] = []
         self._state_listeners: list[StateListener] = []
+
+        # Approval flow state
+        self._confirmation_event = asyncio.Event()
+        self._confirmation_approved: bool = False
+        self._pending_tool_calls: list[dict] | None = None
 
         # Inject system prompt if provided
         if config.system_prompt:
@@ -156,7 +165,7 @@ class AgentEngine:
         Backend is the single source of truth; never cache this on the frontend.
         """
         async with self._state_lock:
-            return {
+            snap: dict[str, Any] = {
                 "session_id": self._config.session_id,
                 "state": self._sm.state.name,
                 "is_running": self._sm.state == EngineState.RUNNING,
@@ -165,6 +174,9 @@ class AgentEngine:
                     serialize_message(m) for m in self._messages[-20:]
                 ],
             }
+            if self._pending_tool_calls is not None:
+                snap["pending_approval"] = self._pending_tool_calls
+            return snap
 
     async def send_message(self, text: str) -> None:
         """
@@ -240,22 +252,29 @@ class AgentEngine:
     async def confirm(self) -> None:
         """Approve a pending tool action (WAITING_CONFIRMATION → RUNNING)."""
         async with self._state_lock:
-            if self._sm.state == EngineState.WAITING_CONFIRMATION:
-                self._sm.transition(EngineState.RUNNING)
-                self._emitter.emit(
-                    "state_transition", "triggered-executed",
-                    detail={"to": EngineState.RUNNING.name, "via": "confirm"},
-                )
+            if self._sm.state != EngineState.WAITING_CONFIRMATION:
+                return
+            self._confirmation_approved = True
+            self._sm.transition(EngineState.RUNNING)
+            self._emitter.emit(
+                "state_transition", "triggered-executed",
+                detail={"to": EngineState.RUNNING.name, "via": "confirm"},
+            )
+        self._confirmation_event.set()
+        await self._notify_state_listeners()
 
     async def deny(self) -> None:
-        """Deny a pending tool action (WAITING_CONFIRMATION → WAITING_INPUT)."""
+        """Deny a pending tool action — loop raises CancelledError → WAITING_INPUT."""
         async with self._state_lock:
-            if self._sm.state == EngineState.WAITING_CONFIRMATION:
-                self._sm.transition(EngineState.WAITING_INPUT)
-                self._emitter.emit(
-                    "state_transition", "triggered-executed",
-                    detail={"to": EngineState.WAITING_INPUT.name, "via": "deny"},
-                )
+            if self._sm.state != EngineState.WAITING_CONFIRMATION:
+                return
+            self._confirmation_approved = False
+            self._emitter.emit(
+                "tool_confirmation", "triggered-intercepted",
+                detail={"action": "denied"},
+            )
+        self._confirmation_event.set()
+        # State transition to WAITING_INPUT happens in _run_loop_guarded via CancelledError
 
     # ──────────────────────────────────────────────────────────────────
     # Internal
@@ -269,18 +288,60 @@ class AgentEngine:
             except Exception:
                 pass
 
+    async def _confirmation_gate(self, tool_calls: "list[ToolCallBlock]") -> bool:
+        """
+        Called by ReactLoop before executing any tool call batch.
+
+        If any tool in the batch requires confirmation, transitions to
+        WAITING_CONFIRMATION and awaits the user's approve/deny action.
+
+        Returns True if approved (execution proceeds).
+        Raises asyncio.CancelledError if denied (loop stops, state → WAITING_INPUT).
+        """
+        from harness.types.messages import ToolCallBlock as _TCB  # noqa: F401
+        if not any(c.tool_name in self._config.confirm_tools for c in tool_calls):
+            return True  # No dangerous tool — auto-approve
+
+        async with self._state_lock:
+            self._pending_tool_calls = [
+                {"name": c.tool_name, "input": c.tool_input} for c in tool_calls
+            ]
+            self._confirmation_event.clear()
+            self._sm.transition(EngineState.WAITING_CONFIRMATION)
+            self._emitter.emit(
+                "state_transition", "triggered-executed",
+                detail={
+                    "to": EngineState.WAITING_CONFIRMATION.name,
+                    "tools": [c.tool_name for c in tool_calls],
+                },
+            )
+        await self._notify_state_listeners()
+
+        # Block until confirm() or deny() fires the event
+        await self._confirmation_event.wait()
+
+        async with self._state_lock:
+            self._pending_tool_calls = None
+
+        if not self._confirmation_approved:
+            raise asyncio.CancelledError("tool execution denied by user")
+
+        return True
+
     async def _run_loop_guarded(self) -> None:
         """
         Wraps ReactLoop.run() and guarantees state is restored on all paths.
         Never let an exception escape without transitioning out of RUNNING.
         """
         try:
+            gate = self._confirmation_gate if self._config.confirm_tools else None
             await self._loop.run(
                 messages=self._messages,
                 cancel_event=self._cancel_event,
                 intervention_queue=self._intervention_queue,
                 on_message=self._on_message,
                 on_token=self._on_token,
+                on_pre_execute=gate,
             )
             async with self._state_lock:
                 self._sm.transition(EngineState.COMPLETED)

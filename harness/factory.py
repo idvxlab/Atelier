@@ -153,6 +153,7 @@ def build_engine(
         config=EngineConfig(
             session_id=session_id,
             system_prompt=full_system,
+            confirm_tools=frozenset(harness_cfg.tools.confirm_tools),
         ),
         loop=loop,
         session_store=session_store,

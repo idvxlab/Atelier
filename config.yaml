@@ -98,6 +98,11 @@ tools:
     - grep           # 带上下文行的内容搜索
     - powershell     # 执行 PowerShell 脚本（Windows: pwsh/powershell，Linux/Mac: pwsh）
 
+  # 执行前需要用户确认的工具（审批流）
+  confirm_tools:
+    - shell
+    - powershell
+
   # 各工具的输出字符上限（超出部分自动存入外部引用）
   limits:
     read_file: 20000

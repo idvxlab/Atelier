@@ -101,6 +101,16 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
                     json.dumps({"type": "state", "data": snapshot})
                 )
 
+            elif msg_type == "confirm":
+                await engine.confirm()
+                snapshot = await engine.get_snapshot()
+                await websocket.send_text(json.dumps({"type": "state", "data": snapshot}))
+
+            elif msg_type == "deny":
+                await engine.deny()
+                snapshot = await engine.get_snapshot()
+                await websocket.send_text(json.dumps({"type": "state", "data": snapshot}))
+
             elif msg_type == "cancel":
                 await engine.cancel()
                 await websocket.send_text(
