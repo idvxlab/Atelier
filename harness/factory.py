@@ -30,6 +30,12 @@ from harness.tools.builtin import (
     GLOB_SCHEMA, glob_tool,
     GREP_SCHEMA, grep_tool,
     POWERSHELL_SCHEMA, powershell_tool,
+    WRITE_FILE_SCHEMA, write_file_tool,
+    EDIT_FILE_SCHEMA, edit_file_tool,
+    WEB_FETCH_SCHEMA, web_fetch_tool,
+    WEB_SEARCH_SCHEMA, web_search_tool,
+    THINK_SCHEMA, think_tool,
+    TODO_WRITE_SCHEMA, todo_write_tool,
 )
 from harness.tools.executor import ToolExecutor
 from harness.tools.overflow import OverflowStore
@@ -39,12 +45,18 @@ logger = logging.getLogger(__name__)
 
 # Central tool registry — add new tools here only
 ALL_TOOLS: dict[str, tuple] = {
-    "read_file":  (READ_FILE_SCHEMA,  read_file_tool),
-    "search":     (SEARCH_SCHEMA,     search_tool),
-    "shell":      (SHELL_SCHEMA,      shell_tool),
-    "glob":       (GLOB_SCHEMA,       glob_tool),
-    "grep":       (GREP_SCHEMA,       grep_tool),
-    "powershell": (POWERSHELL_SCHEMA, powershell_tool),
+    "read_file":   (READ_FILE_SCHEMA,   read_file_tool),
+    "write_file":  (WRITE_FILE_SCHEMA,  write_file_tool),
+    "edit_file":   (EDIT_FILE_SCHEMA,   edit_file_tool),
+    "search":      (SEARCH_SCHEMA,      search_tool),
+    "shell":       (SHELL_SCHEMA,       shell_tool),
+    "glob":        (GLOB_SCHEMA,        glob_tool),
+    "grep":        (GREP_SCHEMA,        grep_tool),
+    "powershell":  (POWERSHELL_SCHEMA,  powershell_tool),
+    "web_fetch":   (WEB_FETCH_SCHEMA,   web_fetch_tool),
+    "web_search":  (WEB_SEARCH_SCHEMA,  web_search_tool),
+    "think":       (THINK_SCHEMA,       think_tool),
+    "todo_write":  (TODO_WRITE_SCHEMA,  todo_write_tool),
 }
 
 

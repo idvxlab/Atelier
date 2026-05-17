@@ -11,6 +11,12 @@ from harness.tools.overflow import OverflowStore
 from harness.tools.builtin.shell import SHELL_SCHEMA, shell_tool
 from harness.tools.builtin.read_file import read_file_tool
 from harness.tools.builtin.glob_tool import glob_tool
+from harness.tools.builtin.write_file import write_file_tool
+from harness.tools.builtin.edit_file import edit_file_tool
+from harness.tools.builtin.web_fetch import web_fetch_tool
+from harness.tools.builtin.web_search import web_search_tool
+from harness.tools.builtin.think_tool import think_tool
+from harness.tools.builtin.todo_tool import todo_write_tool
 from harness.llm.base import LLMConfig
 from harness.llm.openai_provider import OpenAIProvider
 from harness.types.messages import ToolCallBlock
@@ -202,3 +208,208 @@ async def test_read_file_tool_offset_limit(tmp_path):
     assert "line2" in result
     assert "line4" in result
     assert "line5" not in result
+
+
+# ──────────────────────────────────────────────────────────────────────
+# write_file
+# ──────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_write_file_tool_overwrite(tmp_path):
+    f = tmp_path / "hello.txt"
+    result = await write_file_tool(path=str(f), content="hello world")
+    assert "Written" in result
+    assert f.read_text(encoding="utf-8") == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_write_file_tool_append(tmp_path):
+    f = tmp_path / "hello.txt"
+    f.write_text("first\n", encoding="utf-8")
+    result = await write_file_tool(path=str(f), content="second", append=True)
+    assert "Appended" in result
+    assert f.read_text(encoding="utf-8") == "first\nsecond"
+
+
+@pytest.mark.asyncio
+async def test_write_file_tool_creates_parent(tmp_path):
+    nested = tmp_path / "a" / "b"
+    f = nested / "file.txt"
+    result = await write_file_tool(path=str(f), content="nested")
+    assert "Written" in result
+    assert f.read_text(encoding="utf-8") == "nested"
+
+
+@pytest.mark.asyncio
+async def test_write_file_tool_invalid_path():
+    # Write to an absolute path that cannot exist on this OS
+    result = await write_file_tool(path="NUL:/impossible", content="x")
+    assert "Error" in result
+
+
+# ──────────────────────────────────────────────────────────────────────
+# edit_file
+# ──────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_edit_file_tool_replace(tmp_path):
+    f = tmp_path / "sample.txt"
+    f.write_text("hello world\nwelcome\n", encoding="utf-8")
+    result = await edit_file_tool(path=str(f), old_string="world", new_string="there")
+    assert "first" in result
+    assert f.read_text(encoding="utf-8") == "hello there\nwelcome\n"
+
+
+@pytest.mark.asyncio
+async def test_edit_file_tool_replace_all(tmp_path):
+    f = tmp_path / "sample.txt"
+    f.write_text("foo bar foo baz foo\n", encoding="utf-8")
+    result = await edit_file_tool(
+        path=str(f), old_string="foo", new_string="FOO", replace_all=True
+    )
+    assert "all" in result
+    assert f.read_text(encoding="utf-8") == "FOO bar FOO baz FOO\n"
+
+
+@pytest.mark.asyncio
+async def test_edit_file_tool_duplicate_without_flag(tmp_path):
+    f = tmp_path / "sample.txt"
+    f.write_text("foo foo foo\n", encoding="utf-8")
+    result = await edit_file_tool(path=str(f), old_string="foo", new_string="FOO")
+    assert "Error" in result
+    assert "appears 3 times" in result
+
+
+@pytest.mark.asyncio
+async def test_edit_file_tool_not_found():
+    result = await edit_file_tool(
+        path="/nonexistent/file.txt",
+        old_string="a",
+        new_string="b",
+    )
+    assert "Error" in result
+    assert "not found" in result
+
+
+@pytest.mark.asyncio
+async def test_edit_file_tool_not_matched(tmp_path):
+    f = tmp_path / "sample.txt"
+    f.write_text("hello world\n", encoding="utf-8")
+    result = await edit_file_tool(path=str(f), old_string="not exist", new_string="X")
+    assert "Error" in result
+    assert "not found" in result
+
+
+# ──────────────────────────────────────────────────────────────────────
+# think_tool
+# ──────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_think_tool_returns_thought():
+    result = await think_tool(thought="Let me think step by step.")
+    assert result == "Let me think step by step."
+
+
+@pytest.mark.asyncio
+async def test_think_tool_empty():
+    result = await think_tool(thought="")
+    assert result == ""
+
+
+# ──────────────────────────────────────────────────────────────────────
+# todo_write
+# ──────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_todo_write_set():
+    result = await todo_write_tool(
+        session_id="s1",
+        action="set",
+        todos=[{"content": "task 1", "status": "pending"}],
+    )
+    assert "set with 1 item" in result
+
+
+@pytest.mark.asyncio
+async def test_todo_write_get():
+    await todo_write_tool(
+        session_id="s2",
+        action="set",
+        todos=[
+            {"content": "alpha", "status": "pending"},
+            {"content": "beta", "status": "in_progress"},
+        ],
+    )
+    result = await todo_write_tool(session_id="s2", action="get")
+    assert "[pending]" in result
+    assert "[in_progress]" in result
+    assert "alpha" in result
+    assert "beta" in result
+
+
+@pytest.mark.asyncio
+async def test_todo_write_update():
+    await todo_write_tool(
+        session_id="s3",
+        action="set",
+        todos=[{"content": "task", "status": "pending"}],
+    )
+    result = await todo_write_tool(
+        session_id="s3", action="update", index=0, status="completed"
+    )
+    assert "completed" in result
+
+
+@pytest.mark.asyncio
+async def test_todo_write_update_invalid_status():
+    await todo_write_tool(
+        session_id="s4",
+        action="set",
+        todos=[{"content": "task", "status": "pending"}],
+    )
+    result = await todo_write_tool(
+        session_id="s4", action="update", index=0, status="done"
+    )
+    assert "Error" in result
+    assert "done" in result
+
+
+@pytest.mark.asyncio
+async def test_todo_write_get_empty():
+    result = await todo_write_tool(session_id="nonexistent", action="get")
+    assert "No todo" in result
+
+
+# ──────────────────────────────────────────────────────────────────────
+# web_fetch (mock-free: just smoke-test it doesn't crash)
+# ──────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_web_fetch_smoke():
+    result = await web_fetch_tool(url="https://httpbin.org/html", max_length=500)
+    # Should not be an error; content should be plain text
+    assert "Error" not in result or len(result) < 200
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_truncation():
+    result = await web_fetch_tool(url="https://httpbin.org/bytes/1000", max_length=100)
+    assert "truncated" in result.lower()
+    assert len(result) <= 150  # rough check
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_invalid_url():
+    result = await web_fetch_tool(url="https://this-domain-does-not-exist-xyz.invalid/")
+    assert "Error" in result
+
+
+# ──────────────────────────────────────────────────────────────────────
+# web_search (mock-free: just smoke-test it doesn't crash)
+# ──────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_web_search_smoke():
+    result = await web_search_tool(query="python httpx", max_results=3)
+    # Should return results or "No results" — never an unhandled exception
+    assert "python" in result.lower() or "no results" in result.lower()
