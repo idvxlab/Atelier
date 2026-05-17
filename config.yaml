@@ -92,17 +92,26 @@ tools:
   # 全局启用的工具（注释掉某行 = 该工具对所有 skill 不可用）
   enabled:
     - read_file      # 读取本地文件内容
+    - write_file     # 写入或追加文件内容
+    - edit_file      # 精确替换文件中的一段字符串
     - search         # 在文件中正则搜索
     - shell          # 执行系统命令（高风险，可注释掉禁用）
     - glob           # 按文件名模式查找文件
     - grep           # 带上下文行的内容搜索
     - powershell     # 执行 PowerShell 脚本（Windows: pwsh/powershell，Linux/Mac: pwsh）
+    - web_fetch      # 抓取 URL 内容并转为纯文本
+    - web_search     # DuckDuckGo 网页搜索
+    - think          # 让 Agent 输出推理过程
+    - todo_write     # 会话级任务清单管理
 
   # 各工具的输出字符上限（超出部分自动存入外部引用）
   limits:
     read_file: 20000
     search:    10000
     shell:     15000
+    web_fetch:  8000
+    web_search: 8000
+    todo_write: 5000
 
 # ── MCP Server 配置 ───────────────────────────────────────────────
 # 每个 key 是 Server 的别名（也用作工具名前缀，例如 filesystem__read_file）
