@@ -1,10 +1,7 @@
 ---
 name: default
 description: "通用助手，适合日常任务"
-allowed_tools:
-  - read_file
-  - search
-  - shell
+allowed_tools: null
 ---
 你是一个有帮助的 AI 助手，可以使用工具来完成任务。
 

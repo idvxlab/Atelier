@@ -116,12 +116,24 @@ def build_engine(
     else:
         tools_to_load = global_enabled if global_enabled is not None else list(ALL_TOOLS.keys())
 
+    logger.info(
+        "[build_engine] session=%s | ALL_TOOLS keys=%s",
+        session_id, list(ALL_TOOLS.keys()),
+    )
+    logger.info(
+        "[build_engine] session=%s | global_enabled=%s | allowed_tools=%s | tools_to_load=%s",
+        session_id, global_enabled, allowed_tools, tools_to_load,
+    )
+
     if registry is None:
         registry = ToolRegistry()
     for name in tools_to_load:
         if name in ALL_TOOLS:
             schema, handler = ALL_TOOLS[name]
             registry.register(schema, handler)
+            logger.info("[build_engine] registered tool: %s", name)
+        else:
+            logger.warning("[build_engine] tool '%s' in tools_to_load but NOT in ALL_TOOLS — skipped", name)
 
     # use_skill is always available if skills exist (not controlled by allowed_tools)
     if skills:
@@ -147,6 +159,10 @@ def build_engine(
     # Append the definitive tool list to the system prompt so the LLM can
     # accurately answer "what tools do you have?" from the actual registry.
     registered = registry.discover()
+    logger.info(
+        "[build_engine] session=%s | final registry (%d tools): %s",
+        session_id, len(registered), [t.schema.name for t in registered],
+    )
     if registered:
         tool_lines = [
             "",

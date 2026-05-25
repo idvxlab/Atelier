@@ -7,12 +7,18 @@ Switching sessions: call /state to get last_messages + is_running.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 load_dotenv(override=False)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+)
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
