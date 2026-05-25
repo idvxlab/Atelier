@@ -5,8 +5,10 @@ from harness.types.tools import ToolSchema, ToolParam
 GLOB_SCHEMA = ToolSchema(
     name="glob",
     description=(
-        "Find files by NAME pattern (e.g. **/*.py, src/**/*.ts). Returns matching file paths. "
-        "Use this when you know the file name or extension but not its content. "
+        "Find files by NAME pattern — returns matching file paths. "
+        "Use pattern='*' to list all files in a directory (replaces 'ls'). "
+        "Use pattern='**/*.py' to find all Python files recursively. "
+        "Prefer this over shell for listing files — works on all platforms including Windows. "
         "Do NOT use this to search file contents — use search or grep for that."
     ),
     params=[

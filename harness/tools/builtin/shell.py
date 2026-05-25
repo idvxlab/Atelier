@@ -45,13 +45,25 @@ async def shell_tool(
     if env:
         merged_env = {**os.environ, **{str(k): str(v) for k, v in env.items()}}
 
-    proc = await asyncio.create_subprocess_exec(
-        *command,
-        cwd=cwd,
-        env=merged_env,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *command,
+            cwd=cwd,
+            env=merged_env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        return (
+            f"Error: command not found: {command[0]!r}. "
+            "On Windows, Unix commands like 'ls', 'cat', 'find', 'grep' do not exist. "
+            "Use the built-in tools instead: glob (list files), read_file (read file), "
+            "search/grep (search content), or powershell for Windows shell commands."
+        )
+    except PermissionError as exc:
+        return f"Error: permission denied running {command[0]!r}: {exc}"
+    except OSError as exc:
+        return f"Error: failed to start process {command[0]!r}: {exc}"
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:

@@ -96,7 +96,22 @@ def build_engine(
     )
 
     skills = list_skills()
-    full_system = system_prompt + build_skill_system_addendum(skills)
+
+    # Append tool-failure recovery instructions so the agent retries intelligently
+    _RECOVERY_INSTRUCTIONS = (
+        "\n\n## Tool Failure Recovery\n"
+        "When a tool returns an error:\n"
+        "1. Read the error message carefully — it usually explains the cause.\n"
+        "2. Do NOT repeat the exact same call. Try an alternative approach:\n"
+        "   - Wrong tool for the task? Switch to the correct built-in tool "
+        "(e.g. use glob instead of shell ls, use read_file instead of shell cat).\n"
+        "   - Bad arguments? Fix the parameters and retry.\n"
+        "   - Command not found? The executable may not be installed or not on PATH — "
+        "tell the user and suggest how to install it.\n"
+        "3. Explain what went wrong and what you tried differently.\n"
+        "4. If all alternatives are exhausted, report clearly what failed and why.\n"
+    )
+    full_system = system_prompt + build_skill_system_addendum(skills) + _RECOVERY_INSTRUCTIONS
 
     compressor = ContextCompressor(
         summarizer=summarizer,
