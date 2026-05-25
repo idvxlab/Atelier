@@ -144,6 +144,16 @@ def build_engine(
             make_spawn_agents_tool(harness_cfg, provider_cfg, session_store, spawn_depth),
         )
 
+    # Append the definitive tool list to the system prompt so the LLM can
+    # accurately answer "what tools do you have?" from the actual registry.
+    registered = registry.discover()
+    if registered:
+        tool_lines = ["", "## Your Executable Tools"]
+        for t in registered:
+            desc = (t.schema.description or "").split(".")[0]  # first sentence only
+            tool_lines.append(f"- **{t.schema.name}**: {desc}")
+        full_system = full_system + "\n".join(tool_lines)
+
     overflow = OverflowStore()
     executor = ToolExecutor(
         registry=registry,

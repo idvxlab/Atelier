@@ -174,9 +174,12 @@ def build_skill_system_addendum(skills: list[dict[str, str]]) -> str:
         return ""
     lines = [
         "",
-        "## Available Skills",
-        "You have access to the following skills via the `use_skill` tool.",
-        'When a request matches a skill description, call use_skill(name="...") first.',
+        "## Skills (Workflow Presets)",
+        "Skills are predefined workflow instructions, NOT executable tools.",
+        "A skill tells you *how* to approach a certain type of task.",
+        "To activate a skill, call the `use_skill` function tool with the skill name.",
+        "Your actual executable tools (read_file, shell, web_search, etc.) are",
+        "listed separately in your function-calling interface.",
         "",
     ]
     for s in skills:
