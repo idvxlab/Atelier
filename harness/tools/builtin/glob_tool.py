@@ -4,7 +4,11 @@ from harness.types.tools import ToolSchema, ToolParam
 
 GLOB_SCHEMA = ToolSchema(
     name="glob",
-    description="Find files by name pattern using pathlib glob. Returns matching file paths.",
+    description=(
+        "Find files by NAME pattern (e.g. **/*.py, src/**/*.ts). Returns matching file paths. "
+        "Use this when you know the file name or extension but not its content. "
+        "Do NOT use this to search file contents — use search or grep for that."
+    ),
     params=[
         ToolParam(name="pattern", type="string", description="Glob pattern to match, e.g. **/*.py"),
         ToolParam(name="path", type="string", description="Root directory to search in (default '.')", required=False),

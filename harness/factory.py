@@ -173,7 +173,7 @@ def build_engine(
             "",
         ]
         for t in registered:
-            desc = (t.schema.description or "").split(".")[0]  # first sentence only
+            desc = (t.schema.description or "").strip()
             tool_lines.append(f"- **{t.schema.name}**: {desc}")
         full_system = full_system + "\n" + "\n".join(tool_lines)
 

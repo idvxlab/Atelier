@@ -4,7 +4,11 @@ from harness.types.tools import ToolSchema, ToolParam
 
 SEARCH_SCHEMA = ToolSchema(
     name="search",
-    description="Search for a pattern in a file or directory.",
+    description=(
+        "Quick regex/literal search across file content — returns matching lines with file:line. "
+        "Use this for a simple one-shot search when you don't need surrounding context lines. "
+        "Prefer grep when you need context lines (before/after the match) or file-type filtering."
+    ),
     params=[
         ToolParam(name="pattern", type="string", description="Regex or literal string to search for"),
         ToolParam(name="path", type="string", description="File or directory to search in"),

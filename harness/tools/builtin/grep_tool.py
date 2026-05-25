@@ -7,8 +7,10 @@ from harness.types.tools import ToolSchema, ToolParam
 GREP_SCHEMA = ToolSchema(
     name="grep",
     description=(
-        "Search for a regex pattern in files with optional context lines. "
-        "Returns matching lines with file path and line number, separated by '--' between groups."
+        "Search file CONTENT by regex with optional surrounding context lines (like grep -C/-B/-A). "
+        "Returns matching lines with file path and line number. "
+        "Use this when you need context around matches, or want to filter by file extension (file_pattern). "
+        "Prefer search for a simple no-context search; use glob to find files by name rather than content."
     ),
     params=[
         ToolParam(name="pattern", type="string", description="Regex or literal string to search for"),
