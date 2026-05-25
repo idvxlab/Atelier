@@ -6,7 +6,13 @@ from harness.types.tools import ToolSchema, ToolParam
 
 SHELL_SCHEMA = ToolSchema(
     name="shell",
-    description="Execute a shell command and return stdout, stderr, and exit code separately.",
+    description=(
+        "Execute a program directly (no shell interpreter). "
+        "Pass command as a list, e.g. ['git', 'status'] or ['python', 'script.py']. "
+        "Use this for running executables like git, python, pip, npm, etc. "
+        "Does NOT support shell syntax (pipes |, redirects >, glob * expansion, $VAR). "
+        "Use powershell if you need shell scripting features on Windows."
+    ),
     params=[
         ToolParam(
             name="command",

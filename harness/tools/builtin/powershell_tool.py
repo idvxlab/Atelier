@@ -9,9 +9,10 @@ from harness.types.tools import ToolSchema, ToolParam
 POWERSHELL_SCHEMA = ToolSchema(
     name="powershell",
     description=(
-        "Execute a PowerShell script and return stdout, stderr, and exit code separately. "
-        "On Windows, uses pwsh.exe (falls back to powershell.exe); "
-        "on Linux/macOS, uses pwsh."
+        "Execute a PowerShell script with full shell scripting support "
+        "(pipes |, variables $var, cmdlets like Get-ChildItem, conditionals, loops). "
+        "Use this instead of shell when you need shell syntax or Windows-specific commands. "
+        "On Windows uses pwsh.exe (falls back to powershell.exe); on Linux/macOS uses pwsh."
     ),
     params=[
         ToolParam(
