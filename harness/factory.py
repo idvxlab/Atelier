@@ -148,11 +148,18 @@ def build_engine(
     # accurately answer "what tools do you have?" from the actual registry.
     registered = registry.discover()
     if registered:
-        tool_lines = ["", "## Your Executable Tools"]
+        tool_lines = [
+            "",
+            "## Your Executable Tools (Authoritative List)",
+            "IMPORTANT: The following is the COMPLETE and ONLY list of callable tools",
+            "available to you right now. Do NOT mention any tools not in this list.",
+            "Do NOT list Skills as tools — Skills are workflow presets, not callable functions.",
+            "",
+        ]
         for t in registered:
             desc = (t.schema.description or "").split(".")[0]  # first sentence only
             tool_lines.append(f"- **{t.schema.name}**: {desc}")
-        full_system = full_system + "\n".join(tool_lines)
+        full_system = full_system + "\n" + "\n".join(tool_lines)
 
     overflow = OverflowStore()
     executor = ToolExecutor(
