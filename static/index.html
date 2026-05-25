@@ -1290,6 +1290,8 @@
 
     async function confirmAction() {
       if (!currentSessionId) return;
+      // Immediately hide panel (optimistic update — don't wait for server round-trip)
+      document.getElementById('confirm-panel').classList.add('hidden');
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'confirm' }));
       } else {
@@ -1300,6 +1302,8 @@
 
     async function denyAction() {
       if (!currentSessionId) return;
+      // Immediately hide panel
+      document.getElementById('confirm-panel').classList.add('hidden');
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'deny' }));
       } else {
@@ -1421,8 +1425,11 @@
         container.scrollTop = container.scrollHeight;
 
       } else if (frame.type === 'state') {
-        if (!frame.data?.is_running) {
-          doPoll();   // render final snapshot (clears streamEl, appends complete messages)
+        // Always re-render on state change so confirm panel hides immediately after approve/deny
+        if (frame.data && !frame.data.is_running) {
+          doPoll();   // final state: clear stream el, append complete messages
+        } else if (frame.data) {
+          renderSnapshot(frame.data);   // mid-run state update (e.g. RUNNING after confirm)
         }
 
       } else if (frame.type === 'error') {
@@ -1587,12 +1594,35 @@
 
       if (role === 'tool') {
         content.filter(b => b.type === 'tool_result').forEach(tr => {
+          // think tool result is already shown via the tool-call block — skip duplicate
+          if (tr.tool_name === 'think') return;
           container.appendChild(renderToolResult(tr));
         });
       }
     }
 
     function renderToolCall(tc) {
+      // think tool: render as a collapsible thinking block instead of a generic tool block
+      if (tc.tool_name === 'think') {
+        const thought = (tc.tool_input?.thought || '').trim();
+        const wrap = document.createElement('div');
+        wrap.className = 'thinking-block';
+        wrap.innerHTML =
+          `<div class="thinking-header">` +
+          `<span>💭 思考过程</span>` +
+          `<span style="font-size:11px;margin-left:6px;color:var(--text-muted)">(${thought.length} 字)</span>` +
+          `<span class="thinking-toggle" style="margin-left:auto">展开 ▼</span>` +
+          `</div>` +
+          `<div class="thinking-body collapsed" style="white-space:pre-wrap">${escHtml(thought)}</div>`;
+        wrap.querySelector('.thinking-header').addEventListener('click', () => {
+          const body = wrap.querySelector('.thinking-body');
+          const toggle = wrap.querySelector('.thinking-toggle');
+          const collapsed = body.classList.toggle('collapsed');
+          toggle.textContent = collapsed ? '展开 ▼' : '收起 ▲';
+        });
+        return wrap;
+      }
+
       const inputStr = JSON.stringify(tc.tool_input || {}, null, 2);
       const wrap = document.createElement('div');
       wrap.className = 'tool-block';
