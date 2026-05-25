@@ -1424,6 +1424,24 @@
         streamEl.querySelector('.msg-bubble').textContent = streamText;
         container.scrollTop = container.scrollHeight;
 
+      } else if (frame.type === 'message') {
+        // Real-time message push: render tool calls and tool results as they complete.
+        // Skip plain assistant text (rendered via streaming tokens) and user messages
+        // (already shown on send). Only intermediate messages need real-time rendering.
+        const m = frame.data;
+        if (m && m.role === 'assistant') {
+          const hasTool = (m.content || []).some(b => b.type === 'tool_call');
+          if (hasTool) {
+            renderMessage(container, m);
+            lastMsgCount += 1;
+            container.scrollTop = container.scrollHeight;
+          }
+        } else if (m && m.role === 'tool') {
+          renderMessage(container, m);
+          lastMsgCount += 1;
+          container.scrollTop = container.scrollHeight;
+        }
+
       } else if (frame.type === 'state') {
         // Always re-render on state change so confirm panel hides immediately after approve/deny
         if (frame.data && !frame.data.is_running) {
