@@ -481,7 +481,7 @@
       overflow: hidden;
       font-family: var(--mono);
       font-size: 12.5px;
-      max-width: 600px;
+      width: 100%;
     }
 
     .tool-header {
@@ -543,7 +543,7 @@
       overflow: hidden;
       font-family: var(--mono);
       font-size: 12.5px;
-      max-width: 600px;
+      width: 100%;
     }
 
     .result-header {
@@ -587,8 +587,8 @@
       color: var(--text-muted);
       font-size: 13px;
       border-left: 2px solid var(--border);
-      margin: 4px 0;
       border-radius: 0 4px 4px 0;
+      width: 100%;
     }
 
     .thinking-header {
@@ -1090,6 +1090,7 @@
     // ── State ────────────────────────────────────────────────────────────
     let currentSessionId = null;
     let pollTimer = null;
+    let sessionRefreshTimer = null;
     let lastMsgCount = 0;
     let overview = { skills: [], personas: [], providers: [], default_provider: '' };
     let currentConfigFile = null;  // { type: 'skill'|'persona'|'yaml', name: string }
@@ -1099,6 +1100,9 @@
     let streamText = '';         // accumulated text token text
     let streamThinkingText = ''; // accumulated thinking token text
     let streamIsThinking = false;
+    // Poll deduplication: at most one doPoll in-flight + one queued
+    let doPollInFlight = false;
+    let doPollQueued  = false;
 
     // ── Boot ─────────────────────────────────────────────────────────────
     async function boot() {
@@ -1248,6 +1252,8 @@
       disconnectWS();
       currentSessionId = id;
       lastMsgCount = 0;
+      doPollInFlight = false;
+      doPollQueued  = false;
       renderSessionsList();
       showChatArea();
 
@@ -1333,7 +1339,7 @@
 
       try {
         await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
-        doPoll(); // immediately render the user message in the UI
+        triggerPoll(); // immediately render the user message in the UI
         // Only start polling if WS is not connected — WS state frame will trigger doPoll when done.
         if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
         document.getElementById('cancel-btn').classList.remove('hidden');
@@ -1361,10 +1367,13 @@
     function startPolling() {
       if (pollTimer) return;
       pollTimer = setInterval(doPoll, 800);
+      // Refresh the session list every 3s while running so sub-agent sessions appear
+      sessionRefreshTimer = setInterval(refreshSessions, 3000);
     }
 
     function stopPolling() {
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      if (sessionRefreshTimer) { clearInterval(sessionRefreshTimer); sessionRefreshTimer = null; }
       document.getElementById('running-indicator').classList.add('hidden');
       document.getElementById('cancel-btn').classList.add('hidden');
     }
@@ -1425,29 +1434,32 @@
         container.scrollTop = container.scrollHeight;
 
       } else if (frame.type === 'message') {
-        // Real-time message push: render tool calls and tool results as they complete.
-        // Skip plain assistant text (rendered via streaming tokens) and user messages
-        // (already shown on send). Only intermediate messages need real-time rendering.
+        // A message completed (tool call or tool result). Trigger an incremental
+        // snapshot fetch so renderSnapshot() is the single source of truth.
+        // This avoids lastMsgCount desync from direct rendering + doPoll races.
         const m = frame.data;
-        if (m && m.role === 'assistant') {
-          const hasTool = (m.content || []).some(b => b.type === 'tool_call');
-          if (hasTool) {
-            renderMessage(container, m);
-            lastMsgCount += 1;
-            container.scrollTop = container.scrollHeight;
+        const isToolActivity =
+          (m?.role === 'assistant' && (m.content || []).some(b => b.type === 'tool_call')) ||
+          m?.role === 'tool';
+        if (isToolActivity) {
+          triggerPoll();
+          // If a spawn_agent/spawn_agents call was made, refresh the session list
+          // after a short delay so new sub-agent sessions appear in the sidebar.
+          const hasSpawnCall = m?.role === 'assistant' && (m.content || []).some(
+            b => b.type === 'tool_call' && (b.tool_name === 'spawn_agent' || b.tool_name === 'spawn_agents')
+          );
+          if (hasSpawnCall) {
+            setTimeout(refreshSessions, 600);
+            setTimeout(refreshSessions, 2500);
           }
-        } else if (m && m.role === 'tool') {
-          renderMessage(container, m);
-          lastMsgCount += 1;
-          container.scrollTop = container.scrollHeight;
         }
 
       } else if (frame.type === 'state') {
         // Always re-render on state change so confirm panel hides immediately after approve/deny
         if (frame.data && !frame.data.is_running) {
-          doPoll();   // final state: clear stream el, append complete messages
+          triggerPoll();   // final state: clear stream el, append complete messages
         } else if (frame.data) {
-          renderSnapshot(frame.data);   // mid-run state update (e.g. RUNNING after confirm)
+          triggerPoll();   // mid-run state update (e.g. RUNNING after confirm)
         }
 
       } else if (frame.type === 'error') {
@@ -1463,6 +1475,18 @@
       const dots = document.getElementById('typing-dots');
       if (dots) container.insertBefore(streamEl, dots);
       else container.appendChild(streamEl);
+    }
+
+    // Trigger an immediate incremental poll, deduplicating concurrent calls.
+    // At most one doPoll runs at a time; if another arrives while in-flight,
+    // it is queued and runs once the current one completes.
+    function triggerPoll() {
+      if (doPollInFlight) { doPollQueued = true; return; }
+      doPollInFlight = true;
+      doPoll().finally(() => {
+        doPollInFlight = false;
+        if (doPollQueued) { doPollQueued = false; triggerPoll(); }
+      });
     }
 
     async function doPoll() {
@@ -1536,8 +1560,19 @@
       lastMsgCount = msgs.length;
 
       for (let i = prevCount; i < msgs.length; i++) {
-        const m = msgs[i];
-        renderMessage(container, m);
+        try {
+          renderMessage(container, msgs[i]);
+        } catch(err) {
+          console.error('[renderMessage] failed for msg index', i, msgs[i], err);
+        }
+      }
+
+      // If new messages were rendered while the engine is still running,
+      // the streaming bubble now shows stale text from a completed LLM turn.
+      // Reset it so the next LLM turn starts with a fresh streaming bubble.
+      if (prevCount < lastMsgCount && snap.is_running && streamEl) {
+        streamEl.remove(); streamEl = null;
+        streamText = ''; streamThinkingText = ''; streamIsThinking = false;
       }
 
       // Typing dots
@@ -1641,6 +1676,50 @@
         return wrap;
       }
 
+      // spawn_agents: expanded card showing each agent's task
+      if (tc.tool_name === 'spawn_agents') {
+        let agents = tc.tool_input?.agents || [];
+        // LLM sometimes serializes the array as a JSON string — parse it back
+        if (typeof agents === 'string') {
+          try { agents = JSON.parse(agents); } catch { agents = []; }
+        }
+        if (!Array.isArray(agents)) agents = [];
+        const agentItems = agents.map((a, i) => {
+          const task = a.task || '';
+          return `<div style="padding:5px 0;display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--border)">` +
+            `<span style="color:var(--green);font-size:11px;white-space:nowrap;margin-top:2px;min-width:54px">Agent ${i + 1}</span>` +
+            `<span style="font-size:12px;color:var(--text)">${escHtml(task.slice(0, 120))}${task.length > 120 ? '…' : ''}</span>` +
+            `</div>`;
+        }).join('');
+        const wrap = document.createElement('div');
+        wrap.className = 'tool-block';
+        wrap.innerHTML =
+          `<div class="tool-header open" onclick="toggleCollapse(this)">` +
+          `<span class="tool-icon">🤖</span>` +
+          `<span class="tool-name" style="color:var(--green)">spawn_agents</span>` +
+          `<span style="color:var(--text-muted);font-size:11px;margin-left:8px">${agents.length} 个子 Agent 并行</span>` +
+          `<span class="tool-chevron">▶</span>` +
+          `</div>` +
+          `<div class="tool-body open" style="padding:6px 12px">${agentItems || '<em style="color:var(--text-muted);font-size:12px">（无 agents）</em>'}</div>`;
+        return wrap;
+      }
+
+      // spawn_agent: expanded card showing the task
+      if (tc.tool_name === 'spawn_agent') {
+        const task = tc.tool_input?.task || '';
+        const wrap = document.createElement('div');
+        wrap.className = 'tool-block';
+        wrap.innerHTML =
+          `<div class="tool-header open" onclick="toggleCollapse(this)">` +
+          `<span class="tool-icon">🤖</span>` +
+          `<span class="tool-name" style="color:var(--green)">spawn_agent</span>` +
+          `<span style="color:var(--text-muted);font-size:11px;margin-left:8px">${escHtml(task.slice(0, 60))}${task.length > 60 ? '…' : ''}</span>` +
+          `<span class="tool-chevron">▶</span>` +
+          `</div>` +
+          `<div class="tool-body open" style="padding:8px 12px;font-size:12px;color:var(--text);white-space:pre-wrap">${escHtml(task)}</div>`;
+        return wrap;
+      }
+
       const inputStr = JSON.stringify(tc.tool_input || {}, null, 2);
       const wrap = document.createElement('div');
       wrap.className = 'tool-block';
@@ -1658,13 +1737,14 @@
     function renderToolResult(tr) {
       const isErr = tr.is_error;
       const content = tr.content || '';
-      const preview = content.slice(0, 300) + (content.length > 300 ? '…' : '');
+      const toolLabel = tr.tool_name ? escHtml(tr.tool_name) : '工具结果';
+      const preview = content.slice(0, 200) + (content.length > 200 ? '…' : '');
       const wrap = document.createElement('div');
       wrap.className = 'result-block';
       wrap.innerHTML = `
     <div class="result-header" onclick="toggleCollapse(this, 'result-body')">
       <span class="${isErr ? 'result-err' : 'result-ok'}">${isErr ? '✗' : '✓'}</span>
-      <span style="font-size:11px;color:var(--text-muted)">${isErr ? '工具错误' : '工具结果'}</span>
+      <span style="font-size:11px;color:var(--accent);font-weight:600;margin-left:2px">${toolLabel}</span>
       <span style="font-size:11px;color:var(--text-muted);margin-left:8px">${escHtml(preview.replace(/\n/g, ' '))}</span>
       <span class="tool-chevron" style="margin-left:auto;color:var(--text-muted)">▶</span>
     </div>

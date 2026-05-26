@@ -1,74 +1,33 @@
 # ────────────────────────────────────────────────────────
-# 第三方 API 配置
-# 361API 走 OpenAI 兼容接口；把 key 放进 .env 或系统环境变量：
-# THREE_SIX_ONE_API_KEY=sk-...
-# 如果你已经写成 OPENAI_API_KEY=sk-...，下面的 api_key_env 也会自动识别。
-# 原 bltcy.ai 配置保留在下方，可按需切换 default_provider。
+# openai-hub 中转站配置
+# 把 key 填入 .env：
+#   OPENAI_HUB_API_KEY=sk-...
+#   OPENAI_HUB_MODEL=gpt-4o          （留空则用下方 model 字段）
 # ────────────────────────────────────────────────────────
 
-default_provider: 361api-openai
+default_provider: hub-openai
 
 providers:
 
-  # ── 361API：OpenAI 兼容格式（New API / 中转站）──────────────────────
-  361api-openai:
+  # ── openai-hub 主模型 ────────────────────────────────────────────────
+  hub-openai:
     name: openai-compatible
-    model: gpt-4o                   # 可换成 361API 控制台里可用的模型名
-    api_key: "${THREE_SIX_ONE_API_KEY}"
+    model: gpt-4o                   # OPENAI_HUB_MODEL 非空时会被环境变量覆盖
+    api_key: "${OPENAI_HUB_API_KEY}"
     api_key_env:
-      - THREE_SIX_ONE_API_KEY
-      - THREESIXONE_API_KEY
-      - API_361_KEY
-      - 361API_API_KEY
-      - OPENAI_API_KEY
-      - BLTCY_API_KEY                # 兼容旧 .env.example 已写入这个变量名的情况
-    base_url: "https://www.361api.com/v1"
+      - OPENAI_HUB_API_KEY
+    base_url: "${OPENAI_HUB_BASE_URL}"
     max_tokens: 4096
     temperature: 0.0
 
-  # ── 361API：摘要用的便宜模型（上下文压缩时使用）──────────────────────
-  361api-mini:
-    name: openai-compatible
-    model: gpt-4o-mini              # 可换成 361API 支持的低成本模型
-    api_key: "${THREE_SIX_ONE_API_KEY}"
-    api_key_env:
-      - THREE_SIX_ONE_API_KEY
-      - THREESIXONE_API_KEY
-      - API_361_KEY
-      - 361API_API_KEY
-      - OPENAI_API_KEY
-      - BLTCY_API_KEY                # 兼容旧 .env.example 已写入这个变量名的情况
-    base_url: "https://www.361api.com/v1"
-    max_tokens: 2048
-    temperature: 0.0
-
-  # ── 方案 A：Anthropic 格式（推荐，支持 Claude 系列模型）──────────────
-  bltcy-anthropic:
-    name: anthropic
-    model: claude-sonnet-4-6        # 可换成 claude-opus-4-6 等
-    api_key: "${BLTCY_API_KEY}"
-    base_url: "https://api.bltcy.ai"   # Anthropic SDK 自动补 /v1/messages
-    max_tokens: 8192
-    temperature: 0.0
-    extra:
-      thinking:
-        enabled: true                     # 是否启用思考过程输出（会增加 token 消耗）
-
-  # ── 方案 B：OpenAI 兼容格式（支持 GPT 系列模型）────────────────────
-  bltcy-openai:
-    name: openai-compatible
-    model: gpt-4o                   # 可换成 gpt-4o-mini 等
-    api_key: "${BLTCY_API_KEY}"
-    base_url: "https://api.bltcy.ai/v1"
-    max_tokens: 4096
-    temperature: 0.0
-
-  # ── 摘要用的便宜模型（上下文压缩时使用）──────────────────────────────
-  bltcy-mini:
+  # ── openai-hub 摘要用便宜模型（上下文压缩时使用）────────────────────
+  hub-mini:
     name: openai-compatible
     model: gpt-4o-mini
-    api_key: "${BLTCY_API_KEY}"
-    base_url: "https://api.bltcy.ai/v1"
+    api_key: "${OPENAI_HUB_API_KEY}"
+    api_key_env:
+      - OPENAI_HUB_API_KEY
+    base_url: "${OPENAI_HUB_BASE_URL}"
     max_tokens: 2048
     temperature: 0.0
 
@@ -79,7 +38,7 @@ compression:
   token_window: 128000
   auto_trigger_ratio: 0.65
   micro_keep_recent: 6
-  summary_provider: 361api-mini     # 用便宜模型做摘要，省 token
+  summary_provider: hub-mini        # 用便宜模型做摘要，省 token
 
 storage:
   backend: sqlite

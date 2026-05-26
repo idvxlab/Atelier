@@ -69,6 +69,7 @@ def build_engine(
     allowed_tools: list[str] | None = None,
     registry: ToolRegistry | None = None,
     spawn_depth: int = 0,
+    engine_registry: dict | None = None,
 ) -> AgentEngine:
     """
     Build a fully wired AgentEngine for a session.
@@ -97,6 +98,26 @@ def build_engine(
 
     skills = list_skills()
 
+    # Require step-by-step reasoning before each tool call (like extended thinking)
+    _REASONING_INSTRUCTIONS = (
+        "\n\n## 逐步推理（必须遵守）\n"
+        "在每次调用任何工具之前，**必须**先调用 `think` 工具写出你的推理过程，包括：\n"
+        "1. 当前状态：我现在知道什么？\n"
+        "2. 需要什么：完成任务需要哪些信息或操作？\n"
+        "3. 工具选择：应该用哪个工具？为什么选这个而不是其他工具？\n"
+        "4. 参数规划：工具的参数应该填什么？\n"
+        "\n"
+        "每次工具返回结果后，也要先用 `think` 分析结果，再决定下一步行动。\n"
+        "\n"
+        "**示例流程**：用户问'当前目录有哪些文件?'\n"
+        "→ think: 用户想知道当前目录的文件列表。我没有直接获取 cwd 的工具，"
+        "但可以用 glob(pattern='*', path='.') 列出当前目录所有文件。选 glob 而不是 shell，"
+        "因为 glob 跨平台且不依赖 Unix 命令。\n"
+        "→ glob(pattern='*', path='.')\n"
+        "→ think: glob 返回了 N 个文件，包括 xxx。用户的问题已回答，整理后给出结论。\n"
+        "→ [最终回复]\n"
+    )
+
     # Append tool-failure recovery instructions so the agent retries intelligently
     _RECOVERY_INSTRUCTIONS = (
         "\n\n## Tool Failure Recovery\n"
@@ -111,7 +132,7 @@ def build_engine(
         "3. Explain what went wrong and what you tried differently.\n"
         "4. If all alternatives are exhausted, report clearly what failed and why.\n"
     )
-    full_system = system_prompt + build_skill_system_addendum(skills) + _RECOVERY_INSTRUCTIONS
+    full_system = system_prompt + build_skill_system_addendum(skills) + _REASONING_INSTRUCTIONS + _RECOVERY_INSTRUCTIONS
 
     compressor = ContextCompressor(
         summarizer=summarizer,
@@ -164,11 +185,11 @@ def build_engine(
     if spawn_depth < MAX_SPAWN_DEPTH:
         registry.register(
             SPAWN_AGENT_SCHEMA,
-            make_spawn_agent_tool(harness_cfg, provider_cfg, session_store, spawn_depth),
+            make_spawn_agent_tool(harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry),
         )
         registry.register(
             SPAWN_AGENTS_SCHEMA,
-            make_spawn_agents_tool(harness_cfg, provider_cfg, session_store, spawn_depth),
+            make_spawn_agents_tool(harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry),
         )
 
     # Append the definitive tool list to the system prompt so the LLM can

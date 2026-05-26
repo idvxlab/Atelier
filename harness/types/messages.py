@@ -54,6 +54,7 @@ class ToolResultBlock:
     content: str
     is_error: bool = False
     is_overflow_ref: bool = False
+    tool_name: str = ""
     type: Literal["tool_result"] = field(default="tool_result", init=False)
 
 

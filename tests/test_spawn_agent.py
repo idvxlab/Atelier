@@ -148,7 +148,8 @@ class _FakeProviderCfg:
 def _make_mock_build_engine(reply_text: str):
     """Return a build_engine replacement that always uses _MockLLM."""
     def _build(session_id, provider_cfg, harness_cfg, session_store,
-                system_prompt="", allowed_tools=None, registry=None, spawn_depth=0):
+                system_prompt="", allowed_tools=None, registry=None,
+                spawn_depth=0, engine_registry=None):
         return _build_engine(reply_text=reply_text, session_id=session_id)
     return _build
 
@@ -169,7 +170,8 @@ class TestSpawnAgentTool:
             spawn_depth=0,
         )
         result = await tool(task="Do something")
-        assert result == "Sub result."
+        assert "Sub result." in result
+        assert "Sub-agent" in result
 
     @pytest.mark.asyncio
     async def test_depth_limit_returns_error_string(self):
@@ -198,7 +200,7 @@ class TestSpawnAgentTool:
             spawn_depth=0,
         )
         result = await tool(task="Will fail")
-        assert result.startswith("Error:")
+        assert "Error:" in result
 
 
 # ── spawn_agents tool ──────────────────────────────────────────────────────────

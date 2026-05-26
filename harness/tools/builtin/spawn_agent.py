@@ -85,6 +85,7 @@ def make_spawn_agent_tool(
     provider_cfg: "ProviderConfig",
     session_store: "SessionStore",
     spawn_depth: int = 0,
+    engine_registry: "dict | None" = None,
 ):
     """Return a spawn_agent handler closed over the given runtime dependencies."""
 
@@ -103,6 +104,7 @@ def make_spawn_agent_tool(
             )
 
         sub_id = f"sub_{uuid.uuid4().hex[:8]}"
+        label = task[:60] + ("…" if len(task) > 60 else "")
         try:
             sub_engine = build_engine(
                 session_id=sub_id,
@@ -112,10 +114,14 @@ def make_spawn_agent_tool(
                 system_prompt=system_prompt,
                 allowed_tools=tools,        # None → inherit global config
                 spawn_depth=spawn_depth + 1,
+                engine_registry=engine_registry,
             )
-            return await sub_engine.run_to_completion(task)
+            if engine_registry is not None:
+                engine_registry[sub_id] = sub_engine
+            result = await sub_engine.run_to_completion(task)
+            return f"[Sub-agent {sub_id} | {label}]\n{result}"
         except Exception as exc:
-            return f"Error: sub-agent '{sub_id}' failed — {exc}"
+            return f"[Sub-agent {sub_id} | {label}]\nError: {exc}"
 
     return spawn_agent_tool
 
@@ -125,6 +131,7 @@ def make_spawn_agents_tool(
     provider_cfg: "ProviderConfig",
     session_store: "SessionStore",
     spawn_depth: int = 0,
+    engine_registry: "dict | None" = None,
 ):
     """Return a spawn_agents handler closed over the given runtime dependencies."""
 
@@ -149,14 +156,17 @@ def make_spawn_agents_tool(
                 system_prompt=cfg.get("system_prompt", ""),
                 allowed_tools=cfg.get("tools"),
                 spawn_depth=spawn_depth + 1,
+                engine_registry=engine_registry,
             )
+            if engine_registry is not None:
+                engine_registry[sub_id] = sub_engine
             task = cfg.get("task", "")
             label = task[:60] + ("…" if len(task) > 60 else "")
             try:
                 result = await sub_engine.run_to_completion(task)
-                return f"[Sub-agent | {label}]\n{result}"
+                return f"[Sub-agent {sub_id} | {label}]\n{result}"
             except Exception as exc:
-                return f"[Sub-agent | {label}]\nError: {exc}"
+                return f"[Sub-agent {sub_id} | {label}]\nError: {exc}"
 
         results = await asyncio.gather(*[run_one(cfg) for cfg in agents])
         return "\n\n---\n\n".join(results)

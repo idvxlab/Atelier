@@ -124,6 +124,7 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
         session_store=_session_store,
         system_prompt=system_prompt,
         allowed_tools=allowed_tools,
+        engine_registry=_engines,
     )
     _engines[session_id] = engine
     _engine_meta[session_id] = {

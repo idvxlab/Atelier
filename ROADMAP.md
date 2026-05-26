@@ -36,7 +36,7 @@ async def write_file_tool(path: str, content: str, append: bool = False) -> str:
 
 ---
 
-## 组员 A 的任务
+## 组员 qt 的任务
 
 文件操作 + Web + 规划工作流，这周全做完。
 
@@ -76,7 +76,7 @@ async def write_file_tool(path: str, content: str, append: bool = False) -> str:
 
 ---
 
-## 组员 B 的任务
+## 组员 wyf 的任务
 
 搜索 + 执行 + MCP，这周全做完。
 

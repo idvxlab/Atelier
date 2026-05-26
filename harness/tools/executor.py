@@ -51,6 +51,7 @@ class ToolExecutor:
                 tool_call_id=call.tool_call_id,
                 content=f"Error: tool '{call.tool_name}' not found",
                 is_error=True,
+                tool_name=call.tool_name,
             )
 
         try:
@@ -68,6 +69,7 @@ class ToolExecutor:
                 tool_call_id=call.tool_call_id,
                 content=f"Error executing '{call.tool_name}': {exc}",
                 is_error=True,
+                tool_name=call.tool_name,
             )
 
         limit = self._limits.get(call.tool_name, DEFAULT_LIMIT)
@@ -87,9 +89,11 @@ class ToolExecutor:
                 tool_call_id=call.tool_call_id,
                 content=f"[Output exceeded {limit} char limit. Full output stored at ref:{ref_id}]",
                 is_overflow_ref=True,
+                tool_name=call.tool_name,
             )
 
         return ToolResultBlock(
             tool_call_id=call.tool_call_id,
             content=raw_output,
+            tool_name=call.tool_name,
         )

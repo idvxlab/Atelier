@@ -4,7 +4,9 @@
       "Bash(pytest tests/ -q)",
       "Bash(D:/Anaconda/python.exe -c \"from harness.config import HarnessConfig; c = HarnessConfig.from_yaml\\(''config.yaml''\\); print\\(''OK providers:'', list\\(c.providers.keys\\(\\)\\)\\)\")",
       "Bash(D:/Anaconda/python.exe -c \":*)",
-      "Bash(python -c \"import ast; ast.parse\\(open\\(''cli.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''OK''\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''cli.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''OK''\\)\")",
+      "WebFetch(domain:www.openai-hub.com)",
+      "Bash(D:/Anaconda/python.exe -m pytest tests/ -q)"
     ]
   }
 }
