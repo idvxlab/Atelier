@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import sys
+import subprocess
+import importlib
 
 import pytest
 
@@ -149,6 +151,26 @@ async def test_executor_tool_exception():
     assert "boom" in results[0].content
 
 
+@pytest.mark.asyncio
+async def test_executor_includes_exception_type_when_message_empty():
+    reg = ToolRegistry()
+    schema = ToolSchema(name="fail_empty", description="Fails", params=[])
+
+    async def handler() -> str:
+        raise RuntimeError()
+
+    reg.register(schema, handler)
+    emitter = EventEmitter("test")
+    overflow = OverflowStore()
+    executor = ToolExecutor(registry=reg, overflow=overflow, emitter=emitter)
+
+    calls = [ToolCallBlock(tool_call_id="c1", tool_name="fail_empty", tool_input={})]
+    results = await executor.execute_all(calls, round_idx=0)
+
+    assert results[0].is_error
+    assert "RuntimeError" in results[0].content
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Builtin tools
 # ──────────────────────────────────────────────────────────────────────
@@ -172,6 +194,55 @@ async def test_shell_tool_timeout():
         timeout=0.1,
     )
     assert "timed out" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_shell_tool_falls_back_to_current_python(monkeypatch):
+    recorded: dict[str, object] = {}
+
+    class DummyCompleted:
+        returncode = 0
+        stdout = b"Python test\n"
+        stderr = b""
+
+    def fake_run(cmd, **kwargs):
+        recorded["cmd"] = list(cmd)
+        return DummyCompleted()
+
+    monkeypatch.setattr("harness.tools.builtin.shell.shutil.which", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "harness.tools.builtin.shell.subprocess.run",
+        fake_run,
+    )
+
+    result = await shell_tool(command=["python", "--version"])
+
+    assert recorded["cmd"][0] == sys.executable
+    assert "Python test" in result
+
+
+@pytest.mark.asyncio
+async def test_powershell_tool_accepts_command_alias(monkeypatch):
+    ps_tool_module = importlib.import_module("harness.tools.builtin.powershell_tool")
+    from harness.tools.builtin.powershell_tool import powershell_tool
+
+    recorded: dict[str, object] = {}
+
+    class DummyCompleted:
+        returncode = 0
+        stdout = b"D:\\MyHarnessPy\n"
+        stderr = b""
+
+    def fake_run(cmd, **kwargs):
+        recorded["cmd"] = list(cmd)
+        return DummyCompleted()
+
+    monkeypatch.setattr(ps_tool_module.subprocess, "run", fake_run)
+
+    result = await powershell_tool(command="Get-Location")
+
+    assert recorded["cmd"][-1] == "Get-Location"
+    assert "D:\\MyHarnessPy" in result
 
 
 @pytest.mark.asyncio

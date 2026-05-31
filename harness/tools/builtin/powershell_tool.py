@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import subprocess
 import sys
 
 from harness.types.tools import ToolSchema, ToolParam
@@ -19,6 +20,13 @@ POWERSHELL_SCHEMA = ToolSchema(
             name="script",
             type="string",
             description="PowerShell script to execute.",
+            required=False,
+        ),
+        ToolParam(
+            name="command",
+            type="string",
+            description="Alias of script for compatibility with models that emit command instead of script.",
+            required=False,
         ),
         ToolParam(
             name="cwd",
@@ -47,34 +55,40 @@ def _find_powershell() -> str:
 
 
 async def powershell_tool(
-    script: str,
+    script: str = "",
+    command: str = "",
     cwd: str = ".",
     timeout: float = 30.0,
 ) -> str:
+    script = script or command
+    if not script.strip():
+        return "Error: script is required."
+
     exe = _find_powershell()
-    proc = await asyncio.create_subprocess_exec(
-        exe,
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        script,
-        cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
     try:
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        try:
-            proc.kill()
-            await proc.communicate()
-        except Exception:
-            pass
+        completed = await asyncio.to_thread(
+            subprocess.run,
+            [exe, "-NoProfile", "-NonInteractive", "-Command", script],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            timeout=timeout,
+            check=False,
+            shell=False,
+        )
+    except FileNotFoundError:
+        return f"Error: PowerShell executable not found: {exe!r}"
+    except PermissionError as exc:
+        return f"Error: permission denied running {exe!r}: {exc}"
+    except OSError as exc:
+        return f"Error: failed to start PowerShell {exe!r}: {exc}"
+    except subprocess.TimeoutExpired:
         return f"[PowerShell timed out after {timeout}s]"
 
-    stdout_text = stdout_bytes.decode(errors="replace")
-    stderr_text = stderr_bytes.decode(errors="replace")
-    exit_code = proc.returncode
+    stdout_text = completed.stdout.decode(errors="replace")
+    stderr_text = completed.stderr.decode(errors="replace")
+    exit_code = completed.returncode
 
     parts: list[str] = []
     if stdout_text:
