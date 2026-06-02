@@ -74,6 +74,7 @@ SPAWN_AGENTS_SCHEMA = ToolSchema(
                 "List of agent configurations. "
                 "Each item: {task: str, system_prompt?: str, tools?: list[str]}"
             ),
+            required=True,
             items={"type": "object"},
         ),
     ],

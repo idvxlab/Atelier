@@ -82,6 +82,7 @@ async def _mount_static() -> None:
 # ── Request / response models ──────────────────────────────────────────
 
 class CreateSessionRequest(BaseModel):
+    session_id: str = ""       # optional; pass to restore after server reload
     provider: str = ""
     persona: str = ""           # load from personas/{name}.md (preferred)
     system_prompt: str = ""     # fallback if no persona
@@ -116,7 +117,7 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
                    f"Available: {list(cfg.providers.keys())}",
         )
 
-    session_id = str(uuid.uuid4())
+    session_id = req.session_id or str(uuid.uuid4())
     engine = build_engine(
         session_id=session_id,
         provider_cfg=cfg.providers[provider_name],
@@ -126,6 +127,7 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
         allowed_tools=allowed_tools,
         engine_registry=_engines,
     )
+    await engine.restore_from_store()
     _engines[session_id] = engine
     _engine_meta[session_id] = {
         "provider": provider_name,
@@ -189,7 +191,7 @@ async def list_sessions() -> dict[str, Any]:
 
 
 @app.delete("/sessions/{session_id}", status_code=204)
-async def delete_session(session_id: str) -> None:
+async def delete_session(session_id: str):
     if session_id not in _engines:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
     engine = _engines.pop(session_id)
@@ -249,7 +251,7 @@ async def api_create_skill(req: CreateFileRequest) -> dict[str, Any]:
 
 
 @app.delete("/config/skills/{name}", status_code=204)
-async def api_delete_skill(name: str) -> None:
+async def api_delete_skill(name: str):
     import shutil
     folder = SKILLS_DIR / name
     if folder.is_dir():
@@ -295,7 +297,7 @@ async def api_create_persona(req: CreateFileRequest) -> dict[str, Any]:
 
 
 @app.delete("/config/personas/{name}", status_code=204)
-async def api_delete_persona(name: str) -> None:
+async def api_delete_persona(name: str):
     path = PERSONAS_DIR / f"{name}.md"
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Persona '{name}' not found")

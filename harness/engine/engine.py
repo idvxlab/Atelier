@@ -126,6 +126,27 @@ class AgentEngine:
     # Public API (called by REST layer or tests)
     # ──────────────────────────────────────────────────────────────────
 
+    async def restore_from_store(self) -> bool:
+        """
+        Restore session messages from the session store.
+
+        Returns True if a saved session was found and restored,
+        False if nothing was stored (fresh session).
+        After restore the engine state is set to WAITING_INPUT so the
+        frontend can immediately poll /state without racing with a running loop.
+        """
+        record = await self._session_store.load(self._config.session_id)
+        if record is None:
+            return False
+        async with self._state_lock:
+            self._messages = record.messages
+            # Force state to WAITING_INPUT after reload — the engine is idle
+            # and the user can send a new message to continue.
+            # Skip if already in WAITING_INPUT (no-transition-from-itself).
+            if self._sm.state != EngineState.WAITING_INPUT:
+                self._sm.transition(EngineState.WAITING_INPUT)
+        return True
+
     def add_message_listener(self, listener: MessageListener) -> None:
         """Register a callback invoked for every new message (real-time push)."""
         self._message_listeners.append(listener)
