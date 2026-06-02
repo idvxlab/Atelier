@@ -2,6 +2,9 @@ from __future__ import annotations
 import asyncio
 import os
 import shlex
+import shutil
+import subprocess
+import sys
 from harness.types.tools import ToolSchema, ToolParam
 
 SHELL_SCHEMA = ToolSchema(
@@ -40,18 +43,37 @@ async def shell_tool(
 ) -> str:
     if isinstance(command, str):
         command = shlex.split(command)
+    else:
+        command = [str(part) for part in command]
+
+    if not command:
+        return "Error: command must not be empty."
 
     merged_env: dict[str, str] | None = None
     if env:
         merged_env = {**os.environ, **{str(k): str(v) for k, v in env.items()}}
 
+    executable = command[0]
+    path_env = (merged_env or os.environ).get("PATH", "")
+    resolved = shutil.which(executable, path=path_env)
+
+    # On Windows or isolated envs, the server process may not inherit a PATH entry
+    # for "python" even though the current interpreter is available.
+    if resolved is None and executable in {"python", "python3"} and sys.executable:
+        command = [sys.executable, *command[1:]]
+
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *command,
+        completed = await asyncio.to_thread(
+            subprocess.run,
+            command,
             cwd=cwd,
             env=merged_env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            timeout=timeout,
+            check=False,
+            shell=False,
         )
     except FileNotFoundError:
         return (
@@ -64,19 +86,12 @@ async def shell_tool(
         return f"Error: permission denied running {command[0]!r}: {exc}"
     except OSError as exc:
         return f"Error: failed to start process {command[0]!r}: {exc}"
-    try:
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        try:
-            proc.kill()
-            await proc.communicate()
-        except Exception:
-            pass
+    except subprocess.TimeoutExpired:
         return f"[Command timed out after {timeout}s]"
 
-    stdout_text = stdout_bytes.decode(errors="replace")
-    stderr_text = stderr_bytes.decode(errors="replace")
-    exit_code = proc.returncode
+    stdout_text = completed.stdout.decode(errors="replace")
+    stderr_text = completed.stderr.decode(errors="replace")
+    exit_code = completed.returncode
 
     parts: list[str] = []
     if stdout_text:

@@ -8,11 +8,10 @@
 default_provider: hub-openai
 
 providers:
-
   # ── openai-hub 主模型 ────────────────────────────────────────────────
   hub-openai:
     name: openai-compatible
-    model: gpt-4o                   # OPENAI_HUB_MODEL 非空时会被环境变量覆盖
+    model: gpt-4o # OPENAI_HUB_MODEL 非空时会被环境变量覆盖
     api_key: "${OPENAI_HUB_API_KEY}"
     api_key_env:
       - OPENAI_HUB_API_KEY
@@ -38,7 +37,7 @@ compression:
   token_window: 128000
   auto_trigger_ratio: 0.65
   micro_keep_recent: 6
-  summary_provider: hub-mini        # 用便宜模型做摘要，省 token
+  summary_provider: hub-mini # 用便宜模型做摘要，省 token
 
 storage:
   backend: sqlite
@@ -47,21 +46,20 @@ storage:
 # ── 工具配置 ─────────────────────────────────────────────────
 # 在这里开关工具、调整参数，不需要改代码
 tools:
-
   # 全局启用的工具（注释掉某行 = 该工具对所有 skill 不可用）
   enabled:
-    - read_file      # 读取本地文件内容
-    - write_file     # 写入或追加文件内容
-    - edit_file      # 精确替换文件中的一段字符串
-    - search         # 在文件中正则搜索
-    - shell          # 执行系统命令（高风险，可注释掉禁用）
-    - glob           # 按文件名模式查找文件
-    - grep           # 带上下文行的内容搜索
-    - powershell     # 执行 PowerShell 脚本（Windows: pwsh/powershell，Linux/Mac: pwsh）
-    - web_fetch      # 抓取 URL 内容并转为纯文本
-    - web_search     # DuckDuckGo 网页搜索
-    - think          # 让 Agent 输出推理过程
-    - todo_write     # 会话级任务清单管理
+    - read_file # 读取本地文件内容
+    - write_file # 写入或追加文件内容
+    - edit_file # 精确替换文件中的一段字符串
+    - search # 在文件中正则搜索
+    - shell # 执行系统命令（高风险，可注释掉禁用）
+    - glob # 按文件名模式查找文件
+    - grep # 带上下文行的内容搜索
+    - powershell # 执行 PowerShell 脚本（Windows: pwsh/powershell，Linux/Mac: pwsh）
+    - web_fetch # 抓取 URL 内容并转为纯文本
+    - web_search # DuckDuckGo 网页搜索
+    - think # 让 Agent 输出推理过程
+    - todo_write # 会话级任务清单管理
 
   # 执行前需要用户确认的工具（审批流）
   confirm_tools:
@@ -71,9 +69,9 @@ tools:
   # 各工具的输出字符上限（超出部分自动存入外部引用）
   limits:
     read_file: 20000
-    search:    10000
-    shell:     15000
-    web_fetch:  8000
+    search: 10000
+    shell: 15000
+    web_fetch: 8000
     web_search: 8000
     todo_write: 5000
 

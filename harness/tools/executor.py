@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import traceback
 from harness.types.messages import ToolCallBlock, ToolResultBlock
 from harness.tools.registry import ToolRegistry
 from harness.tools.overflow import OverflowStore
@@ -61,13 +62,17 @@ class ToolExecutor:
             )
             raw_output: str = await tool.handler(**call.tool_input)
         except Exception as exc:
+            detail = str(exc).strip() or repr(exc)
+            if detail == repr(exc):
+                detail = f"{type(exc).__name__}: {detail}"
+            tb_last = traceback.format_exc().strip().splitlines()[-1]
             self._emitter.emit(
                 "tool_call", "execution-error",
-                detail={"tool": call.tool_name, "error": str(exc), "round": round_idx},
+                detail={"tool": call.tool_name, "error": detail, "round": round_idx},
             )
             return ToolResultBlock(
                 tool_call_id=call.tool_call_id,
-                content=f"Error executing '{call.tool_name}': {exc}",
+                content=f"Error executing '{call.tool_name}': {detail}\n{tb_last}",
                 is_error=True,
                 tool_name=call.tool_name,
             )
