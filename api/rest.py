@@ -64,14 +64,22 @@ async def _startup() -> None:
 
 # ── Static files ───────────────────────────────────────────────────────
 
-STATIC_DIR = Path("static")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = ROOT_DIR / "static"
 
 @app.get("/", include_in_schema=False)
 async def serve_index() -> FileResponse:
     index = STATIC_DIR / "index.html"
     if not index.exists():
         raise HTTPException(status_code=404, detail="Frontend not found. Run setup first.")
-    return FileResponse(str(index))
+    return FileResponse(
+        str(index),
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 @app.on_event("startup")
 async def _mount_static() -> None:
@@ -91,6 +99,12 @@ class CreateSessionRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     text: str
+
+
+class UpdateSessionRequest(BaseModel):
+    display_name: str | None = None
+    pinned: bool | None = None
+    archived: bool | None = None
 
 
 class ConfigWriteRequest(BaseModel):
@@ -133,6 +147,11 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
         "provider": provider_name,
         "persona":  req.persona,
     }
+    # Ensure the session appears in the persistent store immediately
+    try:
+        await _session_store.save(session_id, [])
+    except Exception:
+        pass
     return {
         "session_id": session_id,
         "provider":   provider_name,
@@ -149,7 +168,25 @@ async def send_message(session_id: str, req: SendMessageRequest) -> dict[str, An
 
 @app.get("/sessions/{session_id}/state")
 async def get_state(session_id: str) -> dict[str, Any]:
-    engine = _get_engine(session_id)
+    engine = _engines.get(session_id)
+    if engine is None:
+        # Session not in memory — try to restore from persistent store
+        stored = await _session_store.load(session_id)
+        if stored is None:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+        # Auto-restore engine
+        cfg = _require_config()
+        engine = build_engine(
+            session_id=session_id,
+            provider_cfg=cfg.providers[cfg.default_provider],
+            harness_cfg=cfg,
+            session_store=_session_store,
+            system_prompt="",
+            engine_registry=_engines,
+        )
+        await engine.restore_from_store()
+        _engines[session_id] = engine
+        _engine_meta[session_id] = {"provider": cfg.default_provider, "persona": ""}
     snapshot = await engine.get_snapshot()
     snapshot["meta"] = _engine_meta.get(session_id, {})
     return snapshot
@@ -178,25 +215,63 @@ async def deny_action(session_id: str) -> dict[str, Any]:
 
 @app.get("/sessions")
 async def list_sessions() -> dict[str, Any]:
-    sessions = []
-    for sid, eng in _engines.items():
-        meta = _engine_meta.get(sid, {})
+    sessions: list[dict[str, Any]] = []
+    # Merge persistent store records with active engine state
+    try:
+        store_records = await _session_store.list_sessions()
+    except Exception:
+        store_records = []
+    seen: set[str] = set()
+    for rec in store_records:
+        seen.add(rec.session_id)
+        eng = _engines.get(rec.session_id)
+        meta = _engine_meta.get(rec.session_id, {})
         sessions.append({
-            "session_id": sid,
-            "state":      eng._sm.state.name,
+            "session_id": rec.session_id,
+            "state":      eng._sm.state.name if eng else "COMPLETED",
             "persona":    meta.get("persona", ""),
             "provider":   meta.get("provider", ""),
+            "display_name": rec.display_name,
+            "pinned":       rec.pinned,
+            "archived":     rec.archived,
         })
+    # Also include active engines not yet in the store
+    for sid, eng in _engines.items():
+        if sid not in seen:
+            meta = _engine_meta.get(sid, {})
+            sessions.append({
+                "session_id": sid,
+                "state":      eng._sm.state.name,
+                "persona":    meta.get("persona", ""),
+                "provider":   meta.get("provider", ""),
+                "display_name": "",
+                "pinned":       False,
+                "archived":     False,
+            })
     return {"sessions": sessions}
+
+
+@app.patch("/sessions/{session_id}")
+async def update_session(session_id: str, req: UpdateSessionRequest) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    if req.display_name is not None:
+        kwargs["display_name"] = req.display_name
+    if req.pinned is not None:
+        kwargs["pinned"] = req.pinned
+    if req.archived is not None:
+        kwargs["archived"] = req.archived
+    if kwargs:
+        await _session_store.update_metadata(session_id, **kwargs)
+    return {"status": "updated", "session_id": session_id}
 
 
 @app.delete("/sessions/{session_id}", status_code=204)
 async def delete_session(session_id: str):
-    if session_id not in _engines:
-        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
-    engine = _engines.pop(session_id)
-    _engine_meta.pop(session_id, None)
-    await engine.cancel()
+    engine = _engines.pop(session_id, None)
+    if engine is not None:
+        await engine.cancel()
+        _engine_meta.pop(session_id, None)
+    # Always delete from persistent store
     await _session_store.delete(session_id)
 
 

@@ -27,6 +27,14 @@ def _first_env(names: list[str]) -> str:
     return ""
 
 
+_PROVIDER_ALIASES: dict[str, str] = {
+    "my-361api": "361api-openai",
+    "361api": "361api-openai",
+    "my-361api-mini": "361api-mini",
+    "361api-mini": "361api-mini",
+}
+
+
 @dataclass
 class ProviderConfig:
     name: str          # "openai" | "anthropic" | "openai-compatible"
@@ -94,6 +102,12 @@ class HarnessConfig:
     tools: ToolsSettings = field(default_factory=ToolsSettings)
     mcp_servers: dict[str, MCPServerConfig] = field(default_factory=dict)
 
+    @staticmethod
+    def _normalize_provider_name(name: str) -> str:
+        if not name:
+            return name
+        return _PROVIDER_ALIASES.get(name, name)
+
     @classmethod
     def from_yaml(cls, path: str) -> "HarnessConfig":
         with open(path, encoding="utf-8") as f:
@@ -137,11 +151,26 @@ class HarnessConfig:
                 command=list(scfg.get("command", [])),
             )
 
+        default_provider = os.environ.get("HARNESS_DEFAULT_PROVIDER", "").strip()
+        if default_provider:
+            default_provider = cls._normalize_provider_name(default_provider)
+        else:
+            default_provider = cls._normalize_provider_name(
+                raw.get("default_provider", "")
+            )
+
+        compression = (
+            CompressionSettings(**comp_raw) if comp_raw else CompressionSettings()
+        )
+        compression.summary_provider = cls._normalize_provider_name(
+            compression.summary_provider
+        )
+
         return cls(
             providers=providers,
-            default_provider=raw.get("default_provider", ""),
+            default_provider=default_provider,
             engine=EngineSettings(**engine_raw) if engine_raw else EngineSettings(),
-            compression=CompressionSettings(**comp_raw) if comp_raw else CompressionSettings(),
+            compression=compression,
             storage=StorageSettings(**storage_raw) if storage_raw else StorageSettings(),
             tools=tools_cfg,
             mcp_servers=mcp_servers,
@@ -158,6 +187,7 @@ class HarnessConfig:
                 "THREESIXONE_API_KEY",
                 "API_361_KEY",
                 "361API_API_KEY",
+                "BLTCY_API_KEY",
             ]
         ):
             providers["361api-openai"] = ProviderConfig(
@@ -186,7 +216,9 @@ class HarnessConfig:
                 extra={"thinking": {"enabled": False}},
             )
 
-        default = os.environ.get("HARNESS_DEFAULT_PROVIDER", "")
+        default = cls._normalize_provider_name(
+            os.environ.get("HARNESS_DEFAULT_PROVIDER", "")
+        )
         if not default and providers:
             default = next(iter(providers))
 

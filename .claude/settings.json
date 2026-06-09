@@ -6,7 +6,10 @@
       "Bash(D:/Anaconda/python.exe -c \":*)",
       "Bash(python -c \"import ast; ast.parse\\(open\\(''cli.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''OK''\\)\")",
       "WebFetch(domain:www.openai-hub.com)",
-      "Bash(D:/Anaconda/python.exe -m pytest tests/ -q)"
+      "Bash(D:/Anaconda/python.exe -m pytest tests/ -q)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/liuup/claude-code-analysis/main/analysis/04d-mcp-implementation.md\")"
     ]
   }
 }

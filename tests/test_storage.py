@@ -49,8 +49,9 @@ async def test_session_list():
     await store.save("a", [])
     await store.save("b", [])
     sessions = await store.list_sessions()
-    assert "a" in sessions
-    assert "b" in sessions
+    ids = [s.session_id for s in sessions]
+    assert "a" in ids
+    assert "b" in ids
 
 
 @pytest.mark.asyncio
