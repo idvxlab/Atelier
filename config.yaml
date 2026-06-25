@@ -1,32 +1,87 @@
-# ────────────────────────────────────────────────────────
-# openai-hub 中转站配置
-# 把 key 填入 .env：
-#   OPENAI_HUB_API_KEY=sk-...
-#   OPENAI_HUB_MODEL=gpt-4o          （留空则用下方 model 字段）
-# ────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------
+# Third-party API configuration
+# 361API uses an OpenAI-compatible interface.
+# Put keys in .env or system environment variables:
+#   THREE_SIX_ONE_API_KEY=sk-...
+# Compatible aliases such as BLTCY_API_KEY and OPENAI_API_KEY are also accepted.
+# HARNESS_DEFAULT_PROVIDER supports the legacy alias my-361api.
+# ----------------------------------------------------------------------
 
-default_provider: hub-openai
+default_provider: 361api-openai
 
 providers:
-  # ── openai-hub 主模型 ────────────────────────────────────────────────
-  hub-openai:
+  # Primary OpenAI-compatible provider via 361API
+  361api-openai:
     name: openai-compatible
-    model: gpt-4o # OPENAI_HUB_MODEL 非空时会被环境变量覆盖
-    api_key: "${OPENAI_HUB_API_KEY}"
+    model: gpt-4o
+    api_key: "${THREE_SIX_ONE_API_KEY}"
     api_key_env:
-      - OPENAI_HUB_API_KEY
-    base_url: "${OPENAI_HUB_BASE_URL}"
+      - THREE_SIX_ONE_API_KEY
+      - THREESIXONE_API_KEY
+      - API_361_KEY
+      - 361API_API_KEY
+      - OPENAI_API_KEY
+      - BLTCY_API_KEY
+    base_url: "https://www.361api.com/v1"
     max_tokens: 4096
     temperature: 0.0
 
-  # ── openai-hub 摘要用便宜模型（上下文压缩时使用）────────────────────
-  hub-mini:
+  # Lower-cost summarization model for compression
+  361api-mini:
     name: openai-compatible
     model: gpt-4o-mini
-    api_key: "${OPENAI_HUB_API_KEY}"
+    api_key: "${THREE_SIX_ONE_API_KEY}"
     api_key_env:
-      - OPENAI_HUB_API_KEY
-    base_url: "${OPENAI_HUB_BASE_URL}"
+      - THREE_SIX_ONE_API_KEY
+      - THREESIXONE_API_KEY
+      - API_361_KEY
+      - 361API_API_KEY
+      - OPENAI_API_KEY
+      - BLTCY_API_KEY
+    base_url: "https://www.361api.com/v1"
+    max_tokens: 2048
+    temperature: 0.0
+
+  # Legacy provider alias compatibility
+  my-361api:
+    name: openai-compatible
+    model: gpt-4o
+    api_key: "${THREE_SIX_ONE_API_KEY}"
+    api_key_env:
+      - THREE_SIX_ONE_API_KEY
+      - THREESIXONE_API_KEY
+      - API_361_KEY
+      - 361API_API_KEY
+      - OPENAI_API_KEY
+      - BLTCY_API_KEY
+    base_url: "https://www.361api.com/v1"
+    max_tokens: 4096
+    temperature: 0.0
+
+  bltcy-anthropic:
+    name: anthropic
+    model: claude-sonnet-4-6
+    api_key: "${BLTCY_API_KEY}"
+    base_url: "https://api.bltcy.ai"
+    max_tokens: 8192
+    temperature: 0.0
+    extra:
+      thinking:
+        enabled: true
+
+  bltcy-openai:
+    name: openai-compatible
+    model: gpt-4o
+    api_key: "${BLTCY_API_KEY}"
+    base_url: "https://api.bltcy.ai/v1"
+    max_tokens: 4096
+    temperature: 0.0
+
+  bltcy-mini:
+    name: openai-compatible
+    model: gpt-4o-mini
+    api_key: "${BLTCY_API_KEY}"
+    base_url: "https://api.bltcy.ai/v1"
     max_tokens: 2048
     temperature: 0.0
 
@@ -37,36 +92,31 @@ compression:
   token_window: 128000
   auto_trigger_ratio: 0.65
   micro_keep_recent: 6
-  summary_provider: hub-mini # 用便宜模型做摘要，省 token
+  summary_provider: 361api-mini
 
 storage:
   backend: sqlite
   path: ./harness.db
 
-# ── 工具配置 ─────────────────────────────────────────────────
-# 在这里开关工具、调整参数，不需要改代码
 tools:
-  # 全局启用的工具（注释掉某行 = 该工具对所有 skill 不可用）
   enabled:
-    - read_file # 读取本地文件内容
-    - write_file # 写入或追加文件内容
-    - edit_file # 精确替换文件中的一段字符串
-    - search # 在文件中正则搜索
-    - shell # 执行系统命令（高风险，可注释掉禁用）
-    - glob # 按文件名模式查找文件
-    - grep # 带上下文行的内容搜索
-    - powershell # 执行 PowerShell 脚本（Windows: pwsh/powershell，Linux/Mac: pwsh）
-    - web_fetch # 抓取 URL 内容并转为纯文本
-    - web_search # DuckDuckGo 网页搜索
-    - think # 让 Agent 输出推理过程
-    - todo_write # 会话级任务清单管理
+    - read_file
+    - write_file
+    - edit_file
+    - search
+    - shell
+    - glob
+    - grep
+    - powershell
+    - web_fetch
+    - web_search
+    - think
+    - todo_write
 
-  # 执行前需要用户确认的工具（审批流）
   confirm_tools:
     - shell
     - powershell
 
-  # 各工具的输出字符上限（超出部分自动存入外部引用）
   limits:
     read_file: 20000
     search: 10000
@@ -75,26 +125,7 @@ tools:
     web_search: 8000
     todo_write: 5000
 
-# ── MCP Server 配置 ───────────────────────────────────────────────
-# 每个 key 是 Server 的别名（也用作工具名前缀，例如 filesystem__read_file）
-# transport 目前只支持 stdio
-# command   启动 Server 的完整命令（列表形式）
-#
-# 使用前请先安装对应的 npm 包，例如：
-#   npm install -g @modelcontextprotocol/server-filesystem
-# 或使用 npx 免安装直接运行（如下示例）。
-#
 mcp_servers:
   filesystem:
     transport: stdio
     command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."]
-#
-# 取消注释以上段落即可启用 MCP filesystem server。
-#
-# 启用后，在 CLI 里输入 /tools 应能看到：
-#   filesystem__read_file / filesystem__list_directory / filesystem__write_file ...
-#
-#   # 示例：Git MCP Server
-#   git:
-#     transport: stdio
-#     command: ["npx", "-y", "@modelcontextprotocol/server-git", "--repository", "."]

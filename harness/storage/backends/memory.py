@@ -26,11 +26,27 @@ class MemorySessionStore(SessionStore):
     async def load(self, session_id: str) -> SessionRecord | None:
         return self._sessions.get(session_id)
 
-    async def list_sessions(self) -> list[str]:
-        return list(self._sessions.keys())
+    async def list_sessions(self) -> list[SessionRecord]:
+        records = list(self._sessions.values())
+        # Newest first, then pinned on top (stable sort)
+        records.sort(key=lambda r: r.created_at, reverse=True)
+        records.sort(key=lambda r: r.pinned, reverse=True)
+        return records
 
     async def delete(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
+
+    async def update_metadata(self, session_id: str, **kwargs) -> None:
+        rec = self._sessions.get(session_id)
+        if rec is None:
+            return
+        for k, v in kwargs.items():
+            if k == "pinned":
+                rec.pinned = bool(v)
+            elif k == "archived":
+                rec.archived = bool(v)
+            elif k == "display_name":
+                rec.display_name = str(v)
 
 
 class MemoryCheckpointStore(CheckpointStore):

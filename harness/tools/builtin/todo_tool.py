@@ -17,6 +17,22 @@ TODO_WRITE_SCHEMA = ToolSchema(
             type="array",
             description="List of todo items with 'content' and 'status' fields (use with action=set)",
             required=False,
+            items={
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Todo item text",
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Todo status",
+                        "enum": ["pending", "in_progress", "completed"],
+                    },
+                },
+                "required": ["content", "status"],
+                "additionalProperties": False,
+            },
         ),
         ToolParam(
             name="index",

@@ -11,6 +11,9 @@ class SessionRecord:
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: dict = field(default_factory=dict)
+    display_name: str = ""
+    pinned: bool = False
+    archived: bool = False
 
 class SessionStore(ABC):
     @abstractmethod
@@ -20,7 +23,10 @@ class SessionStore(ABC):
     async def load(self, session_id: str) -> SessionRecord | None: ...
 
     @abstractmethod
-    async def list_sessions(self) -> list[str]: ...
+    async def list_sessions(self) -> list[SessionRecord]: ...
 
     @abstractmethod
     async def delete(self, session_id: str) -> None: ...
+
+    @abstractmethod
+    async def update_metadata(self, session_id: str, **kwargs) -> None: ...

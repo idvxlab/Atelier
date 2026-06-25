@@ -158,6 +158,18 @@ class SQLiteSessionStore(SessionStore):
                 metadata    TEXT NOT NULL DEFAULT '{}'
             )
         """)
+        # Schema migrations — add columns that may not exist in older DBs
+        for col, col_def in [
+            ("display_name", "TEXT DEFAULT ''"),
+            ("pinned", "INTEGER DEFAULT 0"),
+            ("archived", "INTEGER DEFAULT 0"),
+        ]:
+            try:
+                await conn.execute(
+                    f"ALTER TABLE sessions ADD COLUMN {col} {col_def}"
+                )
+            except aiosqlite.OperationalError:
+                pass  # column already exists
         await conn.commit()
 
     async def _get_conn(self) -> aiosqlite.Connection:
@@ -172,7 +184,7 @@ class SQLiteSessionStore(SessionStore):
         async with aiosqlite.connect(self._db_path) as conn:
             conn.row_factory = aiosqlite.Row
             await self._ensure_tables(conn)
-            # Upsert: insert or update
+            # Upsert: insert or update. Preserve existing metadata/display_name/pinned/archived on conflict.
             await conn.execute("""
                 INSERT INTO sessions (session_id, messages, created_at, updated_at, metadata)
                 VALUES (?, ?, ?, ?, '{}')
@@ -198,15 +210,59 @@ class SQLiteSessionStore(SessionStore):
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
                 metadata=json.loads(row["metadata"]),
+                display_name=row["display_name"] if "display_name" in row.keys() else "",
+                pinned=bool(row["pinned"]) if "pinned" in row.keys() else False,
+                archived=bool(row["archived"]) if "archived" in row.keys() else False,
             )
 
-    async def list_sessions(self) -> list[str]:
+    async def list_sessions(self) -> list[SessionRecord]:
         async with aiosqlite.connect(self._db_path) as conn:
             conn.row_factory = aiosqlite.Row
             await self._ensure_tables(conn)
-            async with conn.execute("SELECT session_id FROM sessions ORDER BY created_at") as cur:
+            async with conn.execute(
+                "SELECT * FROM sessions ORDER BY pinned DESC, created_at DESC"
+            ) as cur:
                 rows = await cur.fetchall()
-            return [row["session_id"] for row in rows]
+            results: list[SessionRecord] = []
+            for row in rows:
+                results.append(SessionRecord(
+                    session_id=row["session_id"],
+                    messages=[],  # lazy — messages not needed for listing
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                    metadata=json.loads(row["metadata"]),
+                    display_name=row["display_name"] if "display_name" in row.keys() else "",
+                    pinned=bool(row["pinned"]) if "pinned" in row.keys() else False,
+                    archived=bool(row["archived"]) if "archived" in row.keys() else False,
+                ))
+            return results
+
+    async def update_metadata(self, session_id: str, **kwargs) -> None:
+        """Partially update session metadata fields (display_name, pinned, archived)."""
+        allowed = {"display_name", "pinned", "archived"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return
+        set_clauses: list[str] = []
+        params: list[Any] = []
+        for k, v in updates.items():
+            if k == "pinned":
+                set_clauses.append("pinned = ?")
+                params.append(1 if v else 0)
+            elif k == "archived":
+                set_clauses.append("archived = ?")
+                params.append(1 if v else 0)
+            else:
+                set_clauses.append(f"{k} = ?")
+                params.append(v)
+        params.append(session_id)
+        async with aiosqlite.connect(self._db_path) as conn:
+            await self._ensure_tables(conn)
+            await conn.execute(
+                f"UPDATE sessions SET {', '.join(set_clauses)} WHERE session_id = ?",
+                params,
+            )
+            await conn.commit()
 
     async def delete(self, session_id: str) -> None:
         async with aiosqlite.connect(self._db_path) as conn:
