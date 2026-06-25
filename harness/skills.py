@@ -151,7 +151,7 @@ def _scan_skill_dir(scan_dir: Path, source: str) -> list[dict[str, Any]]:
 
     # Folder-based skills (each subfolder with SKILL.md)
     for item in sorted(scan_dir.iterdir()):
-        if not item.is_dir() or item.name.startswith("."):
+        if not item.is_dir() or item.name.startswith(".") or item.name == "template":
             continue
         skill_md = item / "SKILL.md"
         if skill_md.exists():
