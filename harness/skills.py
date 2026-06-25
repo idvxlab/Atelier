@@ -29,7 +29,8 @@ def _get_skill_scan_dirs() -> list[tuple[Path, str]]:
     return [
         (Path(".myharness/skills"), "project"),
         (home / ".myharness" / "skills", "global"),
-        (Path(".claude/skills"), "claude"),
+        (Path(".claude/skills"), "project-claude"),
+        (home / ".claude" / "skills", "global-claude"),
     ]
 
 
