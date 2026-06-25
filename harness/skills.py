@@ -1,9 +1,15 @@
 """
 Shared skill and persona loading logic.
 Used by both the CLI (cli.py) and the REST API (api/rest.py).
+
+Skill discovery priority (high → low):
+  1. .myharness/skills/         — project-installed
+  2. ~/.myharness/skills/       — user-global installed
+  3. .claude/skills/            — Claude Code ecosystem compat
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -13,9 +19,18 @@ import yaml
 
 # ── Paths ─────────────────────────────────────────────────────────────
 
-SKILLS_DIR   = Path("skills")
-PERSONAS_DIR = Path("personas")
-SKILLS_YAML  = SKILLS_DIR / "skills.yaml"   # kept for legacy compat
+SKILLS_DIR         = Path(".myharness/skills")   # where skill CRUD writes to
+PERSONAS_DIR       = Path(".myharness/personas")
+
+def _get_skill_scan_dirs() -> list[tuple[Path, str]]:
+    """Return [(directory, source_label), ...] in priority order."""
+    home = Path(os.environ.get("HOME", os.environ.get("USERPROFILE", "~")))
+
+    return [
+        (Path(".myharness/skills"), "project"),
+        (home / ".myharness" / "skills", "global"),
+        (Path(".claude/skills"), "claude"),
+    ]
 
 
 # ── Persona helpers ────────────────────────────────────────────────────
@@ -91,23 +106,35 @@ def parse_skill_md(path: Path) -> dict[str, Any]:
 
 
 def load_skill(name: str) -> dict[str, Any]:
-    """
-    Load a skill by name.
-    Priority: skills/{name}/SKILL.md  ->  skills/{name}.md (legacy)  ->  ValueError
-    """
-    folder_md = SKILLS_DIR / name / "SKILL.md"
-    if folder_md.exists():
-        return parse_skill_md(folder_md)
+    """Load a skill by name, searching all directories in priority order.
 
-    legacy_md = SKILLS_DIR / f"{name}.md"
-    if legacy_md.exists():
-        return parse_skill_md(legacy_md)
+    Priority: .myharness/skills/ > ~/.myharness/skills/ > .claude/skills/
+
+    For each directory, looks for ``{name}/SKILL.md`` first, then ``{name}.md`` (legacy).
+    """
+    for scan_dir, source in _get_skill_scan_dirs():
+        if not scan_dir.exists():
+            continue
+
+        # Folder-based: {dir}/{name}/SKILL.md
+        folder_md = scan_dir / name / "SKILL.md"
+        if folder_md.exists():
+            meta = parse_skill_md(folder_md)
+            meta.setdefault("_source", source)
+            return meta
+
+        # Legacy flat: {dir}/{name}.md
+        legacy_md = scan_dir / f"{name}.md"
+        if legacy_md.exists():
+            meta = parse_skill_md(legacy_md)
+            meta.setdefault("_source", source)
+            return meta
 
     available = [s["name"] for s in list_skills()]
     raise ValueError(
         f"Skill '{name}' not found. "
         f"Available: {available}. "
-        f"Create: skills/{name}/SKILL.md"
+        f"Create: .myharness/skills/{name}/SKILL.md"
     )
 
 
@@ -116,50 +143,63 @@ def load_skill_content(name: str) -> str:
     return load_skill(name).get("system_prompt", "")
 
 
-def list_skills() -> list[dict[str, str]]:
-    """Return [{name, description, source}] for all available skills."""
-    results: list[dict[str, str]] = []
-    seen: set[str] = set()
-
-    if not SKILLS_DIR.exists():
+def _scan_skill_dir(scan_dir: Path, source: str) -> list[dict[str, Any]]:
+    """Scan a single directory for skills, returning [{name, description, source}, ...]."""
+    results: list[dict[str, Any]] = []
+    if not scan_dir.exists():
         return results
 
     # Folder-based skills (each subfolder with SKILL.md)
-    for item in sorted(SKILLS_DIR.iterdir()):
-        if item.is_dir() and item.name != "template":
-            skill_md = item / "SKILL.md"
-            if skill_md.exists():
-                try:
-                    meta = parse_skill_md(skill_md)
-                    name = str(meta.get("name") or item.name)
-                    if name in seen:
-                        continue
-                    seen.add(name)
-                    results.append({
-                        "name":        name,
-                        "description": str(meta.get("description", "")),
-                        "source":      "folder",
-                    })
-                except Exception:
-                    pass
+    for item in sorted(scan_dir.iterdir()):
+        if not item.is_dir() or item.name.startswith("."):
+            continue
+        skill_md = item / "SKILL.md"
+        if skill_md.exists():
+            try:
+                meta = parse_skill_md(skill_md)
+                results.append({
+                    "name":        str(meta.get("name") or item.name),
+                    "description": str(meta.get("description", "")),
+                    "source":      source,
+                })
+            except Exception:
+                pass
 
-    # Legacy single .md files
-    for md_file in sorted(SKILLS_DIR.glob("*.md")):
+    # Legacy flat .md files
+    for md_file in sorted(scan_dir.glob("*.md")):
         if md_file.stem == "template":
             continue
         try:
             meta = parse_skill_md(md_file)
-            name = str(meta.get("name") or md_file.stem)
-            if name in seen:
-                continue
-            seen.add(name)
             results.append({
-                "name":        name,
+                "name":        str(meta.get("name") or md_file.stem),
                 "description": str(meta.get("description", "")),
-                "source":      "md",
+                "source":      source,
             })
         except Exception:
             pass
+
+    return results
+
+
+def list_skills() -> list[dict[str, str]]:
+    """Return [{name, description, source}] for all skills across all directories.
+
+    Sources: "system" (built-in), "project" (.myharness/), "global" (~/.myharness/),
+    "claude" (.claude/ compat).
+
+    Higher-priority directories override lower-priority skills with the same name.
+    """
+    seen: set[str] = set()
+    results: list[dict[str, str]] = []
+
+    # Scan in priority order, skip seen names (first match = highest priority)
+    for scan_dir, source in _get_skill_scan_dirs():
+        for entry in _scan_skill_dir(scan_dir, source):
+            if entry["name"] in seen:
+                continue
+            seen.add(entry["name"])
+            results.append(entry)
 
     return results
 

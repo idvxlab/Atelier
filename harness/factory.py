@@ -13,6 +13,7 @@ for calling ``await client.close()`` on each MCPClient when done.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from harness.config import HarnessConfig, ProviderConfig
 from harness.engine.compression import CompressionConfig, ContextCompressor
@@ -132,7 +133,19 @@ def build_engine(
         "3. Explain what went wrong and what you tried differently.\n"
         "4. If all alternatives are exhausted, report clearly what failed and why.\n"
     )
-    full_system = system_prompt + build_skill_system_addendum(skills) + _REASONING_INSTRUCTIONS + _RECOVERY_INSTRUCTIONS
+    # ── Project context (MYHARNESS.md) ──────────────────────────────────
+    _project_md = Path("MYHARNESS.md")
+    _project_context = ""
+    if _project_md.exists():
+        _project_context = (
+            "\n\n## Project Context (MYHARNESS.md)\n"
+            "The following is the project's memory file. "
+            "Follow its guidelines and use the commands it describes.\n\n"
+            + _project_md.read_text(encoding="utf-8")
+            + "\n\n---\n"
+        )
+
+    full_system = _project_context + system_prompt + build_skill_system_addendum(skills) + _REASONING_INSTRUCTIONS + _RECOVERY_INSTRUCTIONS
 
     compressor = ContextCompressor(
         summarizer=summarizer,

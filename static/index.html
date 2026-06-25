@@ -308,7 +308,7 @@
       border-top: 1px solid var(--border);
       display: flex;
       gap: 8px;
-      align-items: flex-end;
+      align-items: center;
       flex-shrink: 0;
       background: var(--surface);
     }
@@ -1074,6 +1074,74 @@
       font-size: 12.5px;
     }
 
+    /* ── Command bar (above input) ───────────────────────────────────── */
+    #cmd-bar {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 0 12px 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    #cmd-bar.visible { display: flex; flex-direction: column; }
+    #cmd-search-bar {
+      width: 100%;
+      background: var(--bg);
+      border: none;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--font);
+      outline: none;
+    }
+    #cmd-bar-list {
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .cmd-bar-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 13px;
+      transition: background .1s;
+    }
+    .cmd-bar-item:hover, .cmd-bar-item.selected {
+      background: var(--surface2);
+    }
+    .cmd-bar-item .cmd-bar-name {
+      font-weight: 600;
+      color: var(--accent);
+      font-family: var(--mono);
+      min-width: 80px;
+    }
+    .cmd-bar-item .cmd-bar-title {
+      color: var(--text);
+      flex: 1;
+    }
+    .cmd-bar-item .cmd-bar-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .cmd-bar-item .cmd-bar-badge.project {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+    #cmd-bar-hint {
+      padding: 4px 12px 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
     .modal-actions {
       display: flex;
       gap: 8px;
@@ -1312,7 +1380,15 @@
           </div>
         </div>
 
+        <div id="cmd-bar">
+          <input type="text" id="cmd-search-bar" placeholder="搜索命令…" autocomplete="off"
+            oninput="filterCommands()" onkeydown="handleCmdKey(event)">
+          <div id="cmd-bar-list"></div>
+          <div id="cmd-bar-hint">↑↓ 选择  Enter 填入输入框  Esc 关闭</div>
+        </div>
+
         <div id="input-bar">
+          <button class="btn btn-icon" onclick="showCommandBar()" title="命令面板 (Ctrl+K)" style="width:32px;height:32px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;border-radius:6px;line-height:32px;text-align:center">/</button>
           <textarea id="msg-input" placeholder="输入消息，Shift+Enter 换行，Enter 发送…" rows="1"
             onkeydown="handleInputKey(event)" oninput="autoGrow(this)"></textarea>
           <button class="btn btn-primary" onclick="sendMessage()" id="send-btn">发送</button>
@@ -1400,6 +1476,9 @@
     let pendingUserEchoes = [];
     let activeThinkingGroup = null;
     let showArchived = false;    // archive filter toggle
+    let allCommands = [];       // command list from GET /commands
+    let filteredCommands = [];  // search-filtered subset
+    let selectedCmdIndex = -1;  // index in filteredCommands
     let menuSessionId = null;    // which session's menu is open
     // Poll deduplication: at most one doPoll in-flight + one queued
     let doPollInFlight = false;
@@ -1409,6 +1488,7 @@
     async function boot() {
       await loadOverview();
       await refreshSessions();
+      fetchCommands();
     }
 
     async function loadOverview() {
@@ -1819,6 +1899,12 @@
       const text = inp.value.trim();
       if (!text || !currentSessionId || btn.disabled) return;
 
+      // Detect slash commands in the input
+      if (text.startsWith('/')) {
+        await _handleSlashInput(text, inp, btn);
+        return;
+      }
+
       btn.disabled = true;
       inp.value = '';
       autoGrow(inp);
@@ -1826,8 +1912,7 @@
       try {
         appendOptimisticUserMessage(text);
         await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
-        triggerPoll(); // immediately render the user message in the UI
-        // Only start polling if WS is not connected — WS state frame will trigger doPoll when done.
+        triggerPoll();
         if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
         document.getElementById('cancel-btn').classList.remove('hidden');
       } catch (e) {
@@ -1839,16 +1924,101 @@
       }
     }
 
+    async function _handleSlashInput(text, inp, btn) {
+      hideCommandBar();
+      // Parse: /command_id arg1 arg2 ...
+      const parts = text.slice(1).trim().split(/\s+/);
+      const cmdName = parts[0];
+      const cmd = _findCommand(cmdName);
+
+      if (!cmd) {
+        // Not a command — send as-is (skill fallback or plain text)
+        btn.disabled = true;
+        inp.value = '';
+        autoGrow(inp);
+        try {
+          appendOptimisticUserMessage(text);
+          await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
+          triggerPoll();
+          if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+          document.getElementById('cancel-btn').classList.remove('hidden');
+        } catch (e) {
+          rollbackOptimisticUserMessage(text);
+          toast('发送失败: ' + e.message, true);
+        } finally {
+          btn.disabled = false;
+          inp.focus();
+        }
+        return;
+      }
+
+      // Build args from positional params
+      const rawArgs = parts.slice(1);
+      const args = {};
+      if (cmd.has_params && rawArgs.length > 0) {
+        for (let i = 0; i < Math.min(cmd.params.length, rawArgs.length); i++) {
+          args[cmd.params[i]] = rawArgs[i];
+        }
+      }
+
+      // Show the command in chat so the user sees what was sent
+      appendOptimisticUserMessage(text);
+      inp.value = '';
+      autoGrow(inp);
+      btn.disabled = true;
+
+      try {
+        await executeCommand(cmd.id, args);
+      } catch (e) {
+        toast('命令执行失败: ' + e.message, true);
+      } finally {
+        btn.disabled = false;
+        inp.focus();
+      }
+    }
+
+    function _findCommand(name) {
+      // Resolve by exact ID or short-name match (same as backend resolve())
+      const exact = allCommands.find(c => c.id === name);
+      if (exact) return exact;
+      const short = allCommands.find(c => c.id.endsWith(':' + name));
+      if (short) return short;
+      return null;
+    }
+
     function handleInputKey(e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
+        return;
+      }
+      if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        showCommandBar();
+        return;
+      }
+      // Typing "/" in an empty input opens the command bar with text sync
+      if (e.key === '/' && e.target.value.trim() === '') {
+        setTimeout(() => showCommandBar(e.target.value), 10);
       }
     }
 
     function autoGrow(el) {
       el.style.height = 'auto';
       el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+      // Sync command bar search when input starts with /
+      const bar = document.getElementById('cmd-bar');
+      if (bar && bar.classList.contains('visible')) {
+        if (el.value.startsWith('/')) {
+          const searchInput = document.getElementById('cmd-search-bar');
+          if (searchInput) {
+            searchInput.value = el.value.replace(/^\//, '');
+            filterCommands();
+          }
+        } else {
+          hideCommandBar();
+        }
+      }
     }
 
     // ── Polling ───────────────────────────────────────────────────────────
@@ -2784,6 +2954,176 @@
     document.getElementById('modal-overlay').addEventListener('click', e => {
       if (e.target === e.currentTarget) closeModal();
     });
+
+    // ── Command Bar ────────────────────────────────────────────────────────
+
+    async function fetchCommands() {
+      try {
+        const res = await fetch('/commands');
+        if (res.ok) {
+          const data = await res.json();
+          allCommands = data.commands || [];
+        }
+      } catch (e) { /* server may not be ready yet */ }
+    }
+
+    let _cmdBarCloseTimer = null;
+
+    function showCommandBar(initialSearch) {
+      const bar = document.getElementById('cmd-bar');
+      // Toggle: if already open, close it
+      if (bar && bar.classList.contains('visible')) {
+        hideCommandBar();
+        return;
+      }
+      const inp = document.getElementById('cmd-search-bar');
+      if (!bar || !inp) return;
+      bar.classList.add('visible');
+      inp.value = initialSearch ? initialSearch.replace(/^\//, '') : '';
+      inp.focus();
+      filterCommands();
+      // Close when clicking outside (delay to skip the trigger click)
+      clearTimeout(_cmdBarCloseTimer);
+      _cmdBarCloseTimer = setTimeout(() => {
+        document.addEventListener('click', _onDocClick);
+      }, 50);
+    }
+
+    function hideCommandBar() {
+      const bar = document.getElementById('cmd-bar');
+      if (bar) bar.classList.remove('visible');
+      document.removeEventListener('click', _onDocClick);
+      document.getElementById('msg-input').focus();
+    }
+
+    function _onDocClick(e) {
+      const bar = document.getElementById('cmd-bar');
+      // Close if clicked outside the command bar
+      if (bar && !bar.contains(e.target)) {
+        hideCommandBar();
+      }
+    }
+
+    function filterCommands() {
+      const query = (document.getElementById('cmd-search-bar').value || '').toLowerCase();
+      filteredCommands = allCommands.filter(c => {
+        if (c.id === 'exit') return false;
+        const searchStr = (c.id + ' ' + c.title + ' ' + c.description).toLowerCase();
+        return searchStr.includes(query);
+      });
+      selectedCmdIndex = filteredCommands.length > 0 ? 0 : -1;
+      renderCommandBarList();
+    }
+
+    function renderCommandBarList() {
+      const container = document.getElementById('cmd-bar-list');
+      if (!container) return;
+      if (filteredCommands.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);padding:8px">无匹配命令</div>';
+        return;
+      }
+      container.innerHTML = filteredCommands.map((c, i) => {
+        const badge = c.has_params
+          ? `<span class="cmd-bar-badge">参数: ${c.params.join(', ')}</span>`
+          : '';
+        const src = c.source === 'project'
+          ? '<span class="cmd-bar-badge project">项目</span>'
+          : '';
+        const sel = i === selectedCmdIndex ? ' selected' : '';
+        return `<div class="cmd-bar-item${sel}" data-index="${i}"
+          onmousedown="fillCommand(${i})">
+          <span class="cmd-bar-name">/${c.id}</span>
+          <span class="cmd-bar-title">${c.title}</span>
+          ${badge}${src}
+        </div>`;
+      }).join('');
+    }
+
+    function handleCmdKey(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        hideCommandBar();
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (selectedCmdIndex < filteredCommands.length - 1) {
+          selectedCmdIndex++;
+          renderCommandBarList();
+          scrollCmdBarIntoView();
+        }
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (selectedCmdIndex > 0) {
+          selectedCmdIndex--;
+          renderCommandBarList();
+          scrollCmdBarIntoView();
+        }
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (selectedCmdIndex >= 0 && selectedCmdIndex < filteredCommands.length) {
+          fillCommand(selectedCmdIndex);
+        }
+      }
+    }
+
+    function scrollCmdBarIntoView() {
+      const el = document.querySelector('#cmd-bar-list .cmd-bar-item.selected');
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    }
+
+    function fillCommand(index) {
+      if (index < 0 || index >= filteredCommands.length) return;
+      const cmd = filteredCommands[index];
+      const inp = document.getElementById('msg-input');
+      // Build command text: /id with param placeholders as hints
+      let text = '/' + cmd.id;
+      if (cmd.has_params) {
+        text += ' ' + cmd.params.map(p => '<' + p.toLowerCase() + '>').join(' ');
+      }
+      inp.value = text;
+      hideCommandBar();
+      // Delay to let mousedown event settle before focusing
+      setTimeout(() => {
+        inp.focus();
+        inp.setSelectionRange(inp.value.length, inp.value.length);
+      }, 10);
+    }
+
+    async function executeCommand(cmdId, args) {
+      if (!cmdId || !currentSessionId) return;
+      try {
+        const res = await fetch(`/sessions/${currentSessionId}/commands/${encodeURIComponent(cmdId)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ args }),
+        });
+        const data = await res.json();
+        if (data.sent) {
+          stopPolling();
+          connectWS(currentSessionId);
+          document.getElementById('cancel-btn').classList.remove('hidden');
+        }
+        if (data.kind === 'internal' && data.message) {
+          appendSystemMessage(data.message);
+        }
+      } catch (e) {
+        toast('命令执行失败: ' + e.message, true);
+      }
+    }
+
+    function appendSystemMessage(text) {
+      const container = document.getElementById('messages');
+      if (!container) return;
+      const div = document.createElement('div');
+      div.className = 'message system';
+      div.style.cssText = 'padding:10px 16px;color:var(--text-muted);font-size:13px;white-space:pre-wrap;font-family:var(--mono)';
+      div.textContent = text;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
 
     // ── Start ──────────────────────────────────────────────────────────────
     boot();

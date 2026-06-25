@@ -21,6 +21,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(override=False)
 
+from harness.commands import CommandSystem
+from harness.commands.models import CommandContext, CommandResult, substitute_args
 from harness.config import HarnessConfig
 from harness.engine.engine import AgentEngine
 from harness.factory import build_engine, build_engine_with_mcp
@@ -44,6 +46,35 @@ GRAY   = "\033[90m"
 
 def _color(text: str, *codes: str) -> str:
     return "".join(codes) + text + RESET
+
+
+# ── Lazy-initialized command system (shared across session resets) ─────
+_cmd_system: CommandSystem | None = None
+_cmd_ctx: CommandContext | None = None
+
+
+def _ensure_cmd_system(
+    cfg: HarnessConfig,
+    provider_name: str,
+    system_prompt: str,
+    allowed_tools: list[str] | None,
+    persona_name: str,
+    engine: AgentEngine,
+    session_id: str,
+) -> None:
+    """Create and initialise the CommandSystem once per CLI session."""
+    global _cmd_system, _cmd_ctx
+    if _cmd_system is None:
+        _cmd_system = CommandSystem()
+        _cmd_system.initialize()
+    _cmd_ctx = CommandContext(
+        engine=engine,
+        config=cfg,
+        session_id=session_id,
+        system_prompt=system_prompt,
+        allowed_tools=allowed_tools,
+        provider_name=provider_name,
+    )
 
 
 # ── Verbose 模式：把 harness.events 的 INFO 日志漂亮地打出来 ────────────
@@ -211,6 +242,199 @@ async def _wait_for_completion(engine: AgentEngine, prev_count: int) -> int:
     return prev_count
 
 
+# ── Command system helpers ──────────────────────────────────────────────
+
+
+def _print_command_list(cmd_system: CommandSystem) -> None:
+    """Print the full command list (for /help)."""
+    cmds = cmd_system.discover()
+    builtins = [c for c in cmds if c.source == "builtin"]
+    customs = [c for c in cmds if c.source != "builtin"]
+
+    print(_color("\n  ╔════════════════════════════════════╗", CYAN))
+    print(_color("  ║        可用命令                    ║", CYAN, BOLD))
+    print(_color("  ╚════════════════════════════════════╝", CYAN))
+
+    if builtins:
+        print(_color("\n  内置命令:", YELLOW))
+        for c in sorted(builtins, key=lambda x: x.id):
+            desc = c.description
+            print(f"    {_color(c.id, GREEN):<20} {desc}")
+    if customs:
+        print(_color(f"\n  项目命令 (commands/):", YELLOW))
+        for c in sorted(customs, key=lambda x: x.id):
+            params_hint = f"  [参数: {', '.join(c.params)}]" if c.params else ""
+            print(f"    {_color(c.id, CYAN):<30} {c.description}{params_hint}")
+    print(_color("\n  用法: /<command> [args...]", DIM))
+    print(_color("  参数化命令: $UPPER_VAR 占位符会在运行时提示输入\n", DIM))
+
+
+def _print_state(engine: AgentEngine) -> None:
+    """Print current engine state (for /state)."""
+    import asyncio as _asyncio
+    snap = _asyncio.run(engine.get_snapshot()) if _asyncio.get_event_loop().is_running() else None
+    # Called from sync context inside CLI loop; use a quick snapshot
+    # We know engine is accessible, so inline the call
+    # Actually _handle_command is async, so this works fine
+
+
+async def _print_state_async(engine: AgentEngine) -> None:
+    snap = await engine.get_snapshot()
+    print(_color(f"  状态: {snap['state']}  消息数: {len(snap['last_messages'])}", DIM))
+
+
+def _print_tools(engine: AgentEngine) -> None:
+    print(_color("  可用工具：", CYAN))
+    schemas = sorted(engine.tool_schemas, key=lambda s: s.name)
+    for s in schemas:
+        desc = s.description or ""
+        print(f"    {s.name:<22} — {desc}")
+
+
+def _print_skills() -> None:
+    all_skills = list_skills()
+    if not all_skills:
+        print(_color("  暂无可用 skill。新建: skills/<name>/SKILL.md", YELLOW))
+    else:
+        print(_color("  可用 Skill（Agent 自动调用 / 用户手动 /<name>）：", CYAN))
+        for s in all_skills:
+            print(f"    {_color(s['name'], YELLOW):<28} {s['description']}")
+        print(_color("  新建: mkdir skills/<name> && 创建 SKILL.md", DIM))
+
+
+def _print_personas() -> None:
+    personas = list_personas()
+    if not personas:
+        print(_color("  暂无可用 persona。新建: personas/<name>.md", YELLOW))
+    else:
+        print(_color("  可用 Persona（用 --persona <name> 启动时选择）：", CYAN))
+        for p in personas:
+            desc = f" — {p['description']}" if p.get("description") else ""
+            print(f"    {_color(p['name'], YELLOW)}{desc}")
+
+
+def _prompt_for_args(result: CommandResult) -> str | None:
+    """Prompt user for each needed $VAR, return substituted text or None."""
+    args: dict[str, str] = {}
+    print(_color(f"\n  ┌─ 参数输入: {result.command_id} ──", CYAN))
+    for arg_name in result.args_needed:
+        display = arg_name.replace("_", " ").title()
+        try:
+            value = input(_color(f"  │ {display}: ", YELLOW)).strip()
+        except EOFError:
+            return None
+        if not value:
+            print(_color("  │ 已取消", DIM))
+            return None
+        args[arg_name] = value
+    print(_color("  └" + "─" * 30, CYAN))
+    return substitute_args(result.raw_content, args)
+
+
+async def _try_skill_call(skill_name: str, engine: AgentEngine) -> bool:
+    """Fallback: try to load a skill by name. Returns True if skill was found."""
+    try:
+        content = load_skill_content(skill_name)
+        skill_msg = (
+            f"[Skill '{skill_name}' manually invoked]\n\n"
+            f"{content}"
+        )
+        await engine.send_message(skill_msg)
+        return True
+    except ValueError:
+        available = [s["name"] for s in list_skills()]
+        print(_color(f"  未知命令或 skill: '{skill_name}'", RED))
+        if available:
+            print(_color(f"  可用 skill: {', '.join(available)}", GRAY))
+        else:
+            print(_color("  尝试 /help 查看可用命令", GRAY))
+        return False
+
+
+async def _handle_internal_action(result: CommandResult, ctx: CommandContext) -> str | None:
+    """Execute an internal command action.
+    Returns "exit", "reset", or "continue".
+    """
+    action = result.action
+
+    if action == "help":
+        global _cmd_system
+        if _cmd_system:
+            _print_command_list(_cmd_system)
+        return "continue"
+
+    if action == "exit":
+        print(_color("再见！", DIM))
+        return "exit"
+
+    if action == "list-tools" and ctx.engine:
+        _print_tools(ctx.engine)
+        return "continue"
+
+    if action == "list-skills":
+        _print_skills()
+        return "continue"
+
+    if action == "list-personas":
+        _print_personas()
+        return "continue"
+
+    if action == "show-state" and ctx.engine:
+        await _print_state_async(ctx.engine)
+        return "continue"
+
+    if action == "reset":
+        return "reset"
+
+    return "continue"
+
+
+async def _handle_command(
+    user_input: str,
+    cmd_system: CommandSystem,
+    ctx: CommandContext,
+) -> str | None:
+    """Dispatch a slash-command input.
+
+    Returns:
+        "exit"     — caller should break the loop
+        "reset"    — caller should rebuild the engine
+        "continue" — caller should not send to AI (command handled)
+        None       — caller should send the original input to AI engine
+    """
+    parts = user_input[1:].split()
+    cmd_name = parts[0]
+
+    cmd = cmd_system.resolve(cmd_name)
+    if cmd is None or cmd.handler is None:
+        # Not a registered command — try skill fallback
+        ok = await _try_skill_call(cmd_name, ctx.engine)
+        return "continue" if ok else None
+
+    result = cmd.handler(cmd, ctx)
+
+    if result.kind == "prompt":
+        print(_color(f"\n  [{cmd.title}] 已发送给 AI\n", YELLOW))
+        await ctx.engine.send_message(result.prompt_text)
+        return "continue"
+
+    if result.kind == "internal":
+        return await _handle_internal_action(result, ctx)
+
+    if result.kind == "needs-args":
+        filled = _prompt_for_args(result)
+        if filled:
+            print(_color(f"\n  [{cmd.title}] 已发送给 AI\n", YELLOW))
+            await ctx.engine.send_message(filled)
+        return "continue"
+
+    if result.kind == "error":
+        print(_color(f"  错误: {result.message}", RED))
+        return "continue"
+
+    return None
+
+
 async def run_cli(provider_name: str, system_prompt: str,
                   allowed_tools: list[str] | None = None,
                   persona_name: str = "") -> None:
@@ -243,77 +467,44 @@ async def run_cli(provider_name: str, system_prompt: str,
             if not user_input:
                 continue
 
-            # ── 内置命令 ───────────────────────────────────────────────
-            if user_input.lower() in ("/exit", "/quit", "exit", "quit"):
+            # ── Plain "exit"/"quit" without slash ────────────────────
+            if user_input.lower() in ("exit", "quit"):
                 print(_color("再见！", DIM))
                 break
 
-            if user_input.lower() == "/reset":
-                for c in list(mcp_clients):
-                    try:
-                        await c.close()
-                    except Exception:
-                        pass
-                session_id = str(uuid.uuid4())[:8]
-                engine, mcp_clients = await _build_engine(
-                    cfg, provider_name, system_prompt, session_id, allowed_tools=allowed_tools
-                )
-                prev_count = 0
-                print(_color(f"  [新会话已开启: {session_id}]", YELLOW))
-                continue
-
-            if user_input.lower() == "/tools":
-                print(_color("  可用工具：", CYAN))
-                schemas = sorted(engine.tool_schemas, key=lambda s: s.name)
-                for s in schemas:
-                    desc = s.description or ""
-                    print(f"    {s.name:<22} — {desc}")
-                continue
-
-            if user_input.lower() == "/state":
-                snap = await engine.get_snapshot()
-                print(_color(f"  状态: {snap['state']}  消息数: {len(snap['last_messages'])}", DIM))
-                continue
-
-            if user_input.lower() == "/skills":
-                all_skills = list_skills()
-                if not all_skills:
-                    print(_color("  暂无可用 skill。新建: skills/<name>/SKILL.md", YELLOW))
-                else:
-                    print(_color("  可用 Skill（Agent 自动调用 / 用户手动 /<name>）：", CYAN))
-                    for s in all_skills:
-                        print(f"    {_color(s['name'], YELLOW):<28} {s['description']}")
-                    print(_color("  新建: mkdir skills/<name> && 创建 SKILL.md", DIM))
-                continue
-
-            if user_input.lower() == "/personas":
-                personas = list_personas()
-                if not personas:
-                    print(_color("  暂无可用 persona。新建: personas/<name>.md", YELLOW))
-                else:
-                    print(_color("  可用 Persona（用 --persona <name> 启动时选择）：", CYAN))
-                    for p in personas:
-                        desc = f" — {p['description']}" if p.get("description") else ""
-                        print(f"    {_color(p['name'], YELLOW)}{desc}")
-                continue
-
-            # ── 手动调用 skill：/skill-name ────────────────────────────
-            if user_input.startswith("/") and len(user_input) > 1:
-                skill_name = user_input[1:].strip()
-                try:
-                    content = load_skill_content(skill_name)
-                    # 把 skill 内容作为用户消息发送给引擎
-                    skill_msg = (
-                        f"[Skill '{skill_name}' manually invoked]\n\n"
-                        f"{content}"
+            # ── Unified command dispatch (all /-prefixed inputs) ─────
+            if user_input.startswith("/"):
+                _ensure_cmd_system(cfg, provider_name, system_prompt,
+                                    allowed_tools, persona_name,
+                                    engine, session_id)
+                handled = await _handle_command(user_input, _cmd_system, _cmd_ctx)
+                if handled == "exit":
+                    break
+                if handled == "reset":
+                    for c in list(mcp_clients):
+                        try:
+                            await c.close()
+                        except Exception:
+                            pass
+                    session_id = str(uuid.uuid4())[:8]
+                    engine, mcp_clients = await _build_engine(
+                        cfg, provider_name, system_prompt, session_id,
+                        allowed_tools=allowed_tools
                     )
-                    await engine.send_message(skill_msg)
+                    _cmd_ctx.engine = engine
+                    _cmd_ctx.session_id = session_id
+                    prev_count = 0
+                    print(_color(f"  [新会话已开启: {session_id}]", YELLOW))
+                    continue
+                if handled == "continue":
+                    # Command was handled (prompt sent or internal action done)
                     prev_count = await _wait_for_completion(engine, prev_count)
                     print()
-                except ValueError:
-                    available = [s["name"] for s in list_skills()]
-                    print(_color(f"  未知命令或 skill: '{skill_name}'", RED))
-                    print(_color(f"  可用 skill: {', '.join(available)}", GRAY))
+                    continue
+                # handled is None → not a command, send to AI as regular message
+                await engine.send_message(user_input)
+                prev_count = await _wait_for_completion(engine, prev_count)
+                print()
                 continue
 
             # ── 发送消息 ───────────────────────────────────────────────
