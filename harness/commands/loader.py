@@ -1,13 +1,10 @@
 """Custom command loader — scans .md files and registers them as commands.
 
-Mirrors OpenCode's ``LoadCustomCommands()``:
-  - Project-level: ``.myharness/commands/`` → id prefix ``"project:"``
-  - User-level (future): ``~/.myharness/commands/`` → id prefix ``"user:"``
+Mirrors OpenCode's ``LoadCustomCommands()``.
+Filesystem path maps directly to command ID::
 
-File path to command ID mapping::
-
-    .myharness/commands/deploy.md          → project:deploy
-    .myharness/commands/github/issue.md    → project:github:issue
+    .myharness/commands/deploy.md          → deploy
+    .myharness/commands/github/issue.md    → github:issue
 """
 
 from __future__ import annotations
@@ -136,10 +133,10 @@ def load_custom_commands(
 
     # Project-level
     pdir = (project_dir or Path.cwd()) / ".myharness" / "commands"
-    all_cmds.extend(_load_from_dir(pdir, prefix="project", source="project"))
+    all_cmds.extend(_load_from_dir(pdir, prefix="", source="project"))
 
-    # User-level (future)
+    # User-level
     if user_dir:
-        all_cmds.extend(_load_from_dir(user_dir, prefix="user", source="user"))
+        all_cmds.extend(_load_from_dir(user_dir, prefix="", source="user"))
 
     return all_cmds

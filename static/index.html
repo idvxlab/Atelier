@@ -3080,9 +3080,6 @@
       const inp = document.getElementById('msg-input');
       // Build command text: /id with param placeholders as hints
       let text = '/' + cmd.id;
-      if (cmd.has_params) {
-        text += ' ' + cmd.params.map(p => '<' + p.toLowerCase() + '>').join(' ');
-      }
       inp.value = text;
       hideCommandBar();
       // Delay to let mousedown event settle before focusing
