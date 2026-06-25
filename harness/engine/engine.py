@@ -36,6 +36,7 @@ EventListener = Callable[[EngineEvent], Awaitable[None]]
 from harness.types.messages import Message, TextBlock, new_message_id
 from harness.engine.state_machine import StateMachine, EngineState
 from harness.engine.loop import ReactLoop, InterruptSignal
+from harness.engine.prompt_cache import PromptCache
 from harness.storage.session import SessionStore
 from harness.observability.events import EventEmitter
 from harness.tools.registry import ToolRegistry
@@ -147,12 +148,14 @@ class AgentEngine:
         session_store: SessionStore,
         emitter: EventEmitter,
         tool_registry: ToolRegistry,
+        prompt_cache: PromptCache | None = None,
     ) -> None:
         self._config = config
         self._loop = loop
         self._session_store = session_store
         self._emitter = emitter
         self._tool_registry = tool_registry
+        self._prompt_cache: PromptCache = prompt_cache if prompt_cache is not None else PromptCache()
 
         self._sm = StateMachine()
         self._messages: list[Message] = []
@@ -685,12 +688,16 @@ class AgentEngine:
         new mode's block. The system message is the first message in
         self._messages (role='system').
 
-        The two blocks have sentinel markers we use to find and replace
-        them in-place. If the marker isn't found, we append the new
-        block to the existing system message.
+        Also refreshes the PromptCache so the new mode block is available
+        to future callers without a re-import.
         """
         from harness.factory import QUESTION_INSTRUCTIONS, NOQUESTION_INSTRUCTIONS
         new_block = QUESTION_INSTRUCTIONS if mode == "question" else NOQUESTION_INSTRUCTIONS
+
+        # Update the cache first — callers reading from the cache get the
+        # new block immediately without waiting for the in-place mutation.
+        self._prompt_cache.invalidate_mode(mode)
+        self._prompt_cache.set_mode_block(mode, new_block)
         sentinels = (
             "## Question Mode (STRUCTURED clarification only)",
             "## Direct Execution Mode (no question mode)",

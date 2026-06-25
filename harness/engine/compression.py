@@ -15,6 +15,10 @@ Layer 2 — Auto (expensive, calls a small model):
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from harness.types.messages import Message
 
 from harness.types.messages import Message, TextBlock, ToolResultBlock
 
@@ -41,19 +45,37 @@ class ContextCompressor:
         """
         self._summarizer = summarizer
         self._cfg = config
+        # Non-invasive observer — purely additive, never changes compression logic.
+        # Register a callable of type Callable[[str, int, int], None] to receive
+        # (event_type, messages_before, messages_after) each time maybe_compress()
+        # produces a result different from the input list.
+        self._observers: list[Callable[[str, int, int], None]] = []
+
+    def add_observer(self, fn: "Callable[[str, int, int], None]") -> None:
+        """Register an observer that fires when compression triggers. Non-invasive."""
+        self._observers.append(fn)
+
+    def _notify_observers(self, event: str, before: int, after: int) -> None:
+        for fn in self._observers:
+            fn(event, before, after)
 
     async def maybe_compress(
         self, messages: list[Message], round_idx: int
     ) -> list[Message]:
+        before = len(messages)
         tokens = _estimate_tokens(messages)
         ratio = tokens / self._cfg.token_window
 
         if ratio >= self._cfg.auto_trigger_ratio:
-            return await self._auto_compress(messages, round_idx)
+            result = await self._auto_compress(messages, round_idx)
+            self._notify_observers("compression_auto", before, len(result))
+            return result
 
         keep_threshold = self._cfg.micro_keep_recent * 4
         if len(messages) > keep_threshold:
-            return self._micro_compress(messages)
+            result = self._micro_compress(messages)
+            self._notify_observers("compression_micro", before, len(result))
+            return result
 
         return messages
 

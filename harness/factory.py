@@ -18,6 +18,7 @@ from harness.config import HarnessConfig, ProviderConfig
 from harness.engine.compression import CompressionConfig, ContextCompressor
 from harness.engine.engine import AgentEngine, EngineConfig
 from harness.engine.loop import ReactLoop
+from harness.engine.prompt_cache import PromptCache
 from harness.llm.registry import build_provider
 from harness.observability.events import EventEmitter
 from harness.skills import list_skills, build_skill_system_addendum
@@ -307,6 +308,25 @@ def build_engine(
             ),
         )
 
+    # Build the PromptCache — caches immutable base + mode blocks so that
+    # subsequent round loops can re-use the fragments without re-concatenation.
+    # The cache lives on the engine and is passed into the loop.
+    prompt_cache = PromptCache()
+
+    # Cache the immutable base fragment (system_prompt + skills + reasoning + recovery).
+    # This never changes for the lifetime of the engine.
+    _base_fragment = (
+        system_prompt
+        + build_skill_system_addendum(skills)
+        + _REASONING_INSTRUCTIONS
+        + _RECOVERY_INSTRUCTIONS
+    )
+    prompt_cache.set_system_prompt(_base_fragment)
+
+    # Cache the question / noquestion mode blocks individually.
+    prompt_cache.set_mode_block("question", QUESTION_INSTRUCTIONS)
+    prompt_cache.set_mode_block("noquestion", NOQUESTION_INSTRUCTIONS)
+
     # Append the definitive tool list to the system prompt so the LLM can
     # accurately answer "what tools do you have?" from the actual registry.
     registered = registry.discover()
@@ -326,7 +346,9 @@ def build_engine(
         for t in registered:
             desc = (t.schema.description or "").strip()
             tool_lines.append(f"- **{t.schema.name}**: {desc}")
-        full_system = full_system + "\n" + "\n".join(tool_lines)
+        full_system = _base_fragment + question_block + "\n" + "\n".join(tool_lines)
+    else:
+        full_system = _base_fragment + question_block
 
     overflow = OverflowStore()
     executor = ToolExecutor(
@@ -343,6 +365,7 @@ def build_engine(
         compressor=compressor,
         emitter=emitter,
         max_rounds=harness_cfg.engine.max_rounds,
+        prompt_cache=prompt_cache,
     )
 
     engine = AgentEngine(
@@ -358,6 +381,7 @@ def build_engine(
         session_store=session_store,
         emitter=emitter,
         tool_registry=registry,
+        prompt_cache=prompt_cache,
     )
 
     # Register ask_user only when question_mode == "question".
