@@ -2,7 +2,25 @@
 WebSocket endpoint for real-time message streaming.
 
 Clients connect to /ws/{session_id} and receive JSON-encoded messages
-as they arrive from the engine.
+as they arrive from the engine. This is the PRIMARY sync path — the
+frontend subscribes to event frames (state, question.*) instead of
+polling GET /state.
+
+Event channels (server → client):
+  "token"          — streamed LLM text token
+  "thinking"       — thinking phase started
+  "thinking_token" — streamed thinking chunk
+  "message"        — full Message (assistant reply or tool result)
+  "state"          — engine state change snapshot
+  "question.asked"  — a new QuestionRequest was registered (ask_user fired)
+  "question.updated"— a QuestionRequest transitioned (status change)
+  "question.resolved"— a QuestionRequest reached a terminal status
+  "error"          — error frame
+
+The legacy /state polling endpoint remains for:
+  - snapshot restore on initial page load
+  - dev / debug mode where WS may not be available
+  - background sync when the WS connection is down
 """
 from __future__ import annotations
 
@@ -20,19 +38,26 @@ router = APIRouter()
 _THINKING_START = "\x00THINKING\x00"
 _THINKING_TOKEN_PREFIX = "\x00THINKING_TOKEN\x00"
 
+# Event types that originate from the engine's event channel and are
+# forwarded verbatim to the WS client. QuestionMode events live here.
+_FORWARDED_EVENT_TYPES = {"question.asked", "question.updated", "question.resolved"}
+
 
 @router.websocket("/ws/{session_id}")
 async def session_websocket(websocket: WebSocket, session_id: str) -> None:
     """
-    Stream messages for a session over WebSocket.
+    Stream messages and engine events for a session over WebSocket.
 
     Protocol (server → client):
-      {"type": "token",          "data": "<text chunk>"}        ← streamed text tokens
-      {"type": "thinking"}                                       ← thinking phase started
-      {"type": "thinking_token", "data": "<thinking chunk>"}    ← streamed thinking tokens
-      {"type": "message",        "data": <serialized Message>}  ← full message on completion
-      {"type": "state",          "data": <snapshot>}            ← state change or ping response
-      {"type": "error",          "data": {"detail": "..."}}
+      {"type": "token",           "data": "<text chunk>"}
+      {"type": "thinking"}
+      {"type": "thinking_token",  "data": "<thinking chunk>"}
+      {"type": "message",         "data": <serialized Message>}
+      {"type": "state",           "data": <snapshot>}
+      {"type": "question.asked",  "data": <QuestionRequest dict>}
+      {"type": "question.updated","data": {"request_id", "status"}}
+      {"type": "question.resolved","data": {"request_id", "status", "tool_call_id"}}
+      {"type": "error",           "data": {"detail": "..."}}
 
     Protocol (client → server):
       {"type": "message", "text": "..."}   → send user message
@@ -70,15 +95,29 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
             )
 
     async def push_state() -> None:
-        """Fires when engine state changes (RUNNING → COMPLETED/ERROR/WAITING_INPUT)."""
+        """Fires when engine state changes (RUNNING → COMPLETED/ERROR/WAITING_INPUT/...)."""
         snapshot = await engine.get_snapshot()
         await websocket.send_text(
             json.dumps({"type": "state", "data": snapshot})
         )
 
+    async def push_event(event: dict) -> None:
+        """
+        Engine-level semantic event channel.
+
+        Forwards question.asked / question.updated / question.resolved
+        verbatim. The frontend uses these as the PRIMARY sync signal —
+        no polling required. Polling is only a fallback for restore / dev.
+        """
+        etype = event.get("type")
+        if etype not in _FORWARDED_EVENT_TYPES:
+            return
+        await websocket.send_text(json.dumps(event))
+
     engine.add_message_listener(push_message)
     engine.add_token_listener(push_token)
     engine.add_state_listener(push_state)
+    engine.add_event_listener(push_event)
     try:
         while True:
             raw = await websocket.receive_text()
@@ -131,3 +170,4 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
         engine.remove_message_listener(push_message)
         engine.remove_token_listener(push_token)
         engine.remove_state_listener(push_state)
+        engine.remove_event_listener(push_event)

@@ -4,6 +4,7 @@ import asyncio
 import html
 import ipaddress
 import json
+import os
 import re
 import socket
 from typing import Any
@@ -44,11 +45,18 @@ MAX_FETCH_BYTES = 2_000_000
 MAX_REDIRECTS = 5
 
 DEFAULT_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; AIharness/1.0)",
+    # Use a realistic browser UA so many websites serve the full content
+    # instead of a bot-detection interstitial. Override via env if needed.
+    "User-Agent": os.getenv(
+        "WEB_FETCH_USER_AGENT",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    ),
     "Accept": (
         "text/html,application/xhtml+xml,application/xml;q=0.9,"
         "text/plain,application/json;q=0.8,*/*;q=0.5"
     ),
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
 
 
@@ -381,6 +389,35 @@ def _extract_plain_text(raw_text: str, content_type: str) -> tuple[str, str]:
 
 
 def _html_to_text(raw_html: str) -> tuple[str, str]:
+    """
+    Extract (title, main_text) from raw HTML.
+
+    Uses trafilatura first (it's much better at extracting article main content
+    while stripping navigation, ads, related-links blocks), then falls back to
+    BeautifulSoup, then to a regex-based stripper.
+    """
+    # Strategy 1: trafilatura (best for news/blog/article content)
+    try:
+        import trafilatura
+
+        extracted = trafilatura.extract(
+            raw_html,
+            include_comments=False,
+            include_tables=True,
+            favor_precision=True,
+            output_format="json",
+        )
+        if extracted:
+            import json as _json
+            parsed = _json.loads(extracted)
+            title = _normalize_plain_text(parsed.get("title") or "")
+            text = _normalize_plain_text(parsed.get("text") or "")
+            if text and len(text) > 80:
+                return title, text
+    except Exception:
+        pass
+
+    # Strategy 2: BeautifulSoup
     try:
         from bs4 import BeautifulSoup
 
@@ -398,6 +435,11 @@ def _html_to_text(raw_html: str) -> tuple[str, str]:
                 "form",
                 "nav",
                 "footer",
+                "aside",
+                "header",
+                "[role=navigation]",
+                "[role=banner]",
+                "[aria-hidden=true]",
             ]
         ):
             tag.decompose()
@@ -410,15 +452,21 @@ def _html_to_text(raw_html: str) -> tuple[str, str]:
         main_node = soup.find("main") or soup.find("article") or soup.body or soup
         text = main_node.get_text("\n", strip=True)
 
-        return _normalize_plain_text(title), _normalize_plain_text(text)
-
+        norm_title = _normalize_plain_text(title)
+        norm_text = _normalize_plain_text(text)
+        # Use bs4 result as long as it produced anything meaningful
+        if norm_text and len(norm_text) >= 20:
+            return norm_title, norm_text
     except Exception:
-        plain = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", raw_html)
-        plain = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", plain)
-        plain = re.sub(r"(?is)<noscript[^>]*>.*?</noscript>", " ", plain)
-        plain = re.sub(r"<[^>]+>", " ", plain)
+        pass
 
-        return "", _normalize_plain_text(plain)
+    # Strategy 3: regex fallback
+    plain = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", raw_html)
+    plain = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", plain)
+    plain = re.sub(r"(?is)<noscript[^>]*>.*?</noscript>", " ", plain)
+    plain = re.sub(r"<[^>]+>", " ", plain)
+
+    return "", _normalize_plain_text(plain)
 
 
 def _normalize_plain_text(text: str) -> str:

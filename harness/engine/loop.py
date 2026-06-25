@@ -11,7 +11,9 @@ Per-round sequence (enforced strictly):
   7. Execute all tools concurrently via asyncio.gather
   8. Validate the (assistant, tool_result) pair with validate_message_sequence
   9. Append the pair atomically via on_message callbacks
- 10. Drain intervention queue ONLY after tool_result is flushed
+ 10. If any tool_result has is_interrupt=True → raise InterruptSignal
+     (engine catches it and pauses the run at the engine level)
+ 11. Drain intervention queue ONLY after tool_result is flushed
 """
 from __future__ import annotations
 
@@ -32,6 +34,27 @@ from harness.tools.executor import ToolExecutor
 from harness.observability.events import EventEmitter
 
 OnMessageCallback = Callable[[Message], Awaitable[None]]
+
+
+class InterruptSignal(BaseException):
+    """
+    Raised by the loop when a tool result is interruptible (is_interrupt=True).
+
+    The loop is NOT the right place to wait for the user. The engine
+    (AgentEngine._run_loop_guarded) catches this signal, transitions the
+    state machine to WAITING_INPUT, and returns. External code is then
+    responsible for calling engine.resume_question() when the user replies.
+
+    BaseException (not Exception) so the signal can't be swallowed by
+    a generic `except Exception` in tool code.
+    """
+    def __init__(self, request_id: str, tool_call_id: str, round_idx: int):
+        self.request_id = request_id
+        self.tool_call_id = tool_call_id
+        self.round_idx = round_idx
+        super().__init__(
+            f"interrupt request_id={request_id} tool_call_id={tool_call_id}"
+        )
 
 
 class ReactLoop:
@@ -60,11 +83,16 @@ class ReactLoop:
         on_message: OnMessageCallback,
         on_token: TokenCallback | None = None,
         on_pre_execute: Callable[[list], Awaitable[bool]] | None = None,
+        drain_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         """
         Main ReAct cycle. `messages` is the live list owned by AgentEngine.
         This method appends to it exclusively via `on_message` so the engine
         can update its state atomically.
+
+        `drain_callback(text)` is called with each queued user message text
+        when it is drained from the intervention queue. Used by AgentEngine
+        to remove the corresponding entry from _pending_commands.
         """
         for round_idx in range(self._max_rounds):
             self._emitter.set_round(round_idx)
@@ -107,7 +135,7 @@ class ReactLoop:
             if not reply.has_tool_calls():
                 await on_message(reply)
                 await self._drain_interventions(
-                    intervention_queue, round_idx, on_message
+                    intervention_queue, round_idx, on_message, drain_callback
                 )
                 return
 
@@ -166,6 +194,34 @@ class ReactLoop:
             await on_message(reply)
             await on_message(tool_result_msg)
 
+            # ── 9.5. Interrupt detection — engine-level pause ─────────────
+            # If any tool result carries is_interrupt=True, the engine
+            # owns the waiting state. The loop has finished its job for
+            # this round; raise to let the engine pause cleanly.
+            interrupt_result = next(
+                (r for r in results if getattr(r, "is_interrupt", False)),
+                None,
+            )
+            if interrupt_result is not None:
+                # The interrupt request_id is encoded in the placeholder
+                # content as a machine-readable line; the engine parses it.
+                # We don't import the question type here to keep the loop
+                # layer free of domain knowledge — the engine will look up
+                # the active QuestionRequest by tool_call_id.
+                self._emitter.emit(
+                    "tool_interrupt", "triggered-executed",
+                    detail={
+                        "tool": interrupt_result.tool_name,
+                        "tool_call_id": interrupt_result.tool_call_id,
+                        "round": round_idx,
+                    },
+                )
+                raise InterruptSignal(
+                    request_id="",  # engine looks up by tool_call_id
+                    tool_call_id=interrupt_result.tool_call_id,
+                    round_idx=round_idx,
+                )
+
             # ── 10. Drain interventions ONLY after tool_result is flushed ──
             await self._drain_interventions(
                 intervention_queue, round_idx, on_message
@@ -219,9 +275,14 @@ class ReactLoop:
         queue: asyncio.Queue[Message],
         round_idx: int,
         on_message: OnMessageCallback,
+        drain_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         """Flush queued user intervention messages after a safe point."""
         while not queue.empty():
             msg = queue.get_nowait()
             msg.round_index = round_idx
             await on_message(msg)
+            if drain_callback:
+                text_blocks = [b.text for b in msg.content if hasattr(b, "text")]
+                if text_blocks:
+                    await drain_callback(text_blocks[0])

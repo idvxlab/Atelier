@@ -6,6 +6,7 @@ from enum import Enum, auto
 class EngineState(Enum):
     WAITING_INPUT = auto()
     WAITING_CONFIRMATION = auto()
+    WAITING_INTERRUPT = auto()   # paused for a user interrupt (e.g. ask_user)
     RUNNING = auto()
     COMPLETED = auto()
     ERROR = auto()
@@ -22,9 +23,15 @@ _TRANSITIONS: dict[EngineState, set[EngineState]] = {
         EngineState.WAITING_INPUT,
         EngineState.ERROR,
     },
+    EngineState.WAITING_INTERRUPT: {
+        EngineState.RUNNING,   # user replied, resume
+        EngineState.WAITING_INPUT,  # user skipped, drop the partial round
+        EngineState.ERROR,
+    },
     EngineState.RUNNING: {
         EngineState.WAITING_INPUT,
         EngineState.WAITING_CONFIRMATION,
+        EngineState.WAITING_INTERRUPT,
         EngineState.COMPLETED,
         EngineState.ERROR,
     },

@@ -43,6 +43,91 @@ from harness.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
+# ── Question-mode prompt blocks (module-level so the engine can re-stamp
+# the system message at runtime when the user toggles question_mode). ──────
+
+QUESTION_INSTRUCTIONS = (
+    "\n\n## Question Mode (STRUCTURED clarification only)\n"
+    "Question Mode is ENABLED. When you need to clarify the user's intent, "
+    "you MUST use the `ask_user` tool. Plain-text questions (numbered lists, "
+    "markdown with A/B/C/D, or sentences like '请告诉我网站的目标是…') are "
+    "FORBIDDEN in this mode — the frontend will not render them as clickable "
+    "options. Only a real `ask_user` tool call produces the question UI.\n\n"
+    "### When you MUST call `ask_user`\n"
+    "- The user request is broad / open-ended (e.g. '帮我设计一个网站', "
+    "'build me a project', '写个 app') and at least one critical "
+    "constraint is missing.\n"
+    "- A decision is irreversible or expensive to undo and the user "
+    "would clearly prefer to pick the option themselves.\n"
+    "- You need 2-5 distinct values from a known option set.\n\n"
+    "### When you must NOT call `ask_user`\n"
+    "- The user request is already concrete. Just do the work.\n"
+    "- You can reasonably default the unknown values. State the assumption.\n"
+    "- You already asked once this turn. (At most one clarification round.)\n\n"
+    "### Tool contract\n"
+    "```\n"
+    'ask_user(questions: list[QuestionPrompt]) -> InterruptibleToolResult\n'
+    "```\n"
+    "  - Each QuestionPrompt has: `question` (text), `header` (short title), "
+    "`options` (2-5 items, each `{label, description}`), `multiple` (bool), "
+    "`custom` (bool — allow free-text).\n"
+    "  - The tool returns IMMEDIATELY. The run loop pauses at the engine level.\n"
+    "  - When the user picks options in the UI, the engine feeds you a normal "
+    "tool_result with their answers. You then continue the real task.\n\n"
+    "### Call format (full example)\n"
+    "{\n"
+    '  "questions": [\n'
+    "    {\n"
+    '      "header": "网站目标",\n'
+    '      "question": "网站的主要用途是什么？",\n'
+    '      "options": [\n'
+    '        {"label": "展示公司信息", "description": "企业官网、品牌介绍、团队展示"},\n'
+    '        {"label": "提供在线服务", "description": "适合预约、咨询、SaaS"},\n'
+    '        {"label": "销售产品",     "description": "电商、商品、支付"},\n'
+    '        {"label": "作品/案例展示", "description": "作品集、设计案例"}\n'
+    "      ],\n"
+    '      "multiple": false,\n'
+    '      "custom": true\n'
+    "    },\n"
+    "    {\n"
+    '      "header": "核心功能",\n'
+    '      "question": "你希望包含哪些功能？",\n'
+    '      "options": [\n'
+    '        {"label": "首页"},\n'
+    '        {"label": "关于我们"},\n'
+    '        {"label": "产品/服务展示"},\n'
+    '        {"label": "联系表单"},\n'
+    '        {"label": "登录/注册"},\n'
+    '        {"label": "在线支付"}\n'
+    "      ],\n"
+    '      "multiple": true,\n'
+    '      "custom": true\n'
+    "    }\n"
+    "  ]\n"
+    "}\n\n"
+    "### Hard rules (violations break the UI)\n"
+    "  1. NEVER output clarification questions as plain assistant text. "
+    "No '1. ... 2. ... 3. ...' lists. No 'A. xxx  B. xxx' markdown. "
+    "No '请告诉我…' sentences. The UI only renders tool-call payloads.\n"
+    "  2. When the request is broad, your FIRST turn response must include "
+    "an `ask_user` tool call. Do not write a preamble text before calling — "
+    "go straight to the tool call.\n"
+    "  3. Each option needs a short `description` (1-2 lines). Mark the "
+    "recommended option by prefixing its description with 'Recommended'.\n"
+    "  4. 1-5 questions per call. 2-5 options per question. Don't ask "
+    "trivial things — only what materially changes the plan.\n"
+    "  5. After the user answers, NEVER ask again unless a brand-new "
+    "ambiguity appears. Proceed with their answers.\n"
+)
+
+NOQUESTION_INSTRUCTIONS = (
+    "\n\n## Direct Execution Mode (no question mode)\n"
+    "This session is in direct execution mode. Do NOT proactively ask the user questions.\n"
+    "For any uncertainty, make reasonable default assumptions and explicitly state them in your final answer.\n"
+    "The `ask_user` tool is not available in this mode.\n"
+)
+
+
 # Central tool registry — add new tools here only
 ALL_TOOLS: dict[str, tuple] = {
     "read_file":   (READ_FILE_SCHEMA,   read_file_tool),
@@ -70,6 +155,8 @@ def build_engine(
     registry: ToolRegistry | None = None,
     spawn_depth: int = 0,
     engine_registry: dict | None = None,
+    provider_name: str = "",
+    question_mode: str = "noquestion",
 ) -> AgentEngine:
     """
     Build a fully wired AgentEngine for a session.
@@ -85,6 +172,9 @@ def build_engine(
                        When None, a fresh registry is created from ALL_TOOLS.
         spawn_depth:   Current agent nesting depth (0 = top-level). Used to limit
                        recursive sub-agent creation via spawn_agent/spawn_agents.
+        question_mode: "question" enables the ask_user clarification tool and adds
+                       clarifying instructions to the system prompt. "noquestion"
+                       (default) means proceed with reasonable defaults.
     """
     emitter = EventEmitter(session_id)
     llm = build_provider(provider_cfg)
@@ -132,7 +222,22 @@ def build_engine(
         "3. Explain what went wrong and what you tried differently.\n"
         "4. If all alternatives are exhausted, report clearly what failed and why.\n"
     )
-    full_system = system_prompt + build_skill_system_addendum(skills) + _REASONING_INSTRUCTIONS + _RECOVERY_INSTRUCTIONS
+
+    # Question-mode instructions: only appended when user enabled it.
+    # The block text itself is defined at module level so the engine can
+    # re-stamp the system message at runtime.
+    question_block = (
+        QUESTION_INSTRUCTIONS if question_mode == "question"
+        else NOQUESTION_INSTRUCTIONS
+    )
+
+    full_system = (
+        system_prompt
+        + build_skill_system_addendum(skills)
+        + _REASONING_INSTRUCTIONS
+        + _RECOVERY_INSTRUCTIONS
+        + question_block
+    )
 
     compressor = ContextCompressor(
         summarizer=summarizer,
@@ -168,6 +273,10 @@ def build_engine(
             schema, handler = ALL_TOOLS[name]
             registry.register(schema, handler)
             logger.info("[build_engine] registered tool: %s", name)
+        elif name == "ask_user":
+            # ask_user is a session-specific tool (needs the engine closure)
+            # and is registered later in this function. Skip silently here.
+            continue
         else:
             logger.warning("[build_engine] tool '%s' in tools_to_load but NOT in ALL_TOOLS — skipped", name)
 
@@ -185,11 +294,17 @@ def build_engine(
     if spawn_depth < MAX_SPAWN_DEPTH:
         registry.register(
             SPAWN_AGENT_SCHEMA,
-            make_spawn_agent_tool(harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry),
+            make_spawn_agent_tool(
+                harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry,
+                parent_session_id=session_id,
+            ),
         )
         registry.register(
             SPAWN_AGENTS_SCHEMA,
-            make_spawn_agents_tool(harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry),
+            make_spawn_agents_tool(
+                harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry,
+                parent_session_id=session_id,
+            ),
         )
 
     # Append the definitive tool list to the system prompt so the LLM can
@@ -230,17 +345,30 @@ def build_engine(
         max_rounds=harness_cfg.engine.max_rounds,
     )
 
-    return AgentEngine(
+    engine = AgentEngine(
         config=EngineConfig(
             session_id=session_id,
             system_prompt=full_system,
             confirm_tools=frozenset(harness_cfg.tools.confirm_tools),
+            provider_name=provider_name,
+            spawn_depth=spawn_depth,
+            question_mode=question_mode,
         ),
         loop=loop,
         session_store=session_store,
         emitter=emitter,
         tool_registry=registry,
     )
+
+    # Register ask_user only when question_mode == "question".
+    # The tool needs the engine reference, so it's added after construction.
+    if question_mode == "question":
+        from harness.tools.builtin.ask_user import (
+            ASK_USER_SCHEMA, make_ask_user_tool,
+        )
+        registry.register(ASK_USER_SCHEMA, make_ask_user_tool(engine))
+
+    return engine
 
 
 # ── MCP async helpers ────────────────────────────────────────────────────────
@@ -302,6 +430,7 @@ async def build_engine_with_mcp(
     session_store: SessionStore,
     system_prompt: str = "",
     allowed_tools: list[str] | None = None,
+    question_mode: str = "noquestion",
 ) -> tuple[AgentEngine, list]:  # tuple[AgentEngine, list[MCPClient]]
     """Async variant of build_engine() that also initialises MCP Servers.
 
@@ -337,5 +466,6 @@ async def build_engine_with_mcp(
         system_prompt=system_prompt,
         allowed_tools=allowed_tools,
         registry=registry,
+        question_mode=question_mode,
     )
     return engine, mcp_clients

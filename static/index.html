@@ -1,1786 +1,3109 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MyHarnessPy</title>
-  <style>
-    /* ── Reset & Variables ────────────────────────────────────────────── */
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --surface2: #21262d;
-      --border: #30363d;
-      --text: #e6edf3;
-      --text-muted: #8b949e;
-      --accent: #58a6ff;
-      --accent-dim: #1f3a5f;
-      --green: #3fb950;
-      --green-dim: #0d2a18;
-      --yellow: #d29922;
-      --yellow-dim: #2d2208;
-      --red: #f85149;
-      --red-dim: #2d1118;
-      --tool-bg: #1c2128;
-      --user-bg: #1f3a5f;
-      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-    }
-
-    html,
-    body {
-      height: 100%;
-      overflow: hidden;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 14px;
-    }
-
-    /* ── Layout ───────────────────────────────────────────────────────── */
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-
-    #topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      height: 48px;
-      min-height: 48px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-
-    #topbar h1 {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: .02em;
-      color: var(--text);
-    }
-
-    #topbar h1 span {
-      color: var(--accent);
-    }
-
-    #main {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-      min-height: 0;
-      min-width: 0;
-    }
-
-    /* sidebar */
-    #sidebar {
-      width: 220px;
-      min-width: 220px;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #sidebar-scroll {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 0;
-    }
-
-    .sidebar-section {
-      padding: 4px 0 8px;
-    }
-
-    .sidebar-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      padding: 8px 14px 4px;
-    }
-
-    .sidebar-item {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 5px 14px;
-      cursor: pointer;
-      transition: background .12s;
-      border-radius: 0;
-      color: var(--text-muted);
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sidebar-item:hover {
-      background: var(--surface2);
-      color: var(--text);
-    }
-
-    .sidebar-item.active {
-      background: var(--accent-dim);
-      color: var(--accent);
-    }
-
-    .sidebar-item .badge {
-      margin-left: auto;
-      font-size: 10px;
-      padding: 1px 6px;
-      border-radius: 10px;
-      flex-shrink: 0;
-    }
-
-    .badge-run {
-      background: var(--green-dim);
-      color: var(--green);
-    }
-
-    .badge-done {
-      background: var(--surface2);
-      color: var(--text-muted);
-    }
-
-    .badge-err {
-      background: var(--red-dim);
-      color: var(--red);
-    }
-
-    .badge-wait {
-      background: var(--yellow-dim);
-      color: var(--yellow);
-    }
-
-    #sidebar-bottom {
-      border-top: 1px solid var(--border);
-      padding: 8px;
-    }
-
-    /* chat area */
-    #chat-wrap {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      min-width: 0;
-      min-height: 0;
-    }
-
-    #messages-wrap {
-      flex: 1;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      min-width: 0;
-    }
-
-    #session-header {
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-      background: var(--surface);
-      min-height: 44px;
-    }
-
-    #session-header .meta {
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-
-    #session-header .meta strong {
-      color: var(--accent);
-    }
-
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      min-height: 0;
-      min-width: 0;
-    }
-
-    #input-bar {
-      padding: 12px 16px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
-      flex-shrink: 0;
-      background: var(--surface);
-    }
-
-    #msg-input {
-      flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 12px;
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 14px;
-      resize: none;
-      min-height: 38px;
-      max-height: 120px;
-      outline: none;
-      line-height: 1.5;
-      transition: border-color .15s;
-    }
-
-    #msg-input:focus {
-      border-color: var(--accent);
-    }
-
-    /* config panel */
-    #config-panel {
-      width: 360px;
-      min-width: 360px;
-      background: var(--surface);
-      border-left: 1px solid var(--border);
-      display: none;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #config-panel.open {
-      display: flex;
-    }
-
-    #config-panel-header {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 13px;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-
-    #config-tree {
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-      overflow-y: auto;
-      max-height: 220px;
-      flex-shrink: 0;
-    }
-
-    .tree-folder {
-      padding: 4px 14px;
-      font-size: 12px;
-      color: var(--text-muted);
-      font-weight: 600;
-      letter-spacing: .04em;
-    }
-
-    .tree-file {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 4px 14px 4px 26px;
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text-muted);
-      transition: background .1s;
-    }
-
-    .tree-file:hover {
-      background: var(--surface2);
-      color: var(--text);
-    }
-
-    .tree-file.active {
-      color: var(--accent);
-      background: var(--accent-dim);
-    }
-
-    .tree-file .del-btn {
-      opacity: 0;
-      font-size: 11px;
-      color: var(--red);
-      cursor: pointer;
-      padding: 0 4px;
-    }
-
-    .tree-file:hover .del-btn {
-      opacity: 1;
-    }
-
-    .tree-new {
-      padding: 3px 14px 3px 26px;
-      display: flex;
-      gap: 6px;
-      align-items: center;
-    }
-
-    .tree-new input {
-      flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 3px 7px;
-      color: var(--text);
-      font-size: 12px;
-      outline: none;
-    }
-
-    .tree-new input:focus {
-      border-color: var(--accent);
-    }
-
-    #config-editor-wrap {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #config-filename {
-      padding: 8px 14px 4px;
-      font-size: 12px;
-      color: var(--accent);
-      font-family: var(--mono);
-      flex-shrink: 0;
-    }
-
-    #config-editor {
-      flex: 1;
-      background: var(--bg);
-      border: none;
-      border-top: 1px solid var(--border);
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: 12.5px;
-      padding: 12px 14px;
-      resize: none;
-      outline: none;
-      line-height: 1.6;
-    }
-
-    #config-actions {
-      padding: 8px 12px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-    /* ── Message Bubbles ──────────────────────────────────────────────── */
-    .msg {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      max-width: 80%;
-      flex-shrink: 0;
-    }
-
-    .msg.user {
-      align-self: flex-end;
-      align-items: flex-end;
-    }
-
-    .msg.assistant,
-    .msg.tool {
-      align-self: flex-start;
-      align-items: flex-start;
-    }
-
-    .msg-role {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      padding: 0 4px;
-    }
-
-    .msg-bubble {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 14px;
-      line-height: 1.6;
-      max-width: 100%;
-    }
-
-    .msg.user .msg-bubble {
-      background: var(--user-bg);
-      border-color: var(--accent-dim);
-    }
-
-    /* markdown in bubbles */
-    .msg-bubble p {
-      margin-bottom: 6px;
-    }
-
-    .msg-bubble p:last-child {
-      margin-bottom: 0;
-    }
-
-    .msg-bubble code {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      padding: 1px 5px;
-      font-family: var(--mono);
-      font-size: 12.5px;
-      color: var(--accent);
-    }
-
-    .msg-bubble pre {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-      overflow-x: auto;
-      margin: 6px 0;
-    }
-
-    .msg-bubble pre code {
-      background: none;
-      border: none;
-      padding: 0;
-      color: var(--text);
-      font-size: 12.5px;
-    }
-
-    .msg-bubble ul,
-    .msg-bubble ol {
-      padding-left: 18px;
-      margin: 4px 0;
-    }
-
-    .msg-bubble li {
-      margin: 2px 0;
-    }
-
-    .msg-bubble strong {
-      color: var(--text);
-      font-weight: 600;
-    }
-
-    .msg-bubble blockquote {
-      border-left: 3px solid var(--border);
-      padding-left: 10px;
-      color: var(--text-muted);
-      margin: 6px 0;
-    }
-
-    /* tool call block */
-    .tool-block {
-      background: var(--tool-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      font-family: var(--mono);
-      font-size: 12.5px;
-      width: 100%;
-      max-width: 100%;
-      min-width: 0;
-      flex-shrink: 0;
-    }
-
-    .tool-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 12px;
-      cursor: pointer;
-      user-select: none;
-      border-bottom: 1px solid transparent;
-      transition: background .1s;
-      min-width: 0;
-    }
-
-    .tool-header:hover {
-      background: var(--surface2);
-    }
-
-    .tool-header.open {
-      border-bottom-color: var(--border);
-    }
-
-    .tool-icon {
-      color: var(--yellow);
-      font-size: 13px;
-    }
-
-    .tool-name {
-      color: var(--yellow);
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-
-    .tool-summary {
-      color: var(--text-muted);
-      font-size: 11px;
-      margin-left: 8px;
-      flex: 1 1 auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .tool-chevron {
-      margin-left: auto;
-      color: var(--text-muted);
-      transition: transform .15s;
-    }
-
-    .tool-header.open .tool-chevron {
-      transform: rotate(90deg);
-    }
-
-    .tool-body {
-      padding: 8px 12px;
-      color: var(--text-muted);
-      display: none;
-      white-space: pre-wrap;
-      word-break: break-word;
-      overflow-x: auto;
-    }
-
-    .tool-body.open {
-      display: block;
-    }
-
-    .tool-body pre,
-    .result-body pre {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    /* tool result */
-    .result-block {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      font-family: var(--mono);
-      font-size: 12.5px;
-      width: 100%;
-      max-width: 100%;
-      min-width: 0;
-      flex-shrink: 0;
-    }
-
-    .result-header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      cursor: pointer;
-      user-select: none;
-      border-bottom: 1px solid transparent;
-      min-width: 0;
-    }
-
-    .result-header.open {
-      border-bottom-color: var(--border);
-    }
-
-    .result-ok {
-      color: var(--green);
-    }
-
-    .result-err {
-      color: var(--red);
-    }
-
-    .result-body {
-      padding: 8px 12px;
-      color: var(--text-muted);
-      display: none;
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-height: 300px;
-      overflow-y: auto;
-      overflow-x: auto;
-    }
-
-    .result-body.open {
-      display: block;
-    }
-
-    .result-summary {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-left: 8px;
-      flex: 1 1 auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    /* thinking */
-    .thinking-block {
-      color: var(--text-muted);
-      font-size: 13px;
-      border-left: 2px solid var(--border);
-      border-radius: 0 4px 4px 0;
-      width: 100%;
-      flex-shrink: 0;
-    }
-
-    .thinking-header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      cursor: pointer;
-      font-style: italic;
-      user-select: none;
-    }
-
-    .thinking-header:hover {
-      background: var(--surface2);
-    }
-
-    .thinking-toggle {
-      margin-left: auto;
-      font-size: 11px;
-      color: var(--accent);
-      font-style: normal;
-      white-space: nowrap;
-    }
-
-    .thinking-body {
-      padding: 0 10px 8px 10px;
-      max-height: 300px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      font-style: normal;
-      font-size: 12px;
-      line-height: 1.6;
-    }
-
-    .thinking-body.collapsed {
-      display: none;
-    }
-
-    /* typing dots */
-    .typing-dots {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 10px 14px;
-      flex-shrink: 0;
-    }
-
-    .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--text-muted);
-      animation: pulse 1.2s infinite;
-    }
-
-    .dot:nth-child(2) {
-      animation-delay: .2s;
-    }
-
-    .dot:nth-child(3) {
-      animation-delay: .4s;
-    }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        opacity: .3;
-        transform: scale(.9);
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyHarnessPy</title>
+    <style>
+      /* ── Reset & Variables ────────────────────────────────────────────── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
 
-      50% {
-        opacity: 1;
-        transform: scale(1.1);
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-muted: #8b949e;
+        --accent: #58a6ff;
+        --accent-dim: #1f3a5f;
+        --green: #3fb950;
+        --green-dim: #0d2a18;
+        --yellow: #d29922;
+        --yellow-dim: #2d2208;
+        --red: #f85149;
+        --red-dim: #2d1118;
+        --tool-bg: #1c2128;
+        --user-bg: #1f3a5f;
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
       }
-    }
 
-    /* ── Buttons ──────────────────────────────────────────────────────── */
-    .btn {
-      padding: 6px 14px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--surface2);
-      color: var(--text);
-      cursor: pointer;
-      font-size: 13px;
-      font-family: var(--font);
-      transition: background .12s, border-color .12s;
-      white-space: nowrap;
-    }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 14px;
+      }
 
-    .btn:hover {
-      background: var(--surface);
-      border-color: var(--text-muted);
-    }
+      /* ── Layout ───────────────────────────────────────────────────────── */
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
 
-    .btn:disabled {
-      opacity: .4;
-      cursor: not-allowed;
-    }
+      #topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        height: 48px;
+        min-height: 48px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
 
-    .btn-primary {
-      background: var(--accent-dim);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
+      #topbar h1 {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--text);
+      }
 
-    .btn-primary:hover {
-      background: #1c3a6e;
-    }
+      #topbar h1 span {
+        color: var(--accent);
+      }
 
-    .btn-danger {
-      border-color: var(--red);
-      color: var(--red);
-    }
+      #main {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+        min-height: 0;
+        min-width: 0;
+      }
 
-    .btn-danger:hover {
-      background: var(--red-dim);
-    }
+      /* sidebar */
+      #sidebar {
+        width: 220px;
+        min-width: 220px;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
 
-    .btn-sm {
-      padding: 4px 10px;
-      font-size: 12px;
-    }
+      #sidebar-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 0;
+      }
 
-    .btn-icon {
-      padding: 5px 8px;
-      font-size: 15px;
-      line-height: 1;
-    }
+      .sidebar-section {
+        padding: 4px 0 8px;
+      }
 
-    /* ── Modal ────────────────────────────────────────────────────────── */
-    .overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, .65);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-    }
+      .sidebar-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 8px 14px 4px;
+      }
 
-    .overlay.hidden {
-      display: none;
-    }
+      .sidebar-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 14px;
+        cursor: pointer;
+        transition: background 0.12s;
+        border-radius: 0;
+        color: var(--text-muted);
+        font-size: 13px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
 
-    .modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 24px;
-      width: 440px;
-      max-width: 95vw;
-    }
+      .sidebar-item:hover {
+        background: var(--surface2);
+        color: var(--text);
+      }
 
-    .modal h2 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 16px;
-    }
+      .sidebar-item.active {
+        background: var(--accent-dim);
+        color: var(--accent);
+      }
 
-    .form-group {
-      margin-bottom: 14px;
-    }
+      .sidebar-item .badge {
+        margin-left: auto;
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 10px;
+        flex-shrink: 0;
+      }
 
-    .form-group label {
-      display: block;
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-bottom: 5px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
+      .badge-run {
+        background: var(--green-dim);
+        color: var(--green);
+      }
 
-    .form-group select,
-    .form-group textarea,
-    .form-group input[type=text] {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 7px 10px;
-      color: var(--text);
-      font-size: 13px;
-      font-family: var(--font);
-      outline: none;
-      transition: border-color .15s;
-    }
+      .badge-done {
+        background: var(--surface2);
+        color: var(--text-muted);
+      }
 
-    .form-group select:focus,
-    .form-group textarea:focus,
-    .form-group input:focus {
-      border-color: var(--accent);
-    }
+      .badge-err {
+        background: var(--red-dim);
+        color: var(--red);
+      }
 
-    .form-group select option {
-      background: var(--surface2);
-    }
+      .badge-wait {
+        background: var(--yellow-dim);
+        color: var(--yellow);
+      }
 
-    .form-group textarea {
-      resize: vertical;
-      min-height: 80px;
-      font-family: var(--mono);
-      font-size: 12.5px;
-    }
+      #sidebar-bottom {
+        border-top: 1px solid var(--border);
+        padding: 8px;
+      }
 
-    .modal-actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      margin-top: 16px;
-    }
+      /* chat area */
+      #chat-wrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-width: 0;
+        min-height: 0;
+      }
 
-    /* ── Toast ────────────────────────────────────────────────────────── */
-    #toasts {
-      position: fixed;
-      bottom: 16px;
-      right: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      z-index: 200;
-    }
+      #messages-wrap {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+      }
 
-    .toast {
-      padding: 9px 14px;
-      border-radius: 6px;
-      font-size: 13px;
-      border: 1px solid;
-      max-width: 320px;
-      animation: slide-up .2s ease;
-    }
+      #session-header {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        background: var(--surface);
+        min-height: 44px;
+      }
 
-    .toast-ok {
-      background: var(--green-dim);
-      border-color: var(--green);
-      color: var(--green);
-    }
+      #session-header .meta {
+        color: var(--text-muted);
+        font-size: 12px;
+      }
 
-    .toast-err {
-      background: var(--red-dim);
-      border-color: var(--red);
-      color: var(--red);
-    }
+      #session-header .meta strong {
+        color: var(--accent);
+      }
 
-    @keyframes slide-up {
-      from {
+      #messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 0;
+        min-width: 0;
+      }
+
+      #input-bar {
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+        flex-shrink: 0;
+        background: var(--surface);
+      }
+
+      /* Question-mode toggle row above the input bar */
+      #mode-toolbar {
+        padding: 8px 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface);
+        font-size: 13px;
+        color: var(--text-muted);
+        flex-shrink: 0;
+      }
+      .mode-toggle {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .mode-toggle button {
+        background: var(--bg);
+        color: var(--text-muted);
+        border: none;
+        padding: 5px 12px;
+        cursor: pointer;
+        font-size: 13px;
+        font-family: var(--font);
+      }
+      .mode-toggle button.active {
+        background: var(--accent);
+        color: white;
+      }
+      .mode-toggle button:not(.active):hover {
+        background: var(--border);
+        color: var(--text);
+      }
+      .mode-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-left: auto;
+      }
+
+      /* Clarification card (rendered inside #messages) */
+      .clarify-card {
+        margin: 8px 0;
+        padding: 14px 16px;
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        background: rgba(100, 150, 255, 0.06);
+      }
+      .clarify-card .clarify-question {
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: var(--text);
+        font-size: 14px;
+      }
+      .clarify-card .clarify-options {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .clarify-card .clarify-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        cursor: pointer;
+        background: var(--bg);
+        font-size: 14px;
+        color: var(--text);
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .clarify-card .clarify-option:hover {
+        background: var(--border);
+      }
+      .clarify-card .clarify-option input {
+        cursor: pointer;
+        accent-color: var(--accent);
+      }
+      .clarify-card .clarify-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .clarify-card .clarify-actions .btn {
+        padding: 6px 14px;
+        font-size: 13px;
+      }
+      /* Multi-question card layout */
+      .clarify-card .clarify-header {
+        font-size: 12px;
+        color: var(--accent);
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+      }
+      .clarify-card .clarify-option-desc {
+        color: var(--text-muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+      .clarify-card .clarify-option.is-selected {
+        border-color: var(--accent);
+        background: rgba(100, 150, 255, 0.1);
+      }
+      .clarify-card .clarify-question-block {
+        padding: 10px 0;
+        border-top: 1px dashed var(--border);
+      }
+      .clarify-card .clarify-question-block:first-of-type {
+        border-top: none;
+        padding-top: 4px;
+      }
+      .clarify-card .clarify-custom-input {
+        width: 100%;
+        margin-top: 8px;
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 13px;
+      }
+      .clarify-card .clarify-status {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 6px;
+      }
+      .clarify-card .clarify-error {
+        font-size: 12px;
+        color: #d44;
+        margin-top: 6px;
+      }
+      .clarify-card.is-readonly {
+        opacity: 0.85;
+        border-style: dashed;
+      }
+      .clarify-card.is-readonly .clarify-option {
+        cursor: default;
+      }
+      .clarify-card.is-readonly .clarify-actions {
+        display: none;
+      }
+
+      #msg-input {
+        flex: 1;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 12px;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 14px;
+        resize: none;
+        min-height: 38px;
+        max-height: 120px;
+        outline: none;
+        line-height: 1.5;
+        transition: border-color 0.15s;
+      }
+
+      #msg-input:focus {
+        border-color: var(--accent);
+      }
+
+      /* config panel */
+      #config-panel {
+        width: 360px;
+        min-width: 360px;
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      #config-panel.open {
+        display: flex;
+      }
+
+      #config-panel-header {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      #config-tree {
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+        overflow-y: auto;
+        max-height: 220px;
+        flex-shrink: 0;
+      }
+
+      .tree-folder {
+        padding: 4px 14px;
+        font-size: 12px;
+        color: var(--text-muted);
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+
+      .tree-file {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 14px 4px 26px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text-muted);
+        transition: background 0.1s;
+      }
+
+      .tree-file:hover {
+        background: var(--surface2);
+        color: var(--text);
+      }
+
+      .tree-file.active {
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+
+      .tree-file .del-btn {
         opacity: 0;
-        transform: translateY(8px);
+        font-size: 11px;
+        color: var(--red);
+        cursor: pointer;
+        padding: 0 4px;
       }
 
-      to {
+      .tree-file:hover .del-btn {
         opacity: 1;
-        transform: none;
       }
-    }
 
-    /* ── Empty state ──────────────────────────────────────────────────── */
-    #empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      gap: 12px;
-    }
+      .tree-new {
+        padding: 3px 14px 3px 26px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
 
-    #empty-state .big {
-      font-size: 40px;
-    }
+      .tree-new input {
+        flex: 1;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 3px 7px;
+        color: var(--text);
+        font-size: 12px;
+        outline: none;
+      }
 
-    #empty-state p {
-      font-size: 14px;
-    }
+      .tree-new input:focus {
+        border-color: var(--accent);
+      }
 
-    /* ── Scrollbars ───────────────────────────────────────────────────── */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
+      #config-editor-wrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
 
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
+      #config-filename {
+        padding: 8px 14px 4px;
+        font-size: 12px;
+        color: var(--accent);
+        font-family: var(--mono);
+        flex-shrink: 0;
+      }
 
-    ::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 3px;
-    }
+      #config-editor {
+        flex: 1;
+        background: var(--bg);
+        border: none;
+        border-top: 1px solid var(--border);
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 12.5px;
+        padding: 12px 14px;
+        resize: none;
+        outline: none;
+        line-height: 1.6;
+      }
 
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--text-muted);
-    }
+      #config-actions {
+        padding: 8px 12px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
 
-    /* misc */
-    .divider {
-      height: 1px;
-      background: var(--border);
-      margin: 4px 0;
-    }
+      /* ── Message Bubbles ──────────────────────────────────────────────── */
+      .msg {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-width: 80%;
+        flex-shrink: 0;
+      }
 
-    .hidden {
-      display: none !important;
-    }
+      .msg.user {
+        align-self: flex-end;
+        align-items: flex-end;
+      }
 
-    #error-banner {
-      display: none;
-      padding: 8px 16px;
-      background: var(--red-dim);
-      border-bottom: 1px solid var(--red);
-      color: var(--red);
-      font-size: 13px;
-    }
+      .msg.assistant,
+      .msg.tool {
+        align-self: flex-start;
+        align-items: flex-start;
+      }
 
-    /* ── Approval flow ─────────────────────────────────────────────── */
-    #confirm-panel {
-      margin: 0 16px 10px;
-      padding: 12px 16px;
-      background: #2d2000;
-      border: 1px solid #f59e0b;
-      border-radius: 8px;
-    }
-    .confirm-header {
-      color: #f59e0b;
-      font-weight: 600;
-      font-size: 14px;
-      margin-bottom: 10px;
-    }
-    .confirm-tool {
-      background: #111;
-      border-radius: 4px;
-      padding: 8px 10px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-    .confirm-tool strong { color: #e5e7eb; }
-    .confirm-tool pre {
-      margin: 6px 0 0;
-      white-space: pre-wrap;
-      color: #9ca3af;
-      font-size: 12px;
-      max-height: 180px;
-      overflow-y: auto;
-    }
-    .confirm-actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      margin-top: 10px;
-    }
-    .btn-approve { background: #16a34a; color: #fff; border: none; }
-    .btn-approve:hover { background: #15803d; }
-  </style>
-</head>
+      .msg-role {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0 4px;
+      }
 
-<body>
-  <div id="app">
+      .msg-bubble {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 14px;
+        line-height: 1.6;
+        max-width: 100%;
+      }
 
-    <!-- Top bar -->
-    <div id="topbar">
-      <h1>My<span>Harness</span>Py</h1>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span id="running-indicator" class="hidden" style="color:var(--green);font-size:12px">● 运行中</span>
-        <button class="btn btn-primary btn-sm" onclick="openNewSession()">+ 新建会话</button>
+      .msg.user .msg-bubble {
+        background: var(--user-bg);
+        border-color: var(--accent-dim);
+      }
+
+      /* markdown in bubbles */
+      .msg-bubble p {
+        margin-bottom: 6px;
+      }
+
+      .msg-bubble p:last-child {
+        margin-bottom: 0;
+      }
+
+      .msg-bubble code {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 1px 5px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--accent);
+      }
+
+      .msg-bubble pre {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        overflow-x: auto;
+        margin: 6px 0;
+      }
+
+      .msg-bubble pre code {
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--text);
+        font-size: 12.5px;
+      }
+
+      .msg-bubble ul,
+      .msg-bubble ol {
+        padding-left: 18px;
+        margin: 4px 0;
+      }
+
+      .msg-bubble li {
+        margin: 2px 0;
+      }
+
+      .msg-bubble strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .msg-bubble blockquote {
+        border-left: 3px solid var(--border);
+        padding-left: 10px;
+        color: var(--text-muted);
+        margin: 6px 0;
+      }
+
+      /* tool call block */
+      .tool-block {
+        background: var(--tool-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+
+      .tool-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        cursor: pointer;
+        user-select: none;
+        border-bottom: 1px solid transparent;
+        transition: background 0.1s;
+        min-width: 0;
+      }
+
+      .tool-header:hover {
+        background: var(--surface2);
+      }
+
+      .tool-header.open {
+        border-bottom-color: var(--border);
+      }
+
+      .tool-icon {
+        color: var(--yellow);
+        font-size: 13px;
+      }
+
+      .tool-name {
+        color: var(--yellow);
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      .tool-summary {
+        color: var(--text-muted);
+        font-size: 11px;
+        margin-left: 8px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tool-chevron {
+        margin-left: auto;
+        color: var(--text-muted);
+        transition: transform 0.15s;
+      }
+
+      .tool-header.open .tool-chevron {
+        transform: rotate(90deg);
+      }
+
+      .tool-body {
+        padding: 8px 12px;
+        color: var(--text-muted);
+        display: none;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-x: auto;
+      }
+
+      .tool-body.open {
+        display: block;
+      }
+
+      .tool-body pre,
+      .result-body pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      /* tool result */
+      .result-block {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+
+      .result-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        user-select: none;
+        border-bottom: 1px solid transparent;
+        min-width: 0;
+      }
+
+      .result-header.open {
+        border-bottom-color: var(--border);
+      }
+
+      .result-ok {
+        color: var(--green);
+      }
+
+      .result-err {
+        color: var(--red);
+      }
+
+      .result-body {
+        padding: 8px 12px;
+        color: var(--text-muted);
+        display: none;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 300px;
+        overflow-y: auto;
+        overflow-x: auto;
+      }
+
+      .result-body.open {
+        display: block;
+      }
+
+      .result-summary {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-left: 8px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* thinking */
+      .thinking-block {
+        color: var(--text-muted);
+        font-size: 13px;
+        border-left: 2px solid var(--border);
+        border-radius: 0 4px 4px 0;
+        width: 100%;
+        flex-shrink: 0;
+      }
+
+      .thinking-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-style: italic;
+        user-select: none;
+      }
+
+      .thinking-header:hover {
+        background: var(--surface2);
+      }
+
+      .thinking-toggle {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--accent);
+        font-style: normal;
+        white-space: nowrap;
+      }
+
+      .thinking-body {
+        padding: 0 10px 8px 10px;
+        max-height: 300px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        font-style: normal;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .thinking-body.collapsed {
+        display: none;
+      }
+
+      /* typing dots */
+      .typing-dots {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 10px 14px;
+        flex-shrink: 0;
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        animation: pulse 1.2s infinite;
+      }
+
+      .dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+
+      .dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 0.3;
+          transform: scale(0.9);
+        }
+
+        50% {
+          opacity: 1;
+          transform: scale(1.1);
+        }
+      }
+
+      /* ── Buttons ──────────────────────────────────────────────────────── */
+      .btn {
+        padding: 6px 14px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface2);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 13px;
+        font-family: var(--font);
+        transition:
+          background 0.12s,
+          border-color 0.12s;
+        white-space: nowrap;
+      }
+
+      .btn:hover {
+        background: var(--surface);
+        border-color: var(--text-muted);
+      }
+
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--accent-dim);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .btn-primary:hover {
+        background: #1c3a6e;
+      }
+
+      .btn-danger {
+        border-color: var(--red);
+        color: var(--red);
+      }
+
+      .btn-danger:hover {
+        background: var(--red-dim);
+      }
+
+      .btn-sm {
+        padding: 4px 10px;
+        font-size: 12px;
+      }
+
+      .btn-icon {
+        padding: 5px 8px;
+        font-size: 15px;
+        line-height: 1;
+      }
+
+      /* ── Modal ────────────────────────────────────────────────────────── */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+      }
+
+      .overlay.hidden {
+        display: none;
+      }
+
+      .modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 24px;
+        width: 440px;
+        max-width: 95vw;
+      }
+
+      .modal h2 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 16px;
+      }
+
+      .form-group {
+        margin-bottom: 14px;
+      }
+
+      .form-group label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .form-group select,
+      .form-group textarea,
+      .form-group input[type="text"] {
+        width: 100%;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 7px 10px;
+        color: var(--text);
+        font-size: 13px;
+        font-family: var(--font);
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      .form-group select:focus,
+      .form-group textarea:focus,
+      .form-group input:focus {
+        border-color: var(--accent);
+      }
+
+      .form-group select option {
+        background: var(--surface2);
+      }
+
+      .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
+
+      /* ── Toast ────────────────────────────────────────────────────────── */
+      #toasts {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 200;
+      }
+
+      .toast {
+        padding: 9px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        border: 1px solid;
+        max-width: 320px;
+        animation: slide-up 0.2s ease;
+      }
+
+      .toast-ok {
+        background: var(--green-dim);
+        border-color: var(--green);
+        color: var(--green);
+      }
+
+      .toast-err {
+        background: var(--red-dim);
+        border-color: var(--red);
+        color: var(--red);
+      }
+
+      @keyframes slide-up {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      /* ── Empty state ──────────────────────────────────────────────────── */
+      #empty-state {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        gap: 12px;
+      }
+
+      #empty-state .big {
+        font-size: 40px;
+      }
+
+      #empty-state p {
+        font-size: 14px;
+      }
+
+      /* ── Scrollbars ───────────────────────────────────────────────────── */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
+      }
+
+      /* misc */
+      .divider {
+        height: 1px;
+        background: var(--border);
+        margin: 4px 0;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      #error-banner {
+        display: none;
+        padding: 8px 16px;
+        background: var(--red-dim);
+        border-bottom: 1px solid var(--red);
+        color: var(--red);
+        font-size: 13px;
+      }
+
+      /* ── Approval flow ─────────────────────────────────────────────── */
+      #confirm-panel {
+        margin: 0 16px 10px;
+        padding: 12px 16px;
+        background: #2d2000;
+        border: 1px solid #f59e0b;
+        border-radius: 8px;
+      }
+      .confirm-header {
+        color: #f59e0b;
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+      .confirm-tool {
+        background: #111;
+        border-radius: 4px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+      .confirm-tool strong {
+        color: #e5e7eb;
+      }
+      .confirm-tool pre {
+        margin: 6px 0 0;
+        white-space: pre-wrap;
+        color: #9ca3af;
+        font-size: 12px;
+        max-height: 180px;
+        overflow-y: auto;
+      }
+      .confirm-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 10px;
+      }
+
+      /* ── Pending command queue ─────────────────────────────────────── */
+      #queue-panel {
+        margin: 0 16px 10px;
+        padding: 10px 16px;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      .queue-header {
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .queue-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 7px 10px;
+        background: #1e293b;
+        border-radius: 6px;
+        margin-bottom: 6px;
+        color: #cbd5e1;
+      }
+      .queue-item:last-child { margin-bottom: 0; }
+      .queue-item-text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 380px;
+        line-height: 1.4;
+      }
+      .queue-item-meta {
+        font-size: 11px;
+        color: #475569;
+        white-space: nowrap;
+      }
+      .queue-cancel-btn {
+        background: none;
+        border: none;
+        color: #64748b;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 0 2px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .queue-cancel-btn:hover { color: #ef4444; }
+      .btn-approve {
+        background: #16a34a;
+        color: #fff;
+        border: none;
+      }
+      .btn-approve:hover {
+        background: #15803d;
+      }
+
+      /* ── Edit message mode ─────────────────────────────────────────── */
+      .msg-edit-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-width: 80%;
+        flex-shrink: 0;
+        align-self: flex-end;
+      }
+      .msg-edit-wrap .msg-bubble textarea {
+        width: 100%;
+        min-height: 60px;
+        max-height: 200px;
+        background: var(--bg);
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        padding: 8px 12px;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 14px;
+        line-height: 1.5;
+        resize: vertical;
+        outline: none;
+      }
+      .msg-edit-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .msg-edit-actions .edit-cancel {
+        color: var(--text-muted);
+        font-size: 12px;
+        cursor: pointer;
+        padding: 3px 8px;
+        border-radius: 4px;
+      }
+      .msg-edit-actions .edit-cancel:hover {
+        background: var(--surface2);
+        color: var(--text);
+      }
+      .msg-edit-actions .edit-submit {
+        background: var(--accent-dim);
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        border-radius: 4px;
+        padding: 3px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        font-family: var(--font);
+      }
+      .msg-edit-actions .edit-submit:hover {
+        background: #1c3a6e;
+      }
+      .msg-edit-actions .edit-submit:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      /* Edit button on user messages */
+      .msg.user .msg-actions {
+        display: flex;
+        gap: 4px;
+        margin-top: 2px;
+        align-self: flex-end;
+      }
+      .msg-edit-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: var(--font);
+        opacity: 0;
+        transition: opacity 0.15s, background 0.15s;
+      }
+      .msg.user:hover .msg-edit-btn,
+      .msg.user:focus-within .msg-edit-btn {
+        opacity: 1;
+      }
+      .msg-edit-btn:hover {
+        background: var(--surface2);
+        color: var(--accent);
+      }
+      .msg-edit-btn[disabled] {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+      .edit-running-msg {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-style: italic;
+        padding: 2px 4px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app">
+      <!-- Top bar -->
+      <div id="topbar">
+        <h1>My<span>Harness</span>Py</h1>
+        <div style="display: flex; gap: 8px; align-items: center">
+          <span
+            id="running-indicator"
+            class="hidden"
+            style="color: var(--green); font-size: 12px"
+            >● 运行中</span
+          >
+          <button class="btn btn-primary btn-sm" onclick="openNewSession()">
+            + 新建会话
+          </button>
+        </div>
+      </div>
+
+      <div id="main">
+        <!-- Sidebar -->
+        <div id="sidebar">
+          <div id="sidebar-scroll">
+            <!-- Sessions -->
+            <div class="sidebar-section">
+              <div class="sidebar-label">会话</div>
+              <div id="sessions-list">
+                <div
+                  class="sidebar-item"
+                  style="
+                    color: var(--text-muted);
+                    font-size: 12px;
+                    padding-left: 16px;
+                  "
+                >
+                  暂无会话
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Skills -->
+            <div class="sidebar-section">
+              <div class="sidebar-label">Skills</div>
+              <div id="skills-list">
+                <div
+                  class="sidebar-item"
+                  style="
+                    color: var(--text-muted);
+                    font-size: 12px;
+                    padding-left: 16px;
+                  "
+                >
+                  加载中…
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Personas -->
+            <div class="sidebar-section">
+              <div class="sidebar-label">身份 Personas</div>
+              <div id="personas-list">
+                <div
+                  class="sidebar-item"
+                  style="
+                    color: var(--text-muted);
+                    font-size: 12px;
+                    padding-left: 16px;
+                  "
+                >
+                  加载中…
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar bottom -->
+          <div id="sidebar-bottom">
+            <button
+              class="btn btn-sm"
+              style="width: 100%"
+              onclick="toggleConfig()"
+            >
+              ⚙ 配置文件
+            </button>
+          </div>
+        </div>
+
+        <!-- Chat area -->
+        <div id="chat-wrap">
+          <div id="session-header">
+            <span
+              id="session-title"
+              style="font-size: 13px; color: var(--text-muted)"
+              >未选择会话</span
+            >
+            <span id="session-meta" class="meta hidden"></span>
+            <div style="margin-left: auto; display: flex; gap: 6px">
+              <button
+                id="cancel-btn"
+                class="btn btn-sm btn-danger hidden"
+                onclick="cancelSession()"
+              >
+                停止
+              </button>
+              <button
+                id="delete-btn"
+                class="btn btn-sm hidden"
+                onclick="deleteSession()"
+              >
+                关闭会话
+              </button>
+            </div>
+          </div>
+
+          <div id="error-banner" id="error-banner"></div>
+
+          <!-- Approval panel (shown when WAITING_CONFIRMATION) -->
+          <div id="confirm-panel" class="hidden">
+            <div class="confirm-header">
+              ⚠ Agent 请求执行高风险操作，请审批：
+            </div>
+            <div id="confirm-tool-info"></div>
+            <div class="confirm-actions">
+              <button class="btn btn-danger btn-sm" onclick="denyAction()">
+                拒绝
+              </button>
+              <button class="btn btn-approve btn-sm" onclick="confirmAction()">
+                允许执行
+              </button>
+            </div>
+          </div>
+
+          <!-- Pending command queue (shown when engine is RUNNING and queue is non-empty) -->
+          <div id="queue-panel" class="hidden">
+            <div class="queue-header">
+              <span>⏳</span> 排队中的命令
+            </div>
+            <div id="queue-items"></div>
+          </div>
+
+          <!-- Messages or empty state -->
+          <div id="messages-wrap">
+            <div id="empty-state">
+              <p>选择一个Persona新建会话</p>
+              <button class="btn btn-primary" onclick="openNewSession()">
+                + 新建会话
+              </button>
+            </div>
+            <div id="messages" class="hidden"></div>
+          </div>
+
+          <div id="mode-toolbar">
+            <span>提问模式：</span>
+            <div class="mode-toggle" id="mode-toggle">
+              <button data-mode="question" onclick="setQuestionMode('question')">
+                允许提问
+              </button>
+              <button data-mode="noquestion" onclick="setQuestionMode('noquestion')">
+                直接执行
+              </button>
+            </div>
+            <span class="mode-hint" id="mode-hint">允许 AI 在需求模糊时向你提问澄清</span>
+          </div>
+
+          <div id="input-bar">
+            <textarea
+              id="msg-input"
+              placeholder="输入消息，Shift+Enter 换行，Enter 发送…"
+              rows="1"
+              onkeydown="handleInputKey(event)"
+              oninput="autoGrow(this)"
+            ></textarea>
+            <button
+              class="btn btn-primary"
+              onclick="sendMessage()"
+              id="send-btn"
+            >
+              发送
+            </button>
+          </div>
+        </div>
+
+        <!-- Config panel -->
+        <div id="config-panel">
+          <div id="config-panel-header">
+            <span>配置文件</span>
+            <button class="btn-icon btn" onclick="toggleConfig()" title="关闭">
+              ✕
+            </button>
+          </div>
+          <div id="config-tree"></div>
+          <div id="config-editor-wrap">
+            <div
+              id="config-filename"
+              style="color: var(--text-muted); font-style: italic"
+            >
+              ← 选择文件编辑
+            </div>
+            <textarea
+              id="config-editor"
+              placeholder="选择左侧文件…"
+              disabled
+            ></textarea>
+            <div id="config-actions">
+              <button
+                class="btn btn-primary btn-sm"
+                onclick="saveConfigFile()"
+                id="config-save-btn"
+                disabled
+              >
+                保存
+              </button>
+              <button
+                class="btn btn-sm btn-danger"
+                onclick="deleteConfigFile()"
+                id="config-del-btn"
+                disabled
+              >
+                删除
+              </button>
+              <span
+                id="config-status"
+                style="
+                  font-size: 12px;
+                  color: var(--text-muted);
+                  margin-left: 4px;
+                  align-self: center;
+                "
+              ></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- #main -->
+    </div>
+    <!-- #app -->
+
+    <!-- New Session Modal -->
+    <div id="modal-overlay" class="overlay hidden">
+      <div class="modal">
+        <h2>新建会话</h2>
+        <div class="form-group">
+          <label>Provider</label>
+          <select id="sel-provider"></select>
+        </div>
+        <div class="form-group">
+          <label>Persona（Agent 的身份与权限）</label>
+          <select id="sel-persona">
+            <option value="">— 不使用 Persona —</option>
+          </select>
+          <div
+            id="persona-desc"
+            style="
+              font-size: 12px;
+              color: var(--text-muted);
+              margin-top: 4px;
+              min-height: 16px;
+            "
+          ></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeModal()">取消</button>
+          <button class="btn btn-primary" onclick="createSession()">
+            创建
+          </button>
+        </div>
       </div>
     </div>
 
-    <div id="main">
+    <!-- Toasts -->
+    <div id="toasts"></div>
 
-      <!-- Sidebar -->
-      <div id="sidebar">
-        <div id="sidebar-scroll">
+    <script>
+      "use strict";
 
-          <!-- Sessions -->
-          <div class="sidebar-section">
-            <div class="sidebar-label">会话</div>
-            <div id="sessions-list">
-              <div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无会话</div>
-            </div>
-          </div>
+      // ── State ────────────────────────────────────────────────────────────
+      let currentSessionId = null;
+      let pollTimer = null;
+      let sessionRefreshTimer = null;
+      let lastMsgCount = 0;
+      let overview = {
+        skills: [],
+        personas: [],
+        providers: [],
+        default_provider: "",
+      };
+      let currentConfigFile = null; // { type: 'skill'|'persona'|'yaml', name: string }
+      let allSessions = [];
+      let ws = null; // active WebSocket
+      let streamEl = null; // current streaming bubble DOM node
+      let streamText = ""; // accumulated text token text
+      let streamThinkingText = ""; // accumulated thinking token text
+      let streamIsThinking = false;
+      // Poll deduplication: at most one doPoll in-flight + one queued
+      let doPollInFlight = false;
+      let doPollQueued = false;
+      let lastSessionVersion = 0;   // track version for rewrite detection
+      let editingMessageId = null;  // message_id of the message currently being edited
 
-          <div class="divider"></div>
+      // ── Boot ─────────────────────────────────────────────────────────────
+      async function boot() {
+        await loadOverview();
+        await refreshSessions();
+      }
 
-          <!-- Skills -->
-          <div class="sidebar-section">
-            <div class="sidebar-label">Skills</div>
-            <div id="skills-list">
-              <div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">加载中…</div>
-            </div>
-          </div>
+      async function loadOverview() {
+        try {
+          const r = await api("/config/overview");
+          overview = r;
+          renderSidebar();
+          populateModal();
+        } catch (e) {
+          toast("加载配置失败: " + e.message, true);
+        }
+      }
 
-          <div class="divider"></div>
+      async function refreshSessions() {
+        try {
+          const r = await api("/sessions");
+          allSessions = r.sessions || [];
+          renderSessionsList();
+        } catch (e) {}
+      }
 
-          <!-- Personas -->
-          <div class="sidebar-section">
-            <div class="sidebar-label">身份 Personas</div>
-            <div id="personas-list">
-              <div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">加载中…</div>
-            </div>
-          </div>
-        </div>
+      // ── Render Sidebar ───────────────────────────────────────────────────
+      function renderSidebar() {
+        // Skills
+        const sl = document.getElementById("skills-list");
+        sl.innerHTML = "";
+        if (!overview.skills.length) {
+          sl.innerHTML =
+            '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无 Skill</div>';
+        } else {
+          overview.skills.forEach((s) => {
+            const el = div("sidebar-item", `🔧 ${s.name}`);
+            el.title = s.description || s.name;
+            el.onclick = () => loadConfigFile("skill", s.name);
+            sl.appendChild(el);
+          });
+        }
 
-        <!-- Sidebar bottom -->
-        <div id="sidebar-bottom">
-          <button class="btn btn-sm" style="width:100%" onclick="toggleConfig()">⚙ 配置文件</button>
-        </div>
-      </div>
+        // Personas
+        const pl = document.getElementById("personas-list");
+        pl.innerHTML = "";
+        if (!overview.personas.length) {
+          pl.innerHTML =
+            '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无 Persona</div>';
+        } else {
+          overview.personas.forEach((p) => {
+            const el = div("sidebar-item", `👤 ${p.name}`);
+            el.title = p.description || p.name;
+            el.onclick = () => openNewSession(p.name);
+            pl.appendChild(el);
+          });
+        }
+      }
 
-      <!-- Chat area -->
-      <div id="chat-wrap">
-        <div id="session-header">
-          <span id="session-title" style="font-size:13px;color:var(--text-muted)">未选择会话</span>
-          <span id="session-meta" class="meta hidden"></span>
-          <div style="margin-left:auto;display:flex;gap:6px">
-            <button id="cancel-btn" class="btn btn-sm btn-danger hidden" onclick="cancelSession()">停止</button>
-            <button id="delete-btn" class="btn btn-sm hidden" onclick="deleteSession()">关闭会话</button>
-          </div>
-        </div>
-
-        <div id="error-banner" id="error-banner"></div>
-
-        <!-- Approval panel (shown when WAITING_CONFIRMATION) -->
-        <div id="confirm-panel" class="hidden">
-          <div class="confirm-header">⚠ Agent 请求执行高风险操作，请审批：</div>
-          <div id="confirm-tool-info"></div>
-          <div class="confirm-actions">
-            <button class="btn btn-danger btn-sm" onclick="denyAction()">拒绝</button>
-            <button class="btn btn-approve btn-sm" onclick="confirmAction()">允许执行</button>
-          </div>
-        </div>
-
-        <!-- Messages or empty state -->
-        <div id="messages-wrap">
-          <div id="empty-state">
-            <p>选择一个Persona新建会话</p>
-            <button class="btn btn-primary" onclick="openNewSession()">+ 新建会话</button>
-          </div>
-          <div id="messages" class="hidden"></div>
-        </div>
-
-        <div id="input-bar">
-          <textarea id="msg-input" placeholder="输入消息，Shift+Enter 换行，Enter 发送…" rows="1"
-            onkeydown="handleInputKey(event)" oninput="autoGrow(this)"></textarea>
-          <button class="btn btn-primary" onclick="sendMessage()" id="send-btn">发送</button>
-        </div>
-      </div>
-
-      <!-- Config panel -->
-      <div id="config-panel">
-        <div id="config-panel-header">
-          <span>配置文件</span>
-          <button class="btn-icon btn" onclick="toggleConfig()" title="关闭">✕</button>
-        </div>
-        <div id="config-tree"></div>
-        <div id="config-editor-wrap">
-          <div id="config-filename" style="color:var(--text-muted);font-style:italic">← 选择文件编辑</div>
-          <textarea id="config-editor" placeholder="选择左侧文件…" disabled></textarea>
-          <div id="config-actions">
-            <button class="btn btn-primary btn-sm" onclick="saveConfigFile()" id="config-save-btn" disabled>保存</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteConfigFile()" id="config-del-btn" disabled>删除</button>
-            <span id="config-status"
-              style="font-size:12px;color:var(--text-muted);margin-left:4px;align-self:center"></span>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- #main -->
-  </div><!-- #app -->
-
-  <!-- New Session Modal -->
-  <div id="modal-overlay" class="overlay hidden">
-    <div class="modal">
-      <h2>新建会话</h2>
-      <div class="form-group">
-        <label>Provider</label>
-        <select id="sel-provider"></select>
-      </div>
-      <div class="form-group">
-        <label>Persona（Agent 的身份与权限）</label>
-        <select id="sel-persona">
-          <option value="">— 不使用 Persona —</option>
-        </select>
-        <div id="persona-desc" style="font-size:12px;color:var(--text-muted);margin-top:4px;min-height:16px"></div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn" onclick="closeModal()">取消</button>
-        <button class="btn btn-primary" onclick="createSession()">创建</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toasts -->
-  <div id="toasts"></div>
-
-  <script>
-    'use strict';
-
-    // ── State ────────────────────────────────────────────────────────────
-    let currentSessionId = null;
-    let pollTimer = null;
-    let sessionRefreshTimer = null;
-    let lastMsgCount = 0;
-    let overview = { skills: [], personas: [], providers: [], default_provider: '' };
-    let currentConfigFile = null;  // { type: 'skill'|'persona'|'yaml', name: string }
-    let allSessions = [];
-    let ws = null;               // active WebSocket
-    let streamEl = null;         // current streaming bubble DOM node
-    let streamText = '';         // accumulated text token text
-    let streamThinkingText = ''; // accumulated thinking token text
-    let streamIsThinking = false;
-    // Poll deduplication: at most one doPoll in-flight + one queued
-    let doPollInFlight = false;
-    let doPollQueued  = false;
-
-    // ── Boot ─────────────────────────────────────────────────────────────
-    async function boot() {
-      await loadOverview();
-      await refreshSessions();
-    }
-
-    async function loadOverview() {
-      try {
-        const r = await api('/config/overview');
-        overview = r;
-        renderSidebar();
-        populateModal();
-      } catch (e) { toast('加载配置失败: ' + e.message, true); }
-    }
-
-    async function refreshSessions() {
-      try {
-        const r = await api('/sessions');
-        allSessions = r.sessions || [];
-        renderSessionsList();
-      } catch (e) { }
-    }
-
-    // ── Render Sidebar ───────────────────────────────────────────────────
-    function renderSidebar() {
-      // Skills
-      const sl = document.getElementById('skills-list');
-      sl.innerHTML = '';
-      if (!overview.skills.length) {
-        sl.innerHTML = '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无 Skill</div>';
-      } else {
-        overview.skills.forEach(s => {
-          const el = div('sidebar-item', `🔧 ${s.name}`);
-          el.title = s.description || s.name;
-          el.onclick = () => loadConfigFile('skill', s.name);
+      function renderSessionsList() {
+        const sl = document.getElementById("sessions-list");
+        sl.innerHTML = "";
+        if (!allSessions.length) {
+          sl.innerHTML =
+            '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无会话</div>';
+          return;
+        }
+        allSessions.forEach((s) => {
+          const stateClass =
+            s.state === "RUNNING"
+              ? "badge-run"
+              : s.state === "ERROR"
+                ? "badge-err"
+                : "badge-done";
+          const stateText =
+            s.state === "RUNNING"
+              ? "运行"
+              : s.state === "ERROR"
+                ? "错误"
+                : s.state === "WAITING_INPUT"
+                  ? "等待"
+                  : "完成";
+          const label =
+            s.title || s.display_name || s.persona || s.session_id.slice(0, 8);
+          if (s.display_name && !s.title) {
+            // Show 🤖 prefix for sub-agent display names
+            el.title = s.display_name;
+          }
+          const el = div(
+            "sidebar-item" +
+              (s.session_id === currentSessionId ? " active" : ""),
+            label,
+          );
+          const badge = div("badge " + stateClass, stateText);
+          el.appendChild(badge);
+          el.onclick = () => switchSession(s.session_id);
           sl.appendChild(el);
         });
       }
 
-      // Personas
-      const pl = document.getElementById('personas-list');
-      pl.innerHTML = '';
-      if (!overview.personas.length) {
-        pl.innerHTML = '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无 Persona</div>';
-      } else {
-        overview.personas.forEach(p => {
-          const el = div('sidebar-item', `👤 ${p.name}`);
-          el.title = p.description || p.name;
-          el.onclick = () => openNewSession(p.name);
-          pl.appendChild(el);
+      // ── Modal ─────────────────────────────────────────────────────────────
+      function populateModal() {
+        const provSel = document.getElementById("sel-provider");
+        provSel.innerHTML = "";
+        overview.providers.forEach((p) => {
+          const opt = document.createElement("option");
+          opt.value = p;
+          opt.textContent = p;
+          if (p === overview.default_provider) opt.selected = true;
+          provSel.appendChild(opt);
         });
+
+        const persSel = document.getElementById("sel-persona");
+        persSel.innerHTML = '<option value="">— 不使用 Persona —</option>';
+        overview.personas.forEach((p) => {
+          const opt = document.createElement("option");
+          opt.value = p.name;
+          opt.textContent = p.description
+            ? `${p.name} — ${p.description}`
+            : p.name;
+          opt.dataset.desc = p.description || "";
+          persSel.appendChild(opt);
+        });
+
+        // Show persona description on change
+        persSel.onchange = () => {
+          const selected = persSel.options[persSel.selectedIndex];
+          const descEl = document.getElementById("persona-desc");
+          if (descEl)
+            descEl.textContent = selected ? selected.dataset.desc || "" : "";
+        };
       }
-    }
 
-    function renderSessionsList() {
-      const sl = document.getElementById('sessions-list');
-      sl.innerHTML = '';
-      if (!allSessions.length) {
-        sl.innerHTML = '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无会话</div>';
-        return;
+      function openNewSession(prePersona = "") {
+        document.getElementById("modal-overlay").classList.remove("hidden");
+        if (prePersona) {
+          document.getElementById("sel-persona").value = prePersona;
+          document
+            .getElementById("sel-persona")
+            .dispatchEvent(new Event("change"));
+        }
       }
-      allSessions.forEach(s => {
-        const stateClass = s.state === 'RUNNING' ? 'badge-run' : s.state === 'ERROR' ? 'badge-err' : 'badge-done';
-        const stateText = s.state === 'RUNNING' ? '运行' : s.state === 'ERROR' ? '错误' : s.state === 'WAITING_INPUT' ? '等待' : '完成';
-        const label = s.persona ? `👤 ${s.persona}` : `💬 ${s.session_id.slice(0, 8)}`;
-        const el = div('sidebar-item' + (s.session_id === currentSessionId ? ' active' : ''), label);
-        const badge = div('badge ' + stateClass, stateText);
-        el.appendChild(badge);
-        el.onclick = () => switchSession(s.session_id);
-        sl.appendChild(el);
-      });
-    }
-
-    // ── Modal ─────────────────────────────────────────────────────────────
-    function populateModal() {
-      const provSel = document.getElementById('sel-provider');
-      provSel.innerHTML = '';
-      overview.providers.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p; opt.textContent = p;
-        if (p === overview.default_provider) opt.selected = true;
-        provSel.appendChild(opt);
-      });
-
-      const persSel = document.getElementById('sel-persona');
-      persSel.innerHTML = '<option value="">— 不使用 Persona —</option>';
-      overview.personas.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.name;
-        opt.textContent = p.description ? `${p.name} — ${p.description}` : p.name;
-        opt.dataset.desc = p.description || '';
-        persSel.appendChild(opt);
-      });
-
-      // Show persona description on change
-      persSel.onchange = () => {
-        const selected = persSel.options[persSel.selectedIndex];
-        const descEl = document.getElementById('persona-desc');
-        if (descEl) descEl.textContent = selected ? (selected.dataset.desc || '') : '';
-      };
-    }
-
-    function openNewSession(prePersona = '') {
-      document.getElementById('modal-overlay').classList.remove('hidden');
-      if (prePersona) {
-        document.getElementById('sel-persona').value = prePersona;
-        document.getElementById('sel-persona').dispatchEvent(new Event('change'));
+      function closeModal() {
+        document.getElementById("modal-overlay").classList.add("hidden");
+        document.getElementById("sel-persona").value = "";
+        const descEl = document.getElementById("persona-desc");
+        if (descEl) descEl.textContent = "";
       }
-    }
-    function closeModal() {
-      document.getElementById('modal-overlay').classList.add('hidden');
-      document.getElementById('sel-persona').value = '';
-      const descEl = document.getElementById('persona-desc');
-      if (descEl) descEl.textContent = '';
-    }
 
-    async function createSession() {
-      const btn = document.querySelector('#modal-overlay .btn-primary');
-      if (btn.disabled) return;
-      btn.disabled = true;
-      btn.textContent = '创建中…';
+      async function createSession() {
+        const btn = document.querySelector("#modal-overlay .btn-primary");
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = "创建中…";
 
-      const persona = document.getElementById('sel-persona').value;
-      const provider = document.getElementById('sel-provider').value;
+        const persona = document.getElementById("sel-persona").value;
+        const provider = document.getElementById("sel-provider").value;
 
-      const body = { provider };
-      if (persona) body.persona = persona;
+        const body = { provider };
+        if (persona) body.persona = persona;
 
-      try {
-        const r = await api('/sessions', 'POST', body);
-        closeModal();
-        toast('会话已创建');
-        await refreshSessions();
-        switchSession(r.session_id);
-      } catch (e) {
-        toast('创建失败: ' + e.message, true);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '创建';
+        try {
+          const r = await api("/sessions", "POST", body);
+          closeModal();
+          toast("会话已创建");
+          await refreshSessions();
+          switchSession(r.session_id);
+        } catch (e) {
+          toast("创建失败: " + e.message, true);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "创建";
+        }
       }
-    }
 
-    // ── Session management ────────────────────────────────────────────────
-    async function switchSession(id) {
-      stopPolling();
-      disconnectWS();
-      currentSessionId = id;
-      lastMsgCount = 0;
-      doPollInFlight = false;
-      doPollQueued  = false;
-      renderSessionsList();
-      showChatArea();
-
-      // Load initial state
-      try {
-        const snap = await api(`/sessions/${id}/state`);
-        renderSnapshot(snap);
-        if (snap.is_running) startPolling();
-      } catch (e) { toast('加载会话失败: ' + e.message, true); }
-
-      connectWS(id);
-    }
-
-    function showChatArea() {
-      document.getElementById('empty-state').classList.add('hidden');
-      document.getElementById('messages').classList.remove('hidden');
-      document.getElementById('messages').innerHTML = '';
-      document.getElementById('delete-btn').classList.remove('hidden');
-    }
-
-    async function deleteSession() {
-      if (!currentSessionId) return;
-      if (!confirm('关闭该会话？')) return;
-      try {
-        await api(`/sessions/${currentSessionId}`, 'DELETE');
+      // ── Session management ────────────────────────────────────────────────
+      async function switchSession(id) {
         stopPolling();
         disconnectWS();
-        currentSessionId = null;
+        currentSessionId = id;
         lastMsgCount = 0;
-        document.getElementById('messages').classList.add('hidden');
-        document.getElementById('empty-state').classList.remove('hidden');
-        document.getElementById('session-title').textContent = '未选择会话';
-        document.getElementById('session-meta').classList.add('hidden');
-        document.getElementById('delete-btn').classList.add('hidden');
-        document.getElementById('cancel-btn').classList.add('hidden');
-        await refreshSessions();
-        toast('会话已关闭');
-      } catch (e) { toast('关闭失败: ' + e.message, true); }
-    }
+        lastSessionVersion = 0;
+        editingMessageId = null;
+        doPollInFlight = false;
+        doPollQueued = false;
+        currentQuestionMode = "noquestion";
+        updateModeToggleUI();
+        renderSessionsList();
+        showChatArea();
 
-    async function confirmAction() {
-      if (!currentSessionId) return;
-      // Immediately hide panel (optimistic update — don't wait for server round-trip)
-      document.getElementById('confirm-panel').classList.add('hidden');
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'confirm' }));
-      } else {
-        await api(`/sessions/${currentSessionId}/confirm`, 'POST');
-        doPoll();
-      }
-    }
-
-    async function denyAction() {
-      if (!currentSessionId) return;
-      // Immediately hide panel
-      document.getElementById('confirm-panel').classList.add('hidden');
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'deny' }));
-      } else {
-        await api(`/sessions/${currentSessionId}/deny`, 'POST');
-        doPoll();
-      }
-    }
-
-    async function cancelSession() {
-      if (!currentSessionId) return;
-      try {
-        await api(`/sessions/${currentSessionId}/cancel`, 'POST');
-        toast('已发送停止信号');
-      } catch (e) { toast('停止失败: ' + e.message, true); }
-    }
-
-    // ── Messaging ─────────────────────────────────────────────────────────
-    async function sendMessage() {
-      const inp = document.getElementById('msg-input');
-      const btn = document.getElementById('send-btn');
-      const text = inp.value.trim();
-      if (!text || !currentSessionId || btn.disabled) return;
-
-      btn.disabled = true;
-      inp.value = '';
-      autoGrow(inp);
-
-      try {
-        await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
-        triggerPoll(); // immediately render the user message in the UI
-        // Only start polling if WS is not connected — WS state frame will trigger doPoll when done.
-        if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
-        document.getElementById('cancel-btn').classList.remove('hidden');
-      } catch (e) {
-        toast('发送失败: ' + e.message, true);
-      } finally {
-        btn.disabled = false;
-        inp.focus();
-      }
-    }
-
-    function handleInputKey(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    }
-
-    function autoGrow(el) {
-      el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-    }
-
-    // ── Polling ───────────────────────────────────────────────────────────
-    function startPolling() {
-      if (pollTimer) return;
-      pollTimer = setInterval(doPoll, 800);
-      // Refresh the session list every 3s while running so sub-agent sessions appear
-      sessionRefreshTimer = setInterval(refreshSessions, 3000);
-    }
-
-    function stopPolling() {
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-      if (sessionRefreshTimer) { clearInterval(sessionRefreshTimer); sessionRefreshTimer = null; }
-      document.getElementById('running-indicator').classList.add('hidden');
-      document.getElementById('cancel-btn').classList.add('hidden');
-    }
-
-    // ── WebSocket streaming ───────────────────────────────────────────────
-    function connectWS(sessionId) {
-      disconnectWS();
-      streamEl = null; streamText = ''; streamThinkingText = ''; streamIsThinking = false;
-      const wsUrl = location.origin.replace(/^http/, 'ws') + '/ws/' + sessionId;
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = handleWsFrame;
-      ws.onclose = () => { ws = null; if (currentSessionId) startPolling(); }; // fallback if WS drops
-    }
-
-    function disconnectWS() {
-      if (ws) { ws.onclose = null; ws.close(); ws = null; }
-      if (streamEl) { streamEl.remove(); streamEl = null; }
-      streamText = ''; streamThinkingText = ''; streamIsThinking = false;
-    }
-
-    function handleWsFrame(ev) {
-      let frame;
-      try { frame = JSON.parse(ev.data); } catch { return; }
-      const container = document.getElementById('messages');
-      if (!container) return;
-
-      if (frame.type === 'thinking') {
-        ensureStreamEl(container);
-        streamIsThinking = true;
-        streamText = '';
-        streamThinkingText = '';
-        streamEl.querySelector('.msg-bubble').innerHTML =
-          '<em style="color:var(--text-muted);font-style:italic">💭 正在思考…</em>';
-
-      } else if (frame.type === 'thinking_token') {
-        streamThinkingText += frame.data;
-        ensureStreamEl(container);
-        const bubble = streamEl.querySelector('.msg-bubble');
-        // Build scrollable structure on first token
-        let thinkBody = bubble.querySelector('.thinking-stream-body');
-        if (!thinkBody) {
-          bubble.innerHTML =
-            '<em style="color:var(--text-muted);font-style:italic">💭 思考中…</em>' +
-            '<div class="thinking-stream-body" style="max-height:160px;overflow-y:auto;' +
-            'font-size:12px;color:var(--text-muted);white-space:pre-wrap;' +
-            'padding:4px 0;margin-top:4px;line-height:1.6"></div>';
-          thinkBody = bubble.querySelector('.thinking-stream-body');
+        // Load initial state
+        try {
+          const snap = await api(`/sessions/${id}/state`);
+          renderSnapshot(snap);
+          if (snap.is_running) startPolling();
+        } catch (e) {
+          toast("加载会话失败: " + e.message, true);
         }
-        thinkBody.textContent = streamThinkingText;
-        thinkBody.scrollTop = thinkBody.scrollHeight;
-        container.scrollTop = container.scrollHeight;
 
-      } else if (frame.type === 'token') {
-        if (streamIsThinking) { streamIsThinking = false; streamText = ''; streamThinkingText = ''; }
-        ensureStreamEl(container);
-        streamText += frame.data;
-        streamEl.querySelector('.msg-bubble').textContent = streamText;
-        container.scrollTop = container.scrollHeight;
+        connectWS(id);
+      }
 
-      } else if (frame.type === 'message') {
-        // A message completed (tool call or tool result). Trigger an incremental
-        // snapshot fetch so renderSnapshot() is the single source of truth.
-        // This avoids lastMsgCount desync from direct rendering + doPoll races.
-        const m = frame.data;
-        const isToolActivity =
-          (m?.role === 'assistant' && (m.content || []).some(b => b.type === 'tool_call')) ||
-          m?.role === 'tool';
-        if (isToolActivity) {
-          triggerPoll();
-          // If a spawn_agent/spawn_agents call was made, refresh the session list
-          // after a short delay so new sub-agent sessions appear in the sidebar.
-          const hasSpawnCall = m?.role === 'assistant' && (m.content || []).some(
-            b => b.type === 'tool_call' && (b.tool_name === 'spawn_agent' || b.tool_name === 'spawn_agents')
+      function showChatArea() {
+        document.getElementById("empty-state").classList.add("hidden");
+        document.getElementById("messages").classList.remove("hidden");
+        document.getElementById("messages").innerHTML = "";
+        document.getElementById("delete-btn").classList.remove("hidden");
+      }
+
+      async function deleteSession() {
+        if (!currentSessionId) return;
+        if (!confirm("关闭该会话？")) return;
+        try {
+          await api(`/sessions/${currentSessionId}`, "DELETE");
+          stopPolling();
+          disconnectWS();
+          currentSessionId = null;
+          lastMsgCount = 0;
+          document.getElementById("messages").classList.add("hidden");
+          document.getElementById("empty-state").classList.remove("hidden");
+          document.getElementById("session-title").textContent = "未选择会话";
+          document.getElementById("session-meta").classList.add("hidden");
+          document.getElementById("delete-btn").classList.add("hidden");
+          document.getElementById("cancel-btn").classList.add("hidden");
+          await refreshSessions();
+          toast("会话已关闭");
+        } catch (e) {
+          toast("关闭失败: " + e.message, true);
+        }
+      }
+
+      async function confirmAction() {
+        if (!currentSessionId) return;
+        // Immediately hide panel (optimistic update — don't wait for server round-trip)
+        document.getElementById("confirm-panel").classList.add("hidden");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "confirm" }));
+        } else {
+          await api(`/sessions/${currentSessionId}/confirm`, "POST");
+          doPoll();
+        }
+      }
+
+      async function denyAction() {
+        if (!currentSessionId) return;
+        // Immediately hide panel
+        document.getElementById("confirm-panel").classList.add("hidden");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "deny" }));
+        } else {
+          await api(`/sessions/${currentSessionId}/deny`, "POST");
+          doPoll();
+        }
+      }
+
+      async function cancelSession() {
+        if (!currentSessionId) return;
+        try {
+          await api(`/sessions/${currentSessionId}/cancel`, "POST");
+          toast("已发送停止信号");
+        } catch (e) {
+          toast("停止失败: " + e.message, true);
+        }
+      }
+
+      // ── Question mode + clarifications ──────────────────────────────────
+      let currentQuestionMode = "noquestion";
+
+      function setQuestionMode(mode) {
+        if (mode !== "question" && mode !== "noquestion") return;
+        if (!currentSessionId) {
+          toast("请先选择或创建一个会话", true);
+          return;
+        }
+        if (mode === currentQuestionMode) return;
+        api(`/sessions/${currentSessionId}/mode`, "PATCH", {
+          question_mode: mode,
+        })
+          .then((data) => {
+            currentQuestionMode = data.question_mode || mode;
+            updateModeToggleUI();
+            toast(
+              currentQuestionMode === "question"
+                ? "已开启提问模式：AI 将对模糊需求主动提问澄清"
+                : "已切换为直接执行模式",
+            );
+          })
+          .catch((e) => toast("切换模式失败: " + e.message, true));
+      }
+
+      function updateModeToggleUI() {
+        const buttons = document.querySelectorAll("#mode-toggle button");
+        buttons.forEach((b) => {
+          if (b.dataset.mode === currentQuestionMode) b.classList.add("active");
+          else b.classList.remove("active");
+        });
+        const hint = document.getElementById("mode-hint");
+        if (hint) {
+          hint.textContent =
+            currentQuestionMode === "question"
+              ? "允许 AI 在需求模糊时向你提问澄清"
+              : "AI 将基于合理假设直接执行，结果中说明关键假设";
+        }
+      }
+
+      // ── Question Mode renderer (OpenCode/Claude Code style) ────────────────
+//
+// Supports multi-question cards with single/multi-select, custom text input,
+// keyboard navigation (Tab / Enter / Space / digit-keys), and a11y attributes.
+//
+// Backwards-compat: legacy single-question snapshots with `question` /
+// `options` / `multi_select` still render correctly (auto-converted to one
+// QuestionPrompt with custom=true).
+
+const _coerceQuestionPrompt = (raw) => {
+  // New shape already in list form
+  if (Array.isArray(raw.questions) && raw.questions.length > 0) {
+    return raw.questions.map((q) => ({
+      question: q.question || "",
+      header: q.header || "",
+      options: (q.options || []).map((o) =>
+        typeof o === "string"
+          ? { label: o, description: "" }
+          : { label: o.label || "", description: o.description || "" },
+      ),
+      multiple: !!q.multiple,
+      custom: q.custom !== false,
+    }));
+  }
+  // Legacy shape: question + options + multi_select
+  if (typeof raw.question === "string") {
+    return [
+      {
+        question: raw.question,
+        header: "",
+        options: (raw.options || []).map((o) =>
+          typeof o === "string"
+            ? { label: o, description: "" }
+            : { label: o.label || "", description: o.description || "" },
+        ),
+        multiple: !!raw.multi_select,
+        custom: true,
+      },
+    ];
+  }
+  return [];
+};
+
+const _selectedForCard = (requestId) => {
+  // Per-card transient selection state: { requestId -> { [qi]: string[] } }
+  if (!window.__clarifState) window.__clarifState = {};
+  if (!window.__clarifState[requestId]) {
+    window.__clarifState[requestId] = {};
+  }
+  return window.__clarifState[requestId];
+};
+
+const _clearClarifState = (requestId) => {
+  if (window.__clarifState && window.__clarifState[requestId]) {
+    delete window.__clarifState[requestId];
+  }
+};
+
+const _cardIsAnswerable = (card) => {
+  // Returns true if every question has at least one selection (or the user
+  // chose to leave it blank — but in that case the question is still answerable).
+  // We always allow submitting; backend allows empty inner lists.
+  return true;
+};
+
+const _renderQuestionBlock = (q, qi, requestId) => {
+  const isMulti = !!q.multiple;
+  const inputType = isMulti ? "checkbox" : "radio";
+  const name = `clarif-${requestId}-q${qi}`;
+  const optsHtml = (q.options || [])
+    .map((o, oi) => {
+      const id = `clarif-${requestId}-q${qi}-o${oi}`;
+      return `
+        <div class="clarify-option" data-qi="${qi}" data-oi="${oi}"
+             role="${inputType === "checkbox" ? "checkbox" : "radio"}"
+             tabindex="0"
+             aria-checked="false"
+             data-shortcut="${oi + 1}">
+          <input type="${inputType}" name="${name}" id="${id}"
+                 value="${escHtml(o.label)}" data-qi="${qi}" data-oi="${oi}">
+          <label for="${id}" style="flex:1; cursor:pointer;">
+            <div>${escHtml(o.label)}</div>
+            ${
+              o.description
+                ? `<div class="clarify-option-desc">${escHtml(o.description)}</div>`
+                : ""
+            }
+          </label>
+        </div>
+      `;
+    })
+    .join("");
+
+  const customHtml = q.custom
+    ? `<input type="text" class="clarify-custom-input"
+                data-qi="${qi}"
+                placeholder="Type your own answer"
+                aria-label="Custom answer for question ${qi + 1}">`
+    : "";
+
+  return `
+    <div class="clarify-question-block" data-qi="${qi}">
+      ${
+        q.header
+          ? `<div class="clarify-header">${escHtml(q.header)}</div>`
+          : ""
+      }
+      <div class="clarify-question">${escHtml(q.question || "请选择")}</div>
+      <div class="clarify-options">${optsHtml}</div>
+      ${customHtml}
+      <div class="clarify-status" data-qi="${qi}"></div>
+    </div>
+  `;
+};
+
+const _attachOptionHandlers = (card, requestId, prompts) => {
+  const selection = _selectedForCard(requestId);
+  // Initialize empty selection for each question
+  prompts.forEach((_, qi) => {
+    if (!selection[qi]) selection[qi] = [];
+  });
+
+  const updateSelectionUI = (qi) => {
+    const sel = selection[qi] || [];
+    const block = card.querySelector(`.clarify-question-block[data-qi="${qi}"]`);
+    if (!block) return;
+    block.querySelectorAll(".clarify-option").forEach((opt) => {
+      const oi = parseInt(opt.dataset.oi, 10);
+      const checked = sel.includes(prompts[qi].options[oi].label);
+      const input = opt.querySelector("input");
+      if (input) input.checked = checked;
+      opt.classList.toggle("is-selected", checked);
+      opt.setAttribute("aria-checked", String(checked));
+    });
+  };
+
+  prompts.forEach((_, qi) => updateSelectionUI(qi));
+
+  // Click / change handlers on the option inputs
+  card.querySelectorAll(".clarify-option input").forEach((input) => {
+    input.addEventListener("change", (e) => {
+      const qi = parseInt(e.target.dataset.qi, 10);
+      const oi = parseInt(e.target.dataset.oi, 10);
+      const label = prompts[qi].options[oi].label;
+      const isMulti = !!prompts[qi].multiple;
+      let sel = selection[qi] || [];
+      if (isMulti) {
+        if (e.target.checked) {
+          if (!sel.includes(label)) sel.push(label);
+        } else {
+          sel = sel.filter((x) => x !== label);
+        }
+      } else {
+        // Single-select: replace
+        sel = e.target.checked ? [label] : [];
+      }
+      selection[qi] = sel;
+      updateSelectionUI(qi);
+    });
+  });
+
+  // Custom input handler: replace selection if the user types
+  card.querySelectorAll(".clarify-custom-input").forEach((inp) => {
+    inp.addEventListener("input", (e) => {
+      const qi = parseInt(e.target.dataset.qi, 10);
+      const text = e.target.value.trim();
+      const optionLabels = new Set(prompts[qi].options.map((o) => o.label));
+      // Find any checked option label in this question
+      const checkedLabels = (selection[qi] || []).filter((x) =>
+        optionLabels.has(x),
+      );
+      if (text) {
+        selection[qi] = [...checkedLabels, text];
+      } else {
+        selection[qi] = checkedLabels;
+      }
+    });
+  });
+
+  // Keyboard: Space toggles the focused option; digit keys 1-9 toggle the Nth option
+  card.querySelectorAll(".clarify-option").forEach((opt) => {
+    opt.addEventListener("keydown", (e) => {
+      const qi = parseInt(opt.dataset.qi, 10);
+      const oi = parseInt(opt.dataset.oi, 10);
+      const isMulti = !!prompts[qi].multiple;
+      const label = prompts[qi].options[oi].label;
+      let sel = selection[qi] || [];
+
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (isMulti) {
+          sel = sel.includes(label)
+            ? sel.filter((x) => x !== label)
+            : [...sel, label];
+        } else {
+          sel = [label];
+        }
+        selection[qi] = sel;
+        updateSelectionUI(qi);
+      } else if (/^[1-9]$/.test(e.key)) {
+        // digit-key shortcut
+        const target = parseInt(e.key, 10) - 1;
+        if (target === oi) {
+          // Already on this option → toggle
+          if (isMulti) {
+            sel = sel.includes(label)
+              ? sel.filter((x) => x !== label)
+              : [...sel, label];
+          } else {
+            sel = [label];
+          }
+          selection[qi] = sel;
+          updateSelectionUI(qi);
+          e.preventDefault();
+        }
+      }
+    });
+  });
+};
+
+const _collectAnswers = (card, requestId, prompts) => {
+  const selection = _selectedForCard(requestId);
+  return prompts.map((q, qi) => {
+    const sel = (selection[qi] || []).slice();
+    // If custom=true and there's a custom text, include it
+    if (q.custom) {
+      const inp = card.querySelector(
+        `.clarify-custom-input[data-qi="${qi}"]`,
+      );
+      const text = inp ? inp.value.trim() : "";
+      const optionLabels = new Set(q.options.map((o) => o.label));
+      const labels = sel.filter((x) => optionLabels.has(x));
+      const customs = sel.filter((x) => !optionLabels.has(x));
+      if (text && !customs.includes(text)) customs.push(text);
+      return [...labels, ...customs];
+    }
+    return sel;
+  });
+};
+
+function renderClarificationCard(clarif) {
+  const card = document.createElement("div");
+  card.className = "clarify-card";
+  card.dataset.clarifId = clarif.request_id;
+
+  const prompts = _coerceQuestionPrompt(clarif);
+  if (prompts.length === 0) {
+    card.textContent = "[invalid question payload]";
+    return card;
+  }
+
+  // Card header
+  const header = document.createElement("div");
+  header.className = "clarify-question";
+  header.textContent = `🤔 Agent asks ${prompts.length} question${prompts.length > 1 ? "s" : ""}:`;
+  card.appendChild(header);
+
+  // Each question block
+  prompts.forEach((q, qi) => {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = _renderQuestionBlock(q, qi, clarif.request_id);
+    card.appendChild(wrap.firstElementChild);
+  });
+
+  // Actions
+  const actions = document.createElement("div");
+  actions.className = "clarify-actions";
+  const submitBtn = document.createElement("button");
+  submitBtn.className = "btn btn-primary";
+  submitBtn.textContent = "提交";
+  submitBtn.dataset.role = "submit";
+  submitBtn.addEventListener("click", () =>
+    submitClarification(clarif.request_id),
+  );
+  const skipBtn = document.createElement("button");
+  skipBtn.className = "btn";
+  skipBtn.textContent = "跳过";
+  skipBtn.dataset.role = "skip";
+  skipBtn.addEventListener("click", () =>
+    rejectClarification(clarif.request_id),
+  );
+  actions.appendChild(submitBtn);
+  actions.appendChild(skipBtn);
+  card.appendChild(actions);
+
+  // Status / error slot
+  const status = document.createElement("div");
+  status.className = "clarify-status";
+  status.dataset.role = "status";
+  card.appendChild(status);
+
+  // Wire up selection / keyboard
+  _attachOptionHandlers(card, clarif.request_id, prompts);
+
+  // Card-level Enter key to submit (when focus is anywhere in the card)
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      const tag = (e.target.tagName || "").toUpperCase();
+      // Don't hijack Enter in textarea / multi-line fields
+      if (tag === "TEXTAREA") return;
+      // If focus is on the custom input, Enter submits
+      if (e.target.classList.contains("clarify-custom-input")) {
+        e.preventDefault();
+        submitClarification(clarif.request_id);
+      }
+    }
+  });
+
+  return card;
+}
+
+async function submitClarification(requestId) {
+  const card = document.querySelector(
+    `.clarify-card[data-clarif-id="${requestId}"]`,
+  );
+  if (!card) return;
+  const status = card.querySelector('[data-role="status"]');
+
+  // Re-collect prompts from rendered DOM via the requestId → prompts map
+  const prompts = _renderedPrompts[requestId];
+  if (!prompts) {
+    if (status) status.textContent = "Internal error: prompts not found";
+    return;
+  }
+
+  const answers = _collectAnswers(card, requestId, prompts);
+  // At least one question must be answered? For now, allow all-empty.
+  // (User can click Skip if they want to reject entirely.)
+
+  // Disable buttons
+  card.querySelectorAll(".clarify-actions .btn").forEach((b) => {
+    b.disabled = true;
+  });
+  const submitBtn = card.querySelector('[data-role="submit"]');
+  if (submitBtn) submitBtn.textContent = "已提交…";
+  if (status) status.textContent = "提交中…";
+
+  try {
+    await api(
+      `/sessions/${currentSessionId}/questions/${requestId}/reply`,
+      "POST",
+      { answers },
+    );
+    toast("已提交回答");
+    // Lock the card as readonly with the chosen answers
+    _lockClarifCardAsReadonly(card, requestId, prompts, answers);
+    _clearClarifState(requestId);
+    delete _renderedPrompts[requestId];
+    triggerPoll();
+    if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+  } catch (e) {
+    if (status) {
+      status.classList.add("clarify-error");
+      status.textContent = "提交失败: " + e.message;
+    } else {
+      toast("提交失败: " + e.message, true);
+    }
+    card.querySelectorAll(".clarify-actions .btn").forEach((b) => {
+      b.disabled = false;
+    });
+    if (submitBtn) submitBtn.textContent = "提交";
+  }
+}
+
+async function rejectClarification(requestId) {
+  const card = document.querySelector(
+    `.clarify-card[data-clarif-id="${requestId}"]`,
+  );
+  if (!card) return;
+  card.querySelectorAll(".clarify-actions .btn").forEach((b) => {
+    b.disabled = true;
+  });
+  const status = card.querySelector('[data-role="status"]');
+  if (status) status.textContent = "跳过中…";
+  try {
+    await api(
+      `/sessions/${currentSessionId}/questions/${requestId}/reject`,
+      "POST",
+    );
+    toast("已跳过");
+    _lockClarifCardAsReadonly(card, requestId, [], []);
+    _clearClarifState(requestId);
+    delete _renderedPrompts[requestId];
+    triggerPoll();
+    if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+  } catch (e) {
+    if (status) {
+      status.classList.add("clarify-error");
+      status.textContent = "跳过失败: " + e.message;
+    } else {
+      toast("跳过失败: " + e.message, true);
+    }
+    card.querySelectorAll(".clarify-actions .btn").forEach((b) => {
+      b.disabled = false;
+    });
+  }
+}
+
+const _renderedPrompts = {};
+
+const _lockClarifCardAsReadonly = (card, requestId, prompts, answers) => {
+  card.classList.add("is-readonly");
+  // Make all inputs read-only
+  card.querySelectorAll("input").forEach((inp) => {
+    inp.disabled = true;
+  });
+  // Show the chosen answer in each block's status slot
+  card.querySelectorAll(".clarify-question-block").forEach((block) => {
+    const qi = parseInt(block.dataset.qi, 10);
+    const statusEl = block.querySelector(".clarify-status");
+    const ans = (answers && answers[qi]) || [];
+    if (statusEl) {
+      statusEl.classList.remove("clarify-error");
+      if (ans.length === 0) {
+        statusEl.textContent = "（未选择）";
+      } else {
+        statusEl.textContent = "已选择: " + ans.join(", ");
+      }
+    }
+  });
+  const cardStatus = card.querySelector('[data-role="status"]');
+  if (cardStatus) cardStatus.textContent = "已提交，等待 Agent 继续…";
+};
+
+function renderPendingClarifications(snap) {
+  const container = document.getElementById("messages");
+  if (!container) return;
+  // Remove all existing question cards (so we don't show stale ones)
+  container.querySelectorAll(".clarify-card").forEach((el) => el.remove());
+  // Canonical key: pending_question_requests. WS events drive the
+  // primary sync; this snapshot path is restore-only.
+  const list = snap.pending_question_requests || [];
+  if (!list.length) return;
+  // Only show the most recent pending question
+  const latest = list[list.length - 1];
+  const prompts = _coerceQuestionPrompt(latest);
+  _renderedPrompts[latest.request_id] = prompts;
+  const card = renderClarificationCard(latest);
+  const dots = container.querySelector("#typing-dots");
+  if (dots) {
+    container.insertBefore(card, dots);
+  } else {
+    container.appendChild(card);
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+      // ── Messaging ─────────────────────────────────────────────────────────
+      async function sendMessage() {
+        const inp = document.getElementById("msg-input");
+        const btn = document.getElementById("send-btn");
+        const text = inp.value.trim();
+        if (!text || !currentSessionId || btn.disabled) return;
+
+        btn.disabled = true;
+        inp.value = "";
+        autoGrow(inp);
+
+        try {
+          await api(`/sessions/${currentSessionId}/messages`, "POST", { text });
+          triggerPoll(); // immediately render the user message in the UI
+          // Only start polling if WS is not connected — WS state frame will trigger doPoll when done.
+          if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+          document.getElementById("cancel-btn").classList.remove("hidden");
+        } catch (e) {
+          toast("发送失败: " + e.message, true);
+        } finally {
+          btn.disabled = false;
+          inp.focus();
+        }
+      }
+
+      function handleInputKey(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      }
+
+      function autoGrow(el) {
+        el.style.height = "auto";
+        el.style.height = Math.min(el.scrollHeight, 120) + "px";
+      }
+
+      // ── Polling ───────────────────────────────────────────────────────────
+      function startPolling() {
+        if (pollTimer) return;
+        pollTimer = setInterval(doPoll, 800);
+        // Refresh the session list every 3s while running so sub-agent sessions appear
+        sessionRefreshTimer = setInterval(refreshSessions, 3000);
+      }
+
+      function stopPolling() {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        if (sessionRefreshTimer) {
+          clearInterval(sessionRefreshTimer);
+          sessionRefreshTimer = null;
+        }
+        document.getElementById("running-indicator").classList.add("hidden");
+        document.getElementById("cancel-btn").classList.add("hidden");
+      }
+
+      // ── WebSocket streaming ───────────────────────────────────────────────
+      function connectWS(sessionId) {
+        disconnectWS();
+        streamEl = null;
+        streamText = "";
+        streamThinkingText = "";
+        streamIsThinking = false;
+        const wsUrl =
+          location.origin.replace(/^http/, "ws") + "/ws/" + sessionId;
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = handleWsFrame;
+        ws.onclose = () => {
+          ws = null;
+          if (currentSessionId) startPolling();
+        }; // fallback if WS drops
+      }
+
+      function disconnectWS() {
+        if (ws) {
+          ws.onclose = null;
+          ws.close();
+          ws = null;
+        }
+        if (streamEl) {
+          streamEl.remove();
+          streamEl = null;
+        }
+        streamText = "";
+        streamThinkingText = "";
+        streamIsThinking = false;
+      }
+
+      function handleWsFrame(ev) {
+        let frame;
+        try {
+          frame = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        const container = document.getElementById("messages");
+        if (!container) return;
+
+        if (frame.type === "thinking") {
+          ensureStreamEl(container);
+          streamIsThinking = true;
+          streamText = "";
+          streamThinkingText = "";
+          streamEl.querySelector(".msg-bubble").innerHTML =
+            '<em style="color:var(--text-muted);font-style:italic">💭 正在思考…</em>';
+        } else if (frame.type === "thinking_token") {
+          streamThinkingText += frame.data;
+          ensureStreamEl(container);
+          const bubble = streamEl.querySelector(".msg-bubble");
+          // Build scrollable structure on first token
+          let thinkBody = bubble.querySelector(".thinking-stream-body");
+          if (!thinkBody) {
+            bubble.innerHTML =
+              '<em style="color:var(--text-muted);font-style:italic">💭 思考中…</em>' +
+              '<div class="thinking-stream-body" style="max-height:160px;overflow-y:auto;' +
+              "font-size:12px;color:var(--text-muted);white-space:pre-wrap;" +
+              'padding:4px 0;margin-top:4px;line-height:1.6"></div>';
+            thinkBody = bubble.querySelector(".thinking-stream-body");
+          }
+          thinkBody.textContent = streamThinkingText;
+          thinkBody.scrollTop = thinkBody.scrollHeight;
+          container.scrollTop = container.scrollHeight;
+        } else if (frame.type === "token") {
+          if (streamIsThinking) {
+            streamIsThinking = false;
+            streamText = "";
+            streamThinkingText = "";
+          }
+          ensureStreamEl(container);
+          streamText += frame.data;
+          streamEl.querySelector(".msg-bubble").textContent = streamText;
+          container.scrollTop = container.scrollHeight;
+        } else if (frame.type === "message") {
+          // A message completed (tool call or tool result). Trigger an incremental
+          // snapshot fetch so renderSnapshot() is the single source of truth.
+          // This avoids lastMsgCount desync from direct rendering + doPoll races.
+          const m = frame.data;
+          const isToolActivity =
+            (m?.role === "assistant" &&
+              (m.content || []).some((b) => b.type === "tool_call")) ||
+            m?.role === "tool";
+          if (isToolActivity) {
+            triggerPoll();
+            // If a spawn_agent/spawn_agents call was made, refresh the session list
+            // after a short delay so new sub-agent sessions appear in the sidebar.
+            const hasSpawnCall =
+              m?.role === "assistant" &&
+              (m.content || []).some(
+                (b) =>
+                  b.type === "tool_call" &&
+                  (b.tool_name === "spawn_agent" ||
+                    b.tool_name === "spawn_agents"),
+              );
+            if (hasSpawnCall) {
+              setTimeout(refreshSessions, 600);
+              setTimeout(refreshSessions, 2500);
+            }
+          }
+        } else if (frame.type === "state") {
+          // Always re-render on state change so confirm panel hides immediately after approve/deny
+          if (frame.data && !frame.data.is_running) {
+            triggerPoll(); // final state: clear stream el, append complete messages
+          } else if (frame.data) {
+            triggerPoll(); // mid-run state update (e.g. RUNNING after confirm)
+          }
+        } else if (frame.type === "question.asked") {
+          // Primary sync signal from the engine. Re-render immediately
+          // without waiting for the next /state poll. The new card uses
+          // the request_id in frame.data.request_id as the key.
+          const card = renderClarificationCard(frame.data);
+          const prompts = _coerceQuestionPrompt(frame.data);
+          _renderedPrompts[frame.data.request_id] = prompts;
+          // Remove any stale card before mounting the new one
+          container
+            .querySelectorAll(".clarify-card")
+            .forEach((el) => el.remove());
+          const dots = container.querySelector("#typing-dots");
+          if (dots) container.insertBefore(card, dots);
+          else container.appendChild(card);
+          container.scrollTop = container.scrollHeight;
+        } else if (
+          frame.type === "question.updated" ||
+          frame.type === "question.resolved"
+        ) {
+          // Server told us a question changed state. Drop the card so the
+          // next /state poll won't bring it back, and the run loop
+          // (resumed by the engine) will produce the next assistant turn.
+          const rid = frame.data && frame.data.request_id;
+          if (rid) _clearClarifState(rid);
+          if (rid && _renderedPrompts[rid]) {
+            delete _renderedPrompts[rid];
+          }
+          // Replace the active card with a readonly summary so the user can
+          // see what they chose; then trigger a snapshot poll for the rest.
+          const active = container.querySelector(
+            `.clarify-card[data-clarif-id="${rid}"]`,
           );
-          if (hasSpawnCall) {
-            setTimeout(refreshSessions, 600);
-            setTimeout(refreshSessions, 2500);
+          if (active && frame.data) {
+            active.classList.add("is-readonly");
+            const status = active.querySelector('[data-role="status"]');
+            if (status) {
+              status.classList.remove("clarify-error");
+              status.textContent =
+                "已" +
+                (frame.data.status === "answered"
+                  ? "提交"
+                  : frame.data.status === "rejected"
+                    ? "跳过"
+                    : "过期") +
+                "，等待 Agent 继续…";
+            }
+            active.querySelectorAll("input").forEach((i) => (i.disabled = true));
+            const actions = active.querySelector(".clarify-actions");
+            if (actions) actions.style.display = "none";
+          }
+          // Server will push a new state frame momentarily; doPoll is enough.
+          triggerPoll();
+        } else if (frame.type === "error") {
+          toast(
+            "引擎错误: " + (frame.data?.detail || JSON.stringify(frame.data)),
+            true,
+          );
+        }
+      }
+
+      function ensureStreamEl(container) {
+        if (streamEl) return;
+        streamEl = document.createElement("div");
+        streamEl.className = "msg assistant";
+        streamEl.innerHTML =
+          '<div class="msg-role">Assistant</div><div class="msg-bubble"></div>';
+        const dots = document.getElementById("typing-dots");
+        if (dots) container.insertBefore(streamEl, dots);
+        else container.appendChild(streamEl);
+      }
+
+      // Trigger an immediate incremental poll, deduplicating concurrent calls.
+      // At most one doPoll runs at a time; if another arrives while in-flight,
+      // it is queued and runs once the current one completes.
+      function triggerPoll() {
+        if (doPollInFlight) {
+          doPollQueued = true;
+          return;
+        }
+        doPollInFlight = true;
+        doPoll().finally(() => {
+          doPollInFlight = false;
+          if (doPollQueued) {
+            doPollQueued = false;
+            triggerPoll();
+          }
+        });
+      }
+
+      async function cancelQueueItem(index) {
+        if (!currentSessionId) return;
+        try {
+          const res = await fetch(
+            `${API_BASE}/sessions/${currentSessionId}/pending/${index}`,
+            { method: "DELETE" },
+          );
+          if (res.ok) doPoll();
+          else console.warn("cancelQueueItem: HTTP", res.status);
+        } catch (e) {
+          console.error("cancelQueueItem failed:", e);
+        }
+      }
+
+      async function doPoll() {
+        if (!currentSessionId) {
+          stopPolling();
+          return;
+        }
+        try {
+          const snap = await api(`/sessions/${currentSessionId}/state`);
+          renderSnapshot(snap);
+          if (!snap.is_running) {
+            stopPolling();
+            await refreshSessions();
+          }
+        } catch (e) {}
+      }
+
+      // ── Rendering ─────────────────────────────────────────────────────────
+      function renderSnapshot(snap) {
+        // Remove streaming bubble only when the engine finishes — while still running,
+        // the bubble is owned by the WS token stream and must not be cleared by polling.
+        if (streamEl && !snap.is_running) {
+          streamEl.remove();
+          streamEl = null;
+          streamText = "";
+          streamThinkingText = "";
+          streamIsThinking = false;
+        }
+
+        const msgs = snap.last_messages || [];
+        const meta = snap.meta || {};
+        const newVersion = snap.session_version !== undefined ? snap.session_version : 0;
+
+        // Rewrite / rollback detection:
+        // 1. session_version increased → history was rolled back
+        // 2. message count decreased → messages were removed
+        // In either case, clear the container and full re-render.
+        const didRewind =
+          (lastSessionVersion > 0 && newVersion > lastSessionVersion) ||
+          msgs.length < lastMsgCount;
+
+        if (didRewind) {
+          lastMsgCount = 0;
+          const container = document.getElementById("messages");
+          container.innerHTML = "";
+          editingMessageId = null;
+        }
+        lastSessionVersion = newVersion;
+        const titleEl = document.getElementById("session-title");
+        const metaEl = document.getElementById("session-meta");
+        const snapTitle = (snap.meta && snap.meta.title) || "";
+        titleEl.textContent = snapTitle || currentSessionId.slice(0, 8);
+        const parts = [];
+        if (meta.skill) parts.push(`Skill: <strong>${meta.skill}</strong>`);
+        if (meta.persona)
+          parts.push(`Persona: <strong>${meta.persona}</strong>`);
+        if (meta.provider) parts.push(meta.provider);
+        if (parts.length) {
+          metaEl.innerHTML = parts.join(" &nbsp;·&nbsp; ");
+          metaEl.classList.remove("hidden");
+        }
+
+        // Running indicator (hide during confirmation — user sees the approval panel instead)
+        if (snap.is_running && snap.state !== "WAITING_CONFIRMATION") {
+          document
+            .getElementById("running-indicator")
+            .classList.remove("hidden");
+          document.getElementById("cancel-btn").classList.remove("hidden");
+        }
+
+        // Error banner
+        const errBanner = document.getElementById("error-banner");
+        if (snap.state === "ERROR") {
+          errBanner.style.display = "block";
+          errBanner.textContent =
+            "⚠ 引擎出错：" + (snap.last_error || "").split("\n").slice(-1)[0];
+        } else {
+          errBanner.style.display = "none";
+        }
+
+        // Approval panel
+        const confirmPanel = document.getElementById("confirm-panel");
+        const confirmInfo = document.getElementById("confirm-tool-info");
+        if (
+          snap.state === "WAITING_CONFIRMATION" &&
+          snap.pending_approval?.length
+        ) {
+          confirmInfo.innerHTML = snap.pending_approval
+            .map((t) => {
+              const inputStr = JSON.stringify(t.input, null, 2);
+              return `<div class="confirm-tool"><strong>${escHtml(t.name)}</strong><pre>${escHtml(inputStr)}</pre></div>`;
+            })
+            .join("");
+          confirmPanel.classList.remove("hidden");
+          // Remove typing dots while waiting for user input
+          const dotsEl = document.getElementById("typing-dots");
+          if (dotsEl) dotsEl.remove();
+        } else {
+          confirmPanel.classList.add("hidden");
+        }
+
+        // Pending command queue panel
+        const queuePanel = document.getElementById("queue-panel");
+        const queueItems = document.getElementById("queue-items");
+        const pendingCommands = snap.pending_commands || [];
+        const pendingSpawns = snap.pending_spawns || [];
+        const hasQueue = pendingCommands.length > 0 || pendingSpawns.length > 0;
+
+        if (snap.is_running && hasQueue) {
+          queuePanel.classList.remove("hidden");
+          queueItems.innerHTML = pendingCommands
+            .map((pc) => {
+              const time = pc.submitted_at
+                ? new Date(pc.submitted_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "";
+              return `<div class="queue-item">
+                <div style="flex:1;min-width:0;">
+                  <div class="queue-item-text" title="${escHtml(pc.text)}">${escHtml(pc.text)}</div>
+                  <div class="queue-item-meta">消息 · ${time}</div>
+                </div>
+                <button class="queue-cancel-btn" title="取消" onclick="cancelQueueItem(${pc.index})">✕</button>
+              </div>`;
+            })
+            .join("") + pendingSpawns
+            .map((ps) => {
+              const time = ps.submitted_at
+                ? new Date(ps.submitted_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "";
+              return `<div class="queue-item">
+                <div style="flex:1;min-width:0;">
+                  <div class="queue-item-text" title="${escHtml(ps.display_name || ps.task)}">${escHtml(ps.display_name || ps.task)}</div>
+                  <div class="queue-item-meta">子代理 · ${time}</div>
+                </div>
+                <button class="queue-cancel-btn" title="取消" onclick="cancelQueueItem(${ps.index})">✕</button>
+              </div>`;
+            })
+            .join("");
+        } else {
+          queuePanel.classList.add("hidden");
+        }
+
+        // Render only new messages (delta rendering for performance)
+        const container = document.getElementById("messages");
+        const prevCount = lastMsgCount;
+        lastMsgCount = msgs.length;
+
+        for (let i = prevCount; i < msgs.length; i++) {
+          try {
+            renderMessage(container, msgs[i]);
+          } catch (err) {
+            console.error(
+              "[renderMessage] failed for msg index",
+              i,
+              msgs[i],
+              err,
+            );
           }
         }
 
-      } else if (frame.type === 'state') {
-        // Always re-render on state change so confirm panel hides immediately after approve/deny
-        if (frame.data && !frame.data.is_running) {
-          triggerPoll();   // final state: clear stream el, append complete messages
-        } else if (frame.data) {
-          triggerPoll();   // mid-run state update (e.g. RUNNING after confirm)
+        // Pending clarifications are rendered separately so we can update
+        // them in-place when the user submits an answer.
+        renderPendingClarifications(snap);
+
+        // Sync question mode toggle UI with the server's current value
+        if (snap.question_mode && snap.question_mode !== currentQuestionMode) {
+          currentQuestionMode = snap.question_mode;
+          updateModeToggleUI();
         }
 
-      } else if (frame.type === 'error') {
-        toast('引擎错误: ' + (frame.data?.detail || JSON.stringify(frame.data)), true);
-      }
-    }
-
-    function ensureStreamEl(container) {
-      if (streamEl) return;
-      streamEl = document.createElement('div');
-      streamEl.className = 'msg assistant';
-      streamEl.innerHTML = '<div class="msg-role">Assistant</div><div class="msg-bubble"></div>';
-      const dots = document.getElementById('typing-dots');
-      if (dots) container.insertBefore(streamEl, dots);
-      else container.appendChild(streamEl);
-    }
-
-    // Trigger an immediate incremental poll, deduplicating concurrent calls.
-    // At most one doPoll runs at a time; if another arrives while in-flight,
-    // it is queued and runs once the current one completes.
-    function triggerPoll() {
-      if (doPollInFlight) { doPollQueued = true; return; }
-      doPollInFlight = true;
-      doPoll().finally(() => {
-        doPollInFlight = false;
-        if (doPollQueued) { doPollQueued = false; triggerPoll(); }
-      });
-    }
-
-    async function doPoll() {
-      if (!currentSessionId) { stopPolling(); return; }
-      try {
-        const snap = await api(`/sessions/${currentSessionId}/state`);
-        renderSnapshot(snap);
-        if (!snap.is_running) {
-          stopPolling();
-          await refreshSessions();
-        }
-      } catch (e) { }
-    }
-
-    // ── Rendering ─────────────────────────────────────────────────────────
-    function renderSnapshot(snap) {
-      // Remove streaming bubble only when the engine finishes — while still running,
-      // the bubble is owned by the WS token stream and must not be cleared by polling.
-      if (streamEl && !snap.is_running) { streamEl.remove(); streamEl = null; streamText = ''; streamThinkingText = ''; streamIsThinking = false; }
-
-      const msgs = snap.last_messages || [];
-      const meta = snap.meta || {};
-
-      // Header
-      const titleEl = document.getElementById('session-title');
-      const metaEl = document.getElementById('session-meta');
-      titleEl.textContent = currentSessionId.slice(0, 8);
-      const parts = [];
-      if (meta.skill) parts.push(`Skill: <strong>${meta.skill}</strong>`);
-      if (meta.persona) parts.push(`Persona: <strong>${meta.persona}</strong>`);
-      if (meta.provider) parts.push(meta.provider);
-      if (parts.length) {
-        metaEl.innerHTML = parts.join(' &nbsp;·&nbsp; ');
-        metaEl.classList.remove('hidden');
-      }
-
-      // Running indicator (hide during confirmation — user sees the approval panel instead)
-      if (snap.is_running && snap.state !== 'WAITING_CONFIRMATION') {
-        document.getElementById('running-indicator').classList.remove('hidden');
-        document.getElementById('cancel-btn').classList.remove('hidden');
-      }
-
-      // Error banner
-      const errBanner = document.getElementById('error-banner');
-      if (snap.state === 'ERROR') {
-        errBanner.style.display = 'block';
-        errBanner.textContent = '⚠ 引擎出错：' + (snap.last_error || '').split('\n').slice(-1)[0];
-      } else {
-        errBanner.style.display = 'none';
-      }
-
-      // Approval panel
-      const confirmPanel = document.getElementById('confirm-panel');
-      const confirmInfo = document.getElementById('confirm-tool-info');
-      if (snap.state === 'WAITING_CONFIRMATION' && snap.pending_approval?.length) {
-        confirmInfo.innerHTML = snap.pending_approval.map(t => {
-          const inputStr = JSON.stringify(t.input, null, 2);
-          return `<div class="confirm-tool"><strong>${escHtml(t.name)}</strong><pre>${escHtml(inputStr)}</pre></div>`;
-        }).join('');
-        confirmPanel.classList.remove('hidden');
-        // Remove typing dots while waiting for user input
-        const dotsEl = document.getElementById('typing-dots');
-        if (dotsEl) dotsEl.remove();
-      } else {
-        confirmPanel.classList.add('hidden');
-      }
-
-      // Render only new messages
-      const container = document.getElementById('messages');
-      const prevCount = lastMsgCount;
-      lastMsgCount = msgs.length;
-
-      for (let i = prevCount; i < msgs.length; i++) {
-        try {
-          renderMessage(container, msgs[i]);
-        } catch(err) {
-          console.error('[renderMessage] failed for msg index', i, msgs[i], err);
-        }
-      }
-
-      // If new messages were rendered while the engine is still running,
-      // the streaming bubble now shows stale text from a completed LLM turn.
-      // Reset it so the next LLM turn starts with a fresh streaming bubble.
-      if (prevCount < lastMsgCount && snap.is_running && streamEl) {
-        streamEl.remove(); streamEl = null;
-        streamText = ''; streamThinkingText = ''; streamIsThinking = false;
-      }
-
-      // Typing dots
-      let dotsEl = document.getElementById('typing-dots');
-      if (snap.is_running) {
-        if (!dotsEl) {
-          dotsEl = document.createElement('div');
-          dotsEl.id = 'typing-dots';
-          dotsEl.className = 'typing-dots';
-          dotsEl.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
-          container.appendChild(dotsEl);
-        }
-      } else if (dotsEl) {
-        dotsEl.remove();
-      }
-
-      // Scroll to bottom
-      container.scrollTop = container.scrollHeight;
-    }
-
-    function renderMessage(container, m) {
-      const role = m.role;
-      const content = m.content || [];
-
-      if (role === 'user') {
-        const text = content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-        if (!text) return;
-        const el = div('msg user');
-        el.innerHTML = `<div class="msg-role">You</div><div class="msg-bubble">${escHtml(text).replace(/\n/g, '<br>')}</div>`;
-        container.appendChild(el);
-        return;
-      }
-
-      if (role === 'assistant') {
-        const textBlocks = content.filter(b => b.type === 'text' && b.text);
-        const toolCalls = content.filter(b => b.type === 'tool_call');
-        const thinkBlocks = content.filter(b => b.type === 'thinking' && b.thinking);
-
-        if (thinkBlocks.length) {
-          thinkBlocks.forEach(tb => {
-            const el = document.createElement('div');
-            el.className = 'thinking-block';
-            el.innerHTML =
-              `<div class="thinking-header">` +
-              `<span>💭 思考过程</span>` +
-              `<span style="font-size:11px">(${tb.thinking.length} 字)</span>` +
-              `<span class="thinking-toggle">展开 ▼</span>` +
-              `</div>` +
-              `<div class="thinking-body collapsed">${escHtml(tb.thinking)}</div>`;
-            el.querySelector('.thinking-header').addEventListener('click', () => {
-              const body = el.querySelector('.thinking-body');
-              const toggle = el.querySelector('.thinking-toggle');
-              const collapsed = body.classList.toggle('collapsed');
-              toggle.textContent = collapsed ? '展开 ▼' : '收起 ▲';
-            });
-            container.appendChild(el);
-          });
+        // If new messages were rendered while the engine is still running,
+        // the streaming bubble now shows stale text from a completed LLM turn.
+        // Reset it so the next LLM turn starts with a fresh streaming bubble.
+        if (prevCount < lastMsgCount && snap.is_running && streamEl) {
+          streamEl.remove();
+          streamEl = null;
+          streamText = "";
+          streamThinkingText = "";
+          streamIsThinking = false;
         }
 
-        toolCalls.forEach(tc => {
-          container.appendChild(renderToolCall(tc));
-        });
-
-        if (textBlocks.length) {
-          const raw = textBlocks.map(b => b.text).join('\n\n');
-          const el = div('msg assistant');
-          el.innerHTML = `<div class="msg-role">Assistant</div><div class="msg-bubble">${mdToHtml(raw)}</div>`;
-          container.appendChild(el);
+        // Typing dots
+        let dotsEl = document.getElementById("typing-dots");
+        if (snap.is_running) {
+          if (!dotsEl) {
+            dotsEl = document.createElement("div");
+            dotsEl.id = "typing-dots";
+            dotsEl.className = "typing-dots";
+            dotsEl.innerHTML =
+              '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+            container.appendChild(dotsEl);
+          }
+        } else if (dotsEl) {
+          dotsEl.remove();
         }
-        return;
+
+        // Scroll to bottom
+        container.scrollTop = container.scrollHeight;
       }
 
-      if (role === 'tool') {
-        content.filter(b => b.type === 'tool_result').forEach(tr => {
-          // think tool result is already shown via the tool-call block — skip duplicate
-          if (tr.tool_name === 'think') return;
-          container.appendChild(renderToolResult(tr));
-        });
-      }
-    }
+      function renderMessage(container, m) {
+        const role = m.role;
+        const content = m.content || [];
 
-    function renderToolCall(tc) {
-      // think tool: render as a collapsible thinking block instead of a generic tool block
-      if (tc.tool_name === 'think') {
-        const thought = (tc.tool_input?.thought || '').trim();
-        const wrap = document.createElement('div');
-        wrap.className = 'thinking-block';
-        wrap.innerHTML =
-          `<div class="thinking-header">` +
-          `<span>💭 思考过程</span>` +
-          `<span style="font-size:11px;margin-left:6px;color:var(--text-muted)">(${thought.length} 字)</span>` +
-          `<span class="thinking-toggle" style="margin-left:auto">展开 ▼</span>` +
-          `</div>` +
-          `<div class="thinking-body collapsed" style="white-space:pre-wrap">${escHtml(thought)}</div>`;
-        wrap.querySelector('.thinking-header').addEventListener('click', () => {
-          const body = wrap.querySelector('.thinking-body');
-          const toggle = wrap.querySelector('.thinking-toggle');
-          const collapsed = body.classList.toggle('collapsed');
-          toggle.textContent = collapsed ? '展开 ▼' : '收起 ▲';
-        });
-        return wrap;
-      }
+        if (role === "user") {
+          const text = content
+            .filter((b) => b.type === "text")
+            .map((b) => b.text)
+            .join("\n");
+          if (!text) return;
 
-      // spawn_agents: expanded card showing each agent's task
-      if (tc.tool_name === 'spawn_agents') {
-        let agents = tc.tool_input?.agents || [];
-        // LLM sometimes serializes the array as a JSON string — parse it back
-        if (typeof agents === 'string') {
-          try { agents = JSON.parse(agents); } catch { agents = []; }
-        }
-        if (!Array.isArray(agents)) agents = [];
-        const agentItems = agents.map((a, i) => {
-          const task = a.task || '';
-          return `<div style="padding:5px 0;display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--border)">` +
-            `<span style="color:var(--green);font-size:11px;white-space:nowrap;margin-top:2px;min-width:54px">Agent ${i + 1}</span>` +
-            `<span style="font-size:12px;color:var(--text)">${escHtml(task.slice(0, 120))}${task.length > 120 ? '…' : ''}</span>` +
+          // If this message is being edited, render the edit textarea instead
+          if (editingMessageId === m.message_id) {
+            const wrap = document.createElement("div");
+            wrap.className = "msg-edit-wrap";
+            wrap.dataset.messageId = m.message_id;
+            wrap.innerHTML =
+              `<div class="msg-bubble"><textarea id="edit-ta-${m.message_id}" rows="3">${escHtml(text)}</textarea></div>` +
+              `<div class="msg-edit-actions">` +
+              `<button class="edit-cancel" onclick="cancelEditMessage()">取消</button>` +
+              `<button class="edit-submit" id="edit-submit-${m.message_id}" onclick="submitEditMessage('${m.message_id}')">重新生成</button>` +
+              `</div>`;
+            container.appendChild(wrap);
+            const ta = document.getElementById("edit-ta-" + m.message_id);
+            if (ta) {
+              ta.focus();
+              autoGrow(ta);
+              ta.addEventListener("input", () => autoGrow(ta));
+              ta.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submitEditMessage(m.message_id);
+                }
+                if (e.key === "Escape") cancelEditMessage();
+              });
+            }
+            return;
+          }
+
+          const el = div("msg user");
+          el.dataset.msgId = m.message_id;
+          el.innerHTML =
+            `<div class="msg-role">You</div>` +
+            `<div class="msg-bubble">${escHtml(text).replace(/\n/g, "<br>")}</div>` +
+            `<div class="msg-actions">` +
+            `<button class="msg-edit-btn" data-msg-id="${m.message_id}" ` +
+            `  onclick="startEditMessage('${m.message_id}')">编辑</button>` +
             `</div>`;
-        }).join('');
-        const wrap = document.createElement('div');
-        wrap.className = 'tool-block';
-        wrap.innerHTML =
-          `<div class="tool-header open" onclick="toggleCollapse(this)">` +
-          `<span class="tool-icon">🤖</span>` +
-          `<span class="tool-name" style="color:var(--green)">spawn_agents</span>` +
-          `<span class="tool-summary">${agents.length} 个子 Agent 并行</span>` +
-          `<span class="tool-chevron">▶</span>` +
-          `</div>` +
-          `<div class="tool-body open" style="padding:6px 12px">${agentItems || '<em style="color:var(--text-muted);font-size:12px">（无 agents）</em>'}</div>`;
-        return wrap;
+          container.appendChild(el);
+          return;
+        }
+
+        if (role === "assistant") {
+          const textBlocks = content.filter((b) => b.type === "text" && b.text);
+          const toolCalls = content.filter((b) => b.type === "tool_call");
+          const thinkBlocks = content.filter(
+            (b) => b.type === "thinking" && b.thinking,
+          );
+
+          if (thinkBlocks.length) {
+            thinkBlocks.forEach((tb) => {
+              const el = document.createElement("div");
+              el.className = "thinking-block";
+              el.innerHTML =
+                `<div class="thinking-header">` +
+                `<span>💭 思考过程</span>` +
+                `<span style="font-size:11px">(${tb.thinking.length} 字)</span>` +
+                `<span class="thinking-toggle">展开 ▼</span>` +
+                `</div>` +
+                `<div class="thinking-body collapsed">${escHtml(tb.thinking)}</div>`;
+              el.querySelector(".thinking-header").addEventListener(
+                "click",
+                () => {
+                  const body = el.querySelector(".thinking-body");
+                  const toggle = el.querySelector(".thinking-toggle");
+                  const collapsed = body.classList.toggle("collapsed");
+                  toggle.textContent = collapsed ? "展开 ▼" : "收起 ▲";
+                },
+              );
+              container.appendChild(el);
+            });
+          }
+
+          toolCalls.forEach((tc) => {
+            container.appendChild(renderToolCall(tc));
+          });
+
+          if (textBlocks.length) {
+            const raw = textBlocks.map((b) => b.text).join("\n\n");
+            const el = div("msg assistant");
+            el.innerHTML = `<div class="msg-role">Assistant</div><div class="msg-bubble">${mdToHtml(raw)}</div>`;
+            container.appendChild(el);
+          }
+          return;
+        }
+
+        if (role === "tool") {
+          content
+            .filter((b) => b.type === "tool_result")
+            .forEach((tr) => {
+              // think tool result is already shown via the tool-call block — skip duplicate
+              if (tr.tool_name === "think") return;
+              container.appendChild(renderToolResult(tr));
+            });
+        }
       }
 
-      // spawn_agent: expanded card showing the task
-      if (tc.tool_name === 'spawn_agent') {
-        const task = tc.tool_input?.task || '';
-        const wrap = document.createElement('div');
-        wrap.className = 'tool-block';
-        wrap.innerHTML =
-          `<div class="tool-header open" onclick="toggleCollapse(this)">` +
-          `<span class="tool-icon">🤖</span>` +
-          `<span class="tool-name" style="color:var(--green)">spawn_agent</span>` +
-          `<span class="tool-summary">${escHtml(task.slice(0, 60))}${task.length > 60 ? '…' : ''}</span>` +
-          `<span class="tool-chevron">▶</span>` +
-          `</div>` +
-          `<div class="tool-body open" style="padding:8px 12px;font-size:12px;color:var(--text);white-space:pre-wrap">${escHtml(task)}</div>`;
-        return wrap;
+      // ── Edit message ──────────────────────────────────────────────────────
+      function startEditMessage(messageId) {
+        if (editingMessageId) cancelEditMessage();
+        editingMessageId = messageId;
+
+        // Find the user message element and replace it with the edit textarea
+        const container = document.getElementById("messages");
+        const allUserWrappers = container.querySelectorAll(".msg.user, .msg-edit-wrap");
+        for (const el of allUserWrappers) {
+          const btn = el.querySelector(".msg-edit-btn");
+          const existingId = btn ? btn.dataset.msgId : el.dataset.messageId;
+          if (existingId === messageId) {
+            const content = el.querySelector(".msg-bubble");
+            const text = content ? content.textContent || "" : "";
+            // Build the edit wrapper
+            const editWrap = document.createElement("div");
+            editWrap.className = "msg-edit-wrap";
+            editWrap.dataset.messageId = messageId;
+            editWrap.innerHTML =
+              `<div class="msg-bubble"><textarea id="edit-ta-${messageId}" rows="3">${escHtml(text)}</textarea></div>` +
+              `<div class="msg-edit-actions">` +
+              `<button class="edit-cancel" onclick="cancelEditMessage()">取消</button>` +
+              `<button class="edit-submit" id="edit-submit-${messageId}" onclick="submitEditMessage('${messageId}')">重新生成</button>` +
+              `</div>`;
+            container.replaceChild(editWrap, el);
+            const ta = document.getElementById("edit-ta-" + messageId);
+            if (ta) {
+              ta.focus();
+              autoGrow(ta);
+              ta.addEventListener("input", () => autoGrow(ta));
+              ta.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submitEditMessage(messageId);
+                }
+                if (e.key === "Escape") cancelEditMessage();
+              });
+            }
+            break;
+          }
+        }
       }
 
-      const inputStr = JSON.stringify(tc.tool_input || {}, null, 2);
-      const wrap = document.createElement('div');
-      wrap.className = 'tool-block';
-      wrap.innerHTML = `
+      function cancelEditMessage() {
+        if (!editingMessageId) return;
+        const msgId = editingMessageId;
+        editingMessageId = null;
+        // Find the edit wrap and replace it back with a normal user message
+        const container = document.getElementById("messages");
+        const editWrap = container.querySelector(`.msg-edit-wrap[data-message-id="${msgId}"]`);
+        if (editWrap) {
+          // We need the message data to re-render — re-fetch the snapshot
+          doPoll();
+        }
+      }
+
+      async function submitEditMessage(messageId) {
+        const ta = document.getElementById("edit-ta-" + messageId);
+        if (!ta) return;
+        const newText = ta.value.trim();
+        if (!newText) return;
+
+        const submitBtn = document.getElementById("edit-submit-" + messageId);
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "处理中…";
+        }
+
+        try {
+          editingMessageId = null; // Clear before API call so re-render is clean
+          await api(
+            `/sessions/${currentSessionId}/messages/${messageId}?re_run=true`,
+            "PATCH",
+            { text: newText }
+          );
+          toast("已重新生成");
+          triggerPoll();
+          if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+        } catch (e) {
+          toast("重新生成失败: " + e.message, true);
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "重新生成";
+          }
+          editingMessageId = messageId; // Restore edit mode on failure
+        }
+      }
+
+      function renderToolCall(tc) {
+        // think tool: render as a collapsible thinking block instead of a generic tool block
+        if (tc.tool_name === "think") {
+          const thought = (tc.tool_input?.thought || "").trim();
+          const wrap = document.createElement("div");
+          wrap.className = "thinking-block";
+          wrap.innerHTML =
+            `<div class="thinking-header">` +
+            `<span>💭 思考过程</span>` +
+            `<span style="font-size:11px;margin-left:6px;color:var(--text-muted)">(${thought.length} 字)</span>` +
+            `<span class="thinking-toggle" style="margin-left:auto">展开 ▼</span>` +
+            `</div>` +
+            `<div class="thinking-body collapsed" style="white-space:pre-wrap">${escHtml(thought)}</div>`;
+          wrap
+            .querySelector(".thinking-header")
+            .addEventListener("click", () => {
+              const body = wrap.querySelector(".thinking-body");
+              const toggle = wrap.querySelector(".thinking-toggle");
+              const collapsed = body.classList.toggle("collapsed");
+              toggle.textContent = collapsed ? "展开 ▼" : "收起 ▲";
+            });
+          return wrap;
+        }
+
+        // spawn_agents: expanded card showing each agent's task
+        if (tc.tool_name === "spawn_agents") {
+          let agents = tc.tool_input?.agents || [];
+          // LLM sometimes serializes the array as a JSON string — parse it back
+          if (typeof agents === "string") {
+            try {
+              agents = JSON.parse(agents);
+            } catch {
+              agents = [];
+            }
+          }
+          if (!Array.isArray(agents)) agents = [];
+          const agentItems = agents
+            .map((a, i) => {
+              const task = a.task || "";
+              return (
+                `<div style="padding:5px 0;display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--border)">` +
+                `<span style="color:var(--green);font-size:11px;white-space:nowrap;margin-top:2px;min-width:54px">Agent ${i + 1}</span>` +
+                `<span style="font-size:12px;color:var(--text)">${escHtml(task.slice(0, 120))}${task.length > 120 ? "…" : ""}</span>` +
+                `</div>`
+              );
+            })
+            .join("");
+          const wrap = document.createElement("div");
+          wrap.className = "tool-block";
+          wrap.innerHTML =
+            `<div class="tool-header open" onclick="toggleCollapse(this)">` +
+            `<span class="tool-icon">🤖</span>` +
+            `<span class="tool-name" style="color:var(--green)">spawn_agents</span>` +
+            `<span class="tool-summary">${agents.length} 个子代理并行</span>` +
+            `<span class="tool-chevron">▶</span>` +
+            `</div>` +
+            `<div class="tool-body open" style="padding:6px 12px">${agentItems || '<em style="color:var(--text-muted);font-size:12px">（无 agents）</em>'}</div>`;
+          return wrap;
+        }
+
+        // spawn_agent: expanded card showing the task
+        if (tc.tool_name === "spawn_agent") {
+          const task = tc.tool_input?.task || "";
+          const subMeta = tc.tool_input?.sub_agent_meta || {};
+          const displayName = subMeta.display_name || "";
+          const agentLabel = displayName || "spawn_agent";
+          const wrap = document.createElement("div");
+          wrap.className = "tool-block";
+          wrap.innerHTML =
+            `<div class="tool-header open" onclick="toggleCollapse(this)">` +
+            `<span class="tool-icon">🤖</span>` +
+            `<span class="tool-name" style="color:var(--green)">${escHtml(agentLabel)}</span>` +
+            `<span class="tool-summary">${escHtml(task.slice(0, 60))}${task.length > 60 ? "…" : ""}</span>` +
+            `<span class="tool-chevron">▶</span>` +
+            `</div>` +
+            `<div class="tool-body open" style="padding:8px 12px;font-size:12px;color:var(--text);white-space:pre-wrap">${escHtml(task)}</div>`;
+          return wrap;
+        }
+
+        const inputStr = JSON.stringify(tc.tool_input || {}, null, 2);
+        const wrap = document.createElement("div");
+        wrap.className = "tool-block";
+        wrap.innerHTML = `
     <div class="tool-header" onclick="toggleCollapse(this)">
       <span class="tool-icon">🔧</span>
       <span class="tool-name">${escHtml(tc.tool_name)}</span>
@@ -1788,243 +3111,296 @@
       <span class="tool-chevron">▶</span>
     </div>
     <div class="tool-body"><pre>${escHtml(inputStr)}</pre></div>`;
-      return wrap;
-    }
+        return wrap;
+      }
 
-    function renderToolResult(tr) {
-      const isErr = tr.is_error;
-      const content = tr.content || '';
-      const toolLabel = tr.tool_name ? escHtml(tr.tool_name) : '工具结果';
-      const preview = content.slice(0, 200) + (content.length > 200 ? '…' : '');
-      const wrap = document.createElement('div');
-      wrap.className = 'result-block';
-      wrap.innerHTML = `
+      function renderToolResult(tr) {
+        const isErr = tr.is_error;
+        const content = tr.content || "";
+        const toolLabel = tr.tool_name ? escHtml(tr.tool_name) : "工具结果";
+        const preview =
+          content.slice(0, 200) + (content.length > 200 ? "…" : "");
+        const wrap = document.createElement("div");
+        wrap.className = "result-block";
+        wrap.innerHTML = `
     <div class="result-header" onclick="toggleCollapse(this, 'result-body')">
-      <span class="${isErr ? 'result-err' : 'result-ok'}">${isErr ? '✗' : '✓'}</span>
+      <span class="${isErr ? "result-err" : "result-ok"}">${isErr ? "✗" : "✓"}</span>
       <span style="font-size:11px;color:var(--accent);font-weight:600;margin-left:2px">${toolLabel}</span>
-      <span class="result-summary">${escHtml(preview.replace(/\n/g, ' '))}</span>
+      <span class="result-summary">${escHtml(preview.replace(/\n/g, " "))}</span>
       <span class="tool-chevron" style="margin-left:auto;color:var(--text-muted)">▶</span>
     </div>
     <div class="result-body"><pre>${escHtml(content)}</pre></div>`;
-      return wrap;
-    }
-
-    function toggleCollapse(header, bodyClass = 'tool-body') {
-      header.classList.toggle('open');
-      header.nextElementSibling.classList.toggle('open');
-    }
-
-    function shortInput(inp) {
-      if (!inp) return '';
-      const v = Object.values(inp)[0];
-      if (typeof v === 'string') return escHtml(v.slice(0, 40) + (v.length > 40 ? '…' : ''));
-      return '';
-    }
-
-    // ── Config Panel ──────────────────────────────────────────────────────
-    function toggleConfig() {
-      const panel = document.getElementById('config-panel');
-      panel.classList.toggle('open');
-      if (panel.classList.contains('open')) buildConfigTree();
-    }
-
-    async function buildConfigTree() {
-      const tree = document.getElementById('config-tree');
-      tree.innerHTML = '';
-
-      // Skills
-      tree.appendChild(div('tree-folder', '📁 skills/'));
-      try {
-        const r = await api('/config/skills');
-        (r.skills || []).forEach(s => {
-          const row = treeFileRow(s.name, () => loadConfigFile('skill', s.name));
-          row.querySelector('.del-btn').onclick = (e) => { e.stopPropagation(); confirmDeleteConfig('skill', s.name); };
-          tree.appendChild(row);
-        });
-      } catch (e) { }
-      tree.appendChild(addNewRow('skill'));
-
-      // Personas
-      tree.appendChild(div('tree-folder', '📁 personas/'));
-      try {
-        const r = await api('/config/personas');
-        (r.personas || []).forEach(p => {
-          const name = typeof p === 'string' ? p : p.name;
-          const row = treeFileRow(name, () => loadConfigFile('persona', name));
-          row.querySelector('.del-btn').onclick = (e) => { e.stopPropagation(); confirmDeleteConfig('persona', name); };
-          tree.appendChild(row);
-        });
-      } catch (e) { }
-      tree.appendChild(addNewRow('persona'));
-
-      // config.yaml
-      tree.appendChild(div('tree-folder', '📄 config.yaml'));
-      const yamlRow = treeFileRow('config.yaml', () => loadConfigFile('yaml', 'config.yaml'));
-      yamlRow.querySelector('.del-btn').remove();
-      tree.appendChild(yamlRow);
-    }
-
-    function treeFileRow(name, onclick) {
-      const row = document.createElement('div');
-      row.className = 'tree-file';
-      row.innerHTML = `<span>📄 ${escHtml(name)}</span><span class="del-btn" title="删除">✕</span>`;
-      row.addEventListener('click', onclick);
-      return row;
-    }
-
-    function addNewRow(type) {
-      const wrap = div('tree-new');
-      const inp = document.createElement('input');
-      inp.type = 'text'; inp.placeholder = '新建名称…';
-      const btn = div('', '＋');
-      btn.className = 'btn btn-sm btn-primary';
-      btn.style.padding = '2px 8px';
-      btn.onclick = async () => {
-        const name = inp.value.trim();
-        if (!name) return;
-        const tmpl = type === 'skill'
-          ? `---\nname: ${name}\ndescription: "${name}"\nprovider: bltcy-anthropic\ntask_goal: ""\ntools:\n  - read_file\n  - search\n---\n\n你是一个...`
-          : '你是一个...\n\n回答时用中文。';
-        try {
-          if (type === 'skill') await api('/config/skills', 'POST', { name, content: tmpl });
-          else await api('/config/personas', 'POST', { name, content: tmpl });
-          toast(`${name} 已创建`);
-          inp.value = '';
-          buildConfigTree();
-          await loadConfigFile(type, name);
-          await loadOverview();
-        } catch (e) { toast(e.message, true); }
-      };
-      wrap.appendChild(inp); wrap.appendChild(btn);
-      return wrap;
-    }
-
-    async function loadConfigFile(type, name) {
-      // Highlight active
-      document.querySelectorAll('.tree-file').forEach(el => {
-        const txt = el.querySelector('span')?.textContent;
-        el.classList.toggle('active', txt === `📄 ${name}` || txt === `📄 ${name}`);
-      });
-
-      currentConfigFile = { type, name };
-      document.getElementById('config-filename').textContent = type === 'yaml' ? 'config.yaml' : `${type === 'skill' ? 'skills' : 'personas'}/${name}.md`;
-      document.getElementById('config-filename').style.color = 'var(--accent)';
-      document.getElementById('config-editor').disabled = false;
-      document.getElementById('config-save-btn').disabled = false;
-      document.getElementById('config-del-btn').disabled = type === 'yaml';
-      document.getElementById('config-status').textContent = '';
-
-      try {
-        let r;
-        if (type === 'skill') r = await api(`/config/skills/${name}`);
-        else if (type === 'persona') r = await api(`/config/personas/${name}`);
-        else r = await api('/config/yaml');
-        document.getElementById('config-editor').value = r.content || '';
-      } catch (e) { toast('加载失败: ' + e.message, true); }
-    }
-
-    async function saveConfigFile() {
-      if (!currentConfigFile) return;
-      const { type, name } = currentConfigFile;
-      const content = document.getElementById('config-editor').value;
-      try {
-        if (type === 'skill') await api(`/config/skills/${name}`, 'PUT', { content });
-        else if (type === 'persona') await api(`/config/personas/${name}`, 'PUT', { content });
-        else await api('/config/yaml', 'PUT', { content });
-        document.getElementById('config-status').textContent = '✓ 已保存';
-        setTimeout(() => document.getElementById('config-status').textContent = '', 2000);
-        await loadOverview();
-        await buildConfigTree();
-      } catch (e) { toast('保存失败: ' + e.message, true); }
-    }
-
-    async function confirmDeleteConfig(type, name) {
-      if (!confirm(`确认删除 ${name}？`)) return;
-      try {
-        if (type === 'skill') await api(`/config/skills/${name}`, 'DELETE');
-        else await api(`/config/personas/${name}`, 'DELETE');
-        toast(`${name} 已删除`);
-        currentConfigFile = null;
-        document.getElementById('config-editor').value = '';
-        document.getElementById('config-editor').disabled = true;
-        document.getElementById('config-save-btn').disabled = true;
-        document.getElementById('config-del-btn').disabled = true;
-        document.getElementById('config-filename').textContent = '← 选择文件编辑';
-        document.getElementById('config-filename').style.color = 'var(--text-muted)';
-        await loadOverview();
-        buildConfigTree();
-      } catch (e) { toast('删除失败: ' + e.message, true); }
-    }
-
-    async function deleteConfigFile() {
-      if (!currentConfigFile || currentConfigFile.type === 'yaml') return;
-      confirmDeleteConfig(currentConfigFile.type, currentConfigFile.name);
-    }
-
-    // ── Utilities ─────────────────────────────────────────────────────────
-    async function api(path, method = 'GET', body = null) {
-      const opts = { method, headers: {} };
-      if (body !== null) {
-        opts.headers['Content-Type'] = 'application/json';
-        opts.body = JSON.stringify(body);
+        return wrap;
       }
-      const r = await fetch(path, opts);
-      if (r.status === 204) return null;
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || r.statusText);
-      return data;
-    }
 
-    function div(cls, text = '') {
-      const el = document.createElement('div');
-      if (cls) el.className = cls;
-      if (text) el.textContent = text;
-      return el;
-    }
+      function toggleCollapse(header, bodyClass = "tool-body") {
+        header.classList.toggle("open");
+        header.nextElementSibling.classList.toggle("open");
+      }
 
-    function escHtml(s) {
-      return String(s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
+      function shortInput(inp) {
+        if (!inp) return "";
+        const v = Object.values(inp)[0];
+        if (typeof v === "string")
+          return escHtml(v.slice(0, 40) + (v.length > 40 ? "…" : ""));
+        return "";
+      }
 
-    function mdToHtml(md) {
-      // Very light markdown: bold, inline code, code blocks, lists
-      let h = escHtml(md);
-      // code blocks
-      h = h.replace(/```[\w]*\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-      // inline code
-      h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-      // bold
-      h = h.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      // headers
-      h = h.replace(/^### (.*?)$/gm, '<strong>$1</strong>');
-      h = h.replace(/^## (.*?)$/gm, '<strong style="font-size:1.05em">$1</strong>');
-      h = h.replace(/^# (.*?)$/gm, '<strong style="font-size:1.1em">$1</strong>');
-      // unordered list
-      h = h.replace(/^[- *] (.*?)$/gm, '<li>$1</li>');
-      h = h.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-      // line breaks → paragraphs
-      h = h.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
-      return h;
-    }
+      // ── Config Panel ──────────────────────────────────────────────────────
+      function toggleConfig() {
+        const panel = document.getElementById("config-panel");
+        panel.classList.toggle("open");
+        if (panel.classList.contains("open")) buildConfigTree();
+      }
 
-    function toast(msg, isErr = false) {
-      const el = document.createElement('div');
-      el.className = 'toast ' + (isErr ? 'toast-err' : 'toast-ok');
-      el.textContent = msg;
-      document.getElementById('toasts').appendChild(el);
-      setTimeout(() => el.remove(), 3000);
-    }
+      async function buildConfigTree() {
+        const tree = document.getElementById("config-tree");
+        tree.innerHTML = "";
 
-    // Close modal on overlay click
-    document.getElementById('modal-overlay').addEventListener('click', e => {
-      if (e.target === e.currentTarget) closeModal();
-    });
+        // Skills
+        tree.appendChild(div("tree-folder", "📁 skills/"));
+        try {
+          const r = await api("/config/skills");
+          (r.skills || []).forEach((s) => {
+            const row = treeFileRow(s.name, () =>
+              loadConfigFile("skill", s.name),
+            );
+            row.querySelector(".del-btn").onclick = (e) => {
+              e.stopPropagation();
+              confirmDeleteConfig("skill", s.name);
+            };
+            tree.appendChild(row);
+          });
+        } catch (e) {}
+        tree.appendChild(addNewRow("skill"));
 
-    // ── Start ──────────────────────────────────────────────────────────────
-    boot();
-  </script>
-</body>
+        // Personas
+        tree.appendChild(div("tree-folder", "📁 personas/"));
+        try {
+          const r = await api("/config/personas");
+          (r.personas || []).forEach((p) => {
+            const name = typeof p === "string" ? p : p.name;
+            const row = treeFileRow(name, () =>
+              loadConfigFile("persona", name),
+            );
+            row.querySelector(".del-btn").onclick = (e) => {
+              e.stopPropagation();
+              confirmDeleteConfig("persona", name);
+            };
+            tree.appendChild(row);
+          });
+        } catch (e) {}
+        tree.appendChild(addNewRow("persona"));
 
+        // config.yaml
+        tree.appendChild(div("tree-folder", "📄 config.yaml"));
+        const yamlRow = treeFileRow("config.yaml", () =>
+          loadConfigFile("yaml", "config.yaml"),
+        );
+        yamlRow.querySelector(".del-btn").remove();
+        tree.appendChild(yamlRow);
+      }
+
+      function treeFileRow(name, onclick) {
+        const row = document.createElement("div");
+        row.className = "tree-file";
+        row.innerHTML = `<span>📄 ${escHtml(name)}</span><span class="del-btn" title="删除">✕</span>`;
+        row.addEventListener("click", onclick);
+        return row;
+      }
+
+      function addNewRow(type) {
+        const wrap = div("tree-new");
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.placeholder = "新建名称…";
+        const btn = div("", "＋");
+        btn.className = "btn btn-sm btn-primary";
+        btn.style.padding = "2px 8px";
+        btn.onclick = async () => {
+          const name = inp.value.trim();
+          if (!name) return;
+          const tmpl =
+            type === "skill"
+              ? `---\nname: ${name}\ndescription: "${name}"\nprovider: bltcy-anthropic\ntask_goal: ""\ntools:\n  - read_file\n  - search\n---\n\n你是一个...`
+              : "你是一个...\n\n回答时用中文。";
+          try {
+            if (type === "skill")
+              await api("/config/skills", "POST", { name, content: tmpl });
+            else await api("/config/personas", "POST", { name, content: tmpl });
+            toast(`${name} 已创建`);
+            inp.value = "";
+            buildConfigTree();
+            await loadConfigFile(type, name);
+            await loadOverview();
+          } catch (e) {
+            toast(e.message, true);
+          }
+        };
+        wrap.appendChild(inp);
+        wrap.appendChild(btn);
+        return wrap;
+      }
+
+      async function loadConfigFile(type, name) {
+        // Highlight active
+        document.querySelectorAll(".tree-file").forEach((el) => {
+          const txt = el.querySelector("span")?.textContent;
+          el.classList.toggle(
+            "active",
+            txt === `📄 ${name}` || txt === `📄 ${name}`,
+          );
+        });
+
+        currentConfigFile = { type, name };
+        document.getElementById("config-filename").textContent =
+          type === "yaml"
+            ? "config.yaml"
+            : `${type === "skill" ? "skills" : "personas"}/${name}.md`;
+        document.getElementById("config-filename").style.color =
+          "var(--accent)";
+        document.getElementById("config-editor").disabled = false;
+        document.getElementById("config-save-btn").disabled = false;
+        document.getElementById("config-del-btn").disabled = type === "yaml";
+        document.getElementById("config-status").textContent = "";
+
+        try {
+          let r;
+          if (type === "skill") r = await api(`/config/skills/${name}`);
+          else if (type === "persona")
+            r = await api(`/config/personas/${name}`);
+          else r = await api("/config/yaml");
+          document.getElementById("config-editor").value = r.content || "";
+        } catch (e) {
+          toast("加载失败: " + e.message, true);
+        }
+      }
+
+      async function saveConfigFile() {
+        if (!currentConfigFile) return;
+        const { type, name } = currentConfigFile;
+        const content = document.getElementById("config-editor").value;
+        try {
+          if (type === "skill")
+            await api(`/config/skills/${name}`, "PUT", { content });
+          else if (type === "persona")
+            await api(`/config/personas/${name}`, "PUT", { content });
+          else await api("/config/yaml", "PUT", { content });
+          document.getElementById("config-status").textContent = "✓ 已保存";
+          setTimeout(
+            () => (document.getElementById("config-status").textContent = ""),
+            2000,
+          );
+          await loadOverview();
+          await buildConfigTree();
+        } catch (e) {
+          toast("保存失败: " + e.message, true);
+        }
+      }
+
+      async function confirmDeleteConfig(type, name) {
+        if (!confirm(`确认删除 ${name}？`)) return;
+        try {
+          if (type === "skill") await api(`/config/skills/${name}`, "DELETE");
+          else await api(`/config/personas/${name}`, "DELETE");
+          toast(`${name} 已删除`);
+          currentConfigFile = null;
+          document.getElementById("config-editor").value = "";
+          document.getElementById("config-editor").disabled = true;
+          document.getElementById("config-save-btn").disabled = true;
+          document.getElementById("config-del-btn").disabled = true;
+          document.getElementById("config-filename").textContent =
+            "← 选择文件编辑";
+          document.getElementById("config-filename").style.color =
+            "var(--text-muted)";
+          await loadOverview();
+          buildConfigTree();
+        } catch (e) {
+          toast("删除失败: " + e.message, true);
+        }
+      }
+
+      async function deleteConfigFile() {
+        if (!currentConfigFile || currentConfigFile.type === "yaml") return;
+        confirmDeleteConfig(currentConfigFile.type, currentConfigFile.name);
+      }
+
+      // ── Utilities ─────────────────────────────────────────────────────────
+      async function api(path, method = "GET", body = null) {
+        const opts = { method, headers: {} };
+        if (body !== null) {
+          opts.headers["Content-Type"] = "application/json";
+          opts.body = JSON.stringify(body);
+        }
+        const r = await fetch(path, opts);
+        if (r.status === 204) return null;
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || r.statusText);
+        return data;
+      }
+
+      function div(cls, text = "") {
+        const el = document.createElement("div");
+        if (cls) el.className = cls;
+        if (text) el.textContent = text;
+        return el;
+      }
+
+      function escHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function mdToHtml(md) {
+        // Very light markdown: bold, inline code, code blocks, lists
+        let h = escHtml(md);
+        // code blocks
+        h = h.replace(/```[\w]*\n([\s\S]*?)```/g, "<pre><code>$1</code></pre>");
+        // inline code
+        h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
+        // bold
+        h = h.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+        // headers
+        h = h.replace(/^### (.*?)$/gm, "<strong>$1</strong>");
+        h = h.replace(
+          /^## (.*?)$/gm,
+          '<strong style="font-size:1.05em">$1</strong>',
+        );
+        h = h.replace(
+          /^# (.*?)$/gm,
+          '<strong style="font-size:1.1em">$1</strong>',
+        );
+        // unordered list
+        h = h.replace(/^[- *] (.*?)$/gm, "<li>$1</li>");
+        h = h.replace(/(<li>.*<\/li>)/s, "<ul>$1</ul>");
+        // line breaks → paragraphs
+        h = h
+          .split("\n\n")
+          .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+          .join("");
+        return h;
+      }
+
+      function toast(msg, isErr = false) {
+        const el = document.createElement("div");
+        el.className = "toast " + (isErr ? "toast-err" : "toast-ok");
+        el.textContent = msg;
+        document.getElementById("toasts").appendChild(el);
+        setTimeout(() => el.remove(), 3000);
+      }
+
+      // Close modal on overlay click
+      document
+        .getElementById("modal-overlay")
+        .addEventListener("click", (e) => {
+          if (e.target === e.currentTarget) closeModal();
+        });
+
+      // ── Start ──────────────────────────────────────────────────────────────
+      boot();
+    </script>
+  </body>
 </html>

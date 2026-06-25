@@ -118,6 +118,7 @@ async def _build_engine(
     system_prompt: str,
     session_id: str,
     allowed_tools: list[str] | None = None,
+    question_mode: str = "noquestion",
 ) -> tuple[AgentEngine, list]:
     """
     Build an engine.
@@ -133,6 +134,7 @@ async def _build_engine(
             session_store=MemorySessionStore(),
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
+            question_mode=question_mode,
         )
         return engine, mcp_clients
 
@@ -144,6 +146,7 @@ async def _build_engine(
             session_store=MemorySessionStore(),
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
+            question_mode=question_mode,
         ),
         [],
     )
@@ -213,7 +216,8 @@ async def _wait_for_completion(engine: AgentEngine, prev_count: int) -> int:
 
 async def run_cli(provider_name: str, system_prompt: str,
                   allowed_tools: list[str] | None = None,
-                  persona_name: str = "") -> None:
+                  persona_name: str = "",
+                  question_mode: str = "noquestion") -> None:
     try:
         cfg = HarnessConfig.from_yaml("config.yaml")
     except FileNotFoundError:
@@ -229,7 +233,8 @@ async def run_cli(provider_name: str, system_prompt: str,
 
     session_id = str(uuid.uuid4())[:8]
     engine, mcp_clients = await _build_engine(
-        cfg, provider_name, system_prompt, session_id, allowed_tools=allowed_tools
+        cfg, provider_name, system_prompt, session_id,
+        allowed_tools=allowed_tools, question_mode=question_mode,
     )
     prev_count = 0
 
@@ -256,7 +261,8 @@ async def run_cli(provider_name: str, system_prompt: str,
                         pass
                 session_id = str(uuid.uuid4())[:8]
                 engine, mcp_clients = await _build_engine(
-                    cfg, provider_name, system_prompt, session_id, allowed_tools=allowed_tools
+                    cfg, provider_name, system_prompt, session_id,
+                    allowed_tools=allowed_tools, question_mode=question_mode,
                 )
                 prev_count = 0
                 print(_color(f"  [新会话已开启: {session_id}]", YELLOW))
@@ -272,7 +278,24 @@ async def run_cli(provider_name: str, system_prompt: str,
 
             if user_input.lower() == "/state":
                 snap = await engine.get_snapshot()
-                print(_color(f"  状态: {snap['state']}  消息数: {len(snap['last_messages'])}", DIM))
+                print(_color(
+                    f"  状态: {snap['state']}  消息数: {len(snap['last_messages'])}  "
+                    f"提问模式: {snap.get('question_mode', 'noquestion')}",
+                    DIM,
+                ))
+                continue
+
+            if user_input.lower() in ("/mode question", "/mode q"):
+                new_mode = await engine.set_question_mode("question")
+                print(_color(f"  提问模式已开启 ({new_mode}) — AI 将在需求模糊时主动提问", CYAN))
+                continue
+            if user_input.lower() in ("/mode noquestion", "/mode nq"):
+                new_mode = await engine.set_question_mode("noquestion")
+                print(_color(f"  提问模式已关闭 ({new_mode}) — AI 将直接执行并说明假设", CYAN))
+                continue
+            if user_input.lower() == "/mode":
+                print(_color(f"  当前提问模式: {engine.get_question_mode()}", DIM))
+                print(_color("  用法: /mode question | /mode noquestion", DIM))
                 continue
 
             if user_input.lower() == "/skills":
@@ -379,6 +402,12 @@ def main() -> None:
         action="store_true",
         help="列出所有可用 Persona 并退出",
     )
+    parser.add_argument(
+        "--question-mode",
+        choices=["question", "noquestion"],
+        default="noquestion",
+        help="提问模式：question=允许 AI 在需求模糊时主动提问；noquestion=直接执行（默认）",
+    )
     args = parser.parse_args()
 
     if args.list_personas:
@@ -427,7 +456,8 @@ def main() -> None:
 
     asyncio.run(run_cli(provider, system,
                         allowed_tools=allowed_tools,
-                        persona_name=persona_name))
+                        persona_name=persona_name,
+                        question_mode=args.question_mode))
 
 
 if __name__ == "__main__":
