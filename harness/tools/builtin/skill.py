@@ -23,29 +23,38 @@ USE_SKILL_SCHEMA = ToolSchema(
             name="name",
             type="string",
             description="The skill name to load (e.g. 'code-review', 'python-dev')",
-        )
+        ),
+        ToolParam(
+            name="arguments",
+            type="string",
+            required=False,
+            description="Optional arguments to pass to the skill (e.g. file path, search query)",
+        ),
     ],
 )
 
 
-async def use_skill_tool(name: str) -> str:
+async def use_skill_tool(name: str, arguments: str = "") -> str:
     try:
         meta = load_skill(name)
         content = meta.get("system_prompt", "")
         if not content:
             return f"Skill '{name}' exists but has no instructions."
 
-        # Inject base directory so the model can resolve relative paths
-        # like "see references/forms.md" in the skill body
         source = meta.get("_source_file", "")
         base_dir = str(Path(source).parent) if source else f"skills/{name}"
 
-        return (
+        result = (
             f"Base directory: {base_dir}\n\n"
             f"# Skill: {name}\n\n"
-            f"{content}\n\n"
-            f"---\nFollow the above instructions for the current task."
+            f"{content}"
         )
+
+        if arguments:
+            result += f"\n\n---\nArguments: {arguments}"
+
+        result += f"\n\n---\nFollow the above instructions for the current task."
+        return result
     except ValueError:
         available = [s["name"] for s in list_skills()]
         return (

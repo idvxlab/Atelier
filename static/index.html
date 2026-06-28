@@ -1318,7 +1318,6 @@
             <div id="sessions-list">
               <div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无会话</div>
             </div>
-            <div id="archive-toggle" class="hidden" onclick="toggleArchiveFilter()">📦 显示已归档</div>
           </div>
 
           <div class="divider"></div>
@@ -1475,7 +1474,6 @@
     let streamIsThinking = false;
     let pendingUserEchoes = [];
     let activeThinkingGroup = null;
-    let showArchived = false;    // archive filter toggle
     let allCommands = [];       // command list from GET /commands
     let filteredCommands = [];  // search-filtered subset
     let selectedCmdIndex = -1;  // index in filteredCommands
@@ -1544,17 +1542,7 @@
       sl.innerHTML = '';
       // Sort: pinned first, then by order from backend (already sorted)
       const sorted = [...allSessions].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-      const visible = showArchived ? sorted : sorted.filter(s => !s.archived);
-      const hasArchived = allSessions.some(s => s.archived);
-
-      // Show archive toggle
-      const archiveToggle = document.getElementById('archive-toggle');
-      if (hasArchived || showArchived) {
-        archiveToggle.classList.remove('hidden');
-        archiveToggle.textContent = showArchived ? '📦 隐藏已归档' : `📦 显示已归档 (${allSessions.filter(s => s.archived).length})`;
-      } else {
-        archiveToggle.classList.add('hidden');
-      }
+      const visible = sorted.filter(s => !s.archived);
 
       if (!visible.length) {
         sl.innerHTML = '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无会话</div>';
@@ -1885,11 +1873,6 @@
         await refreshSessions();
         toast('已删除');
       } catch (e) { toast('删除失败: ' + e.message, true); }
-    }
-
-    function toggleArchiveFilter() {
-      showArchived = !showArchived;
-      renderSessionsList();
     }
 
     // ── Messaging ─────────────────────────────────────────────────────────
@@ -3080,9 +3063,6 @@
       const inp = document.getElementById('msg-input');
       // Build command text: /id with param placeholders as hints
       let text = '/' + cmd.id;
-      if (cmd.has_params) {
-        text += ' ' + cmd.params.map(p => '<' + p.toLowerCase() + '>').join(' ');
-      }
       inp.value = text;
       hideCommandBar();
       // Delay to let mousedown event settle before focusing
