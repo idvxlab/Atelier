@@ -229,19 +229,11 @@ def build_engine(
     _project_context = ""
     if _project_md.exists():
         _project_context = (
-            "
-
-## Project Context (MYHARNESS.md)
-"
+            "\n\n## Project Context (MYHARNESS.md)\n"
             "The following is the project's memory file. "
-            "Follow its guidelines and use the commands it describes.
-
-"
+            "Follow its guidelines and use the commands it describes.\n\n"
             + _project_md.read_text(encoding="utf-8")
-            + "
-
----
-"
+            + "\n\n---\n"
         )
 
     # Question-mode instructions: only appended when user enabled it.
