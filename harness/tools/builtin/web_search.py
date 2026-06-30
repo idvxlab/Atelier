@@ -15,9 +15,10 @@ WEB_SEARCH_SCHEMA = ToolSchema(
     name="web_search",
     description=(
         "Search the public web and return structured search results with title, URL, "
-        "snippet, rank, and provider metadata. Uses Brave Search API when "
-        "BRAVE_SEARCH_API_KEY is configured. Falls back to DuckDuckGo Instant Answer "
-        "for local smoke testing only."
+        "snippet, rank, and provider metadata. Provider priority: "
+        "1) Serper (Google results, requires SERPER_API_KEY), "
+        "2) Brave Search (requires BRAVE_SEARCH_API_KEY), "
+        "3) DuckDuckGo Instant Answer (free fallback, only answers factual/definition queries)."
     ),
     params=[
         ToolParam(
@@ -36,6 +37,7 @@ WEB_SEARCH_SCHEMA = ToolSchema(
 
 
 BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
+SERPER_SEARCH_URL = "https://google.serper.dev/search"
 DDG_INSTANT_ANSWER_URL = "https://api.duckduckgo.com/"
 
 DEFAULT_SEARCH_RESULTS = 5
@@ -110,6 +112,14 @@ async def web_search_tool(query: str, max_results: int = DEFAULT_SEARCH_RESULTS)
         )
 
     brave_api_key = os.getenv("BRAVE_SEARCH_API_KEY")
+    serper_api_key = os.getenv("SERPER_API_KEY")
+
+    if serper_api_key:
+        return await _serper_web_search(
+            query=query,
+            max_results=max_results,
+            api_key=serper_api_key,
+        )
 
     if brave_api_key:
         return await _brave_web_search(
@@ -258,6 +268,164 @@ def _iter_ddg_related_topics(items: list[dict[str, Any]]) -> Iterable[dict[str, 
             yield from _iter_ddg_related_topics(topics)
         else:
             yield item
+
+
+async def _serper_web_search(query: str, max_results: int, api_key: str) -> str:
+    """
+    Serper.dev Google Search API.
+
+    Free tier: 2,500 queries/month. Sign up at https://serper.dev.
+    Returns Google organic search results including People Also Ask, knowledge
+    graph, and related searches when present.
+    """
+    try:
+        timeout = httpx.Timeout(20.0, connect=5.0)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                SERPER_SEARCH_URL,
+                headers={
+                    "X-API-KEY": api_key,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "q": query,
+                    "num": max_results,
+                },
+            )
+
+            response.raise_for_status()
+            data = response.json()
+
+    except httpx.TimeoutException:
+        return _json(
+            {
+                "ok": False,
+                "tool": "web_search",
+                "provider": "serper",
+                "query": query,
+                "results": [],
+                "error": {
+                    "type": "timeout",
+                    "message": "Serper (Google) search request timed out",
+                },
+            }
+        )
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code if exc.response is not None else 0
+        detail = ""
+        try:
+            detail = (exc.response.text or "")[:200]
+        except Exception:
+            pass
+        return _json(
+            {
+                "ok": False,
+                "tool": "web_search",
+                "provider": "serper",
+                "query": query,
+                "results": [],
+                "error": {
+                    "type": "http_error",
+                    "message": f"Serper returned HTTP {status}: {detail}",
+                },
+            }
+        )
+    except Exception as exc:
+        return _json(
+            {
+                "ok": False,
+                "tool": "web_search",
+                "provider": "serper",
+                "query": query,
+                "results": [],
+                "error": {
+                    "type": "fetch_error",
+                    "message": repr(exc),
+                },
+            }
+        )
+
+    # Extract organic results
+    raw_results = data.get("organic", []) or []
+    results: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+
+    for rank_zero, item in enumerate(raw_results):
+        if len(results) >= max_results:
+            break
+        if not isinstance(item, dict):
+            continue
+        url = _clean_text(item.get("link"))
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        results.append(
+            {
+                "rank": len(results) + 1,
+                "title": _clean_text(item.get("title")),
+                "url": url,
+                "snippet": _clean_text(item.get("snippet")),
+                "date": _clean_text(item.get("date")),
+                "source": "google_serper",
+            }
+        )
+
+    # Knowledge graph (if Google provides one for the query)
+    kg = data.get("knowledgeGraph")
+    kg_payload: dict[str, Any] | None = None
+    if isinstance(kg, dict):
+        kg_payload = {
+            "title": _clean_text(kg.get("title")),
+            "type": _clean_text(kg.get("type")),
+            "description": _clean_text(kg.get("description")),
+            "website": _clean_text(kg.get("website")),
+        }
+
+    # People Also Ask (often valuable for LLM context)
+    paa = data.get("peopleAlsoAsk") or []
+    paa_payload: list[dict[str, Any]] = []
+    for q in paa[:5]:
+        if isinstance(q, dict):
+            paa_payload.append(
+                {
+                    "question": _clean_text(q.get("question")),
+                    "snippet": _clean_text(q.get("snippet")),
+                    "link": _clean_text(q.get("link")),
+                }
+            )
+
+    # Related searches
+    related = data.get("relatedSearches") or []
+    related_payload: list[str] = [
+        r for r in (_clean_text(x.get("query")) for x in related if isinstance(x, dict)) if r
+    ][:10]
+
+    search_metadata: dict[str, Any] = {}
+    sm = data.get("searchMetadata") or {}
+    if isinstance(sm, dict):
+        search_metadata["total_time_taken"] = sm.get("totalTimeTaken")
+        search_metadata["google_domain"] = sm.get("googleDomain")
+        search_metadata["credits_used"] = sm.get("credits")
+
+    payload: dict[str, Any] = {
+        "ok": True,
+        "tool": "web_search",
+        "provider": "serper",
+        "query": query,
+        "results": results,
+        "result_count": len(results),
+        "is_full_web_search": True,
+        "meta": search_metadata or None,
+    }
+    if kg_payload:
+        payload["knowledge_graph"] = kg_payload
+    if paa_payload:
+        payload["people_also_ask"] = paa_payload
+    if related_payload:
+        payload["related_searches"] = related_payload
+
+    return _json(payload)
 
 
 async def _duckduckgo_instant_answer_fallback(query: str, max_results: int) -> str:

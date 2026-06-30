@@ -9,18 +9,24 @@ class MemorySessionStore(SessionStore):
     def __init__(self) -> None:
         self._sessions: dict[str, SessionRecord] = {}
 
-    async def save(self, session_id: str, messages: list[Message]) -> None:
+    async def save(self, session_id: str, messages: list[Message], title: str = "", metadata: dict | None = None) -> None:
         now = datetime.now(timezone.utc).isoformat()
         if session_id in self._sessions:
             rec = self._sessions[session_id]
             rec.messages = list(messages)
             rec.updated_at = now
+            if title:
+                rec.title = title
+            if metadata is not None:
+                rec.metadata = metadata
         else:
             self._sessions[session_id] = SessionRecord(
                 session_id=session_id,
                 messages=list(messages),
                 created_at=now,
                 updated_at=now,
+                title=title,
+                metadata=metadata if metadata is not None else {},
             )
 
     async def load(self, session_id: str) -> SessionRecord | None:

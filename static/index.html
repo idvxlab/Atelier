@@ -313,6 +313,38 @@
       background: var(--surface);
     }
 
+    /* question mode */
+    #mode-toolbar {
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      font-size: 13px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .mode-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .mode-toggle button { background: var(--bg); color: var(--text-muted); border: none; padding: 5px 12px; cursor: pointer; font-size: 13px; font-family: var(--font); }
+    .mode-toggle button.active { background: var(--accent); color: #fff; }
+    .mode-toggle button:not(.active):hover { background: var(--border); color: var(--text); }
+    .mode-hint { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+    .clarify-card { margin: 8px 0; padding: 14px 16px; border: 1px solid var(--accent); border-radius: 8px; background: rgba(88, 166, 255, .08); width: min(760px, 100%); flex-shrink: 0; }
+    .clarify-question { font-weight: 600; margin-bottom: 10px; color: var(--text); font-size: 14px; }
+    .clarify-header { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 4px; text-transform: uppercase; }
+    .clarify-question-block { padding: 10px 0; border-top: 1px dashed var(--border); }
+    .clarify-question-block:first-of-type { border-top: none; padding-top: 4px; }
+    .clarify-options { display: flex; flex-direction: column; gap: 6px; }
+    .clarify-option { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; background: var(--bg); color: var(--text); }
+    .clarify-option:hover, .clarify-option.is-selected { border-color: var(--accent); background: rgba(88, 166, 255, .12); }
+    .clarify-option input { margin-top: 3px; cursor: pointer; accent-color: var(--accent); }
+    .clarify-option-desc, .clarify-status { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+    .clarify-custom-input { width: 100%; margin-top: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; outline: none; }
+    .clarify-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .clarify-error { color: var(--red); }
+    .clarify-card.is-readonly { opacity: .85; border-style: dashed; }
+    .clarify-card.is-readonly .clarify-actions { display: none; }
     #msg-input {
       flex: 1;
       background: var(--bg);
@@ -1379,6 +1411,14 @@
           </div>
         </div>
 
+        <div id="mode-toolbar">
+          <span>提问模式：</span>
+          <div class="mode-toggle" id="mode-toggle">
+            <button data-mode="question" onclick="setQuestionMode('question')">允许提问</button>
+            <button data-mode="noquestion" onclick="setQuestionMode('noquestion')">直接执行</button>
+          </div>
+          <span class="mode-hint" id="mode-hint">AI 将基于合理假设直接执行</span>
+        </div>
         <div id="cmd-bar">
           <input type="text" id="cmd-search-bar" placeholder="搜索命令…" autocomplete="off"
             oninput="filterCommands()" onkeydown="handleCmdKey(event)">
@@ -1476,6 +1516,7 @@
     let activeThinkingGroup = null;
     let allCommands = [];       // command list from GET /commands
     let filteredCommands = [];  // search-filtered subset
+    let currentQuestionMode = 'noquestion';
     let selectedCmdIndex = -1;  // index in filteredCommands
     let menuSessionId = null;    // which session's menu is open
     // Poll deduplication: at most one doPoll in-flight + one queued
@@ -1875,6 +1916,151 @@
       } catch (e) { toast('删除失败: ' + e.message, true); }
     }
 
+    // Question mode + clarification cards
+    function setQuestionMode(mode) {
+      if (mode !== 'question' && mode !== 'noquestion') return;
+      if (!currentSessionId) { toast('请先选择或创建一个会话', true); return; }
+      if (mode === currentQuestionMode) return;
+      api(`/sessions/${currentSessionId}/mode`, 'PATCH', { question_mode: mode })
+        .then(data => {
+          currentQuestionMode = data.question_mode || mode;
+          updateModeToggleUI();
+          toast(currentQuestionMode === 'question' ? '已开启提问模式' : '已切换为直接执行模式');
+        })
+        .catch(e => toast('切换模式失败: ' + e.message, true));
+    }
+
+    function updateModeToggleUI() {
+      document.querySelectorAll('#mode-toggle button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === currentQuestionMode);
+      });
+      const hint = document.getElementById('mode-hint');
+      if (hint) hint.textContent = currentQuestionMode === 'question' ? '允许 AI 在需求模糊时向你提问澄清' : 'AI 将基于合理假设直接执行';
+    }
+
+    function coerceQuestionPrompts(raw) {
+      if (Array.isArray(raw?.questions) && raw.questions.length) {
+        return raw.questions.map(q => ({ question: q.question || '', header: q.header || '', options: (q.options || []).map(o => typeof o === 'string' ? { label: o, description: '' } : { label: o.label || '', description: o.description || '' }), multiple: !!q.multiple, custom: q.custom !== false }));
+      }
+      if (typeof raw?.question === 'string') {
+        return [{ question: raw.question, header: '', options: (raw.options || []).map(o => typeof o === 'string' ? { label: o, description: '' } : { label: o.label || '', description: o.description || '' }), multiple: !!raw.multi_select, custom: true }];
+      }
+      return [];
+    }
+
+    function renderClarificationCard(req) {
+      const prompts = coerceQuestionPrompts(req);
+      const card = div('clarify-card');
+      card.dataset.clarifId = req.request_id;
+      if (!prompts.length) { card.textContent = '[invalid question payload]'; return card; }
+      card.appendChild(div('clarify-question', `Agent asks ${prompts.length} question${prompts.length > 1 ? 's' : ''}:`));
+      prompts.forEach((q, qi) => {
+        const block = div('clarify-question-block');
+        block.dataset.qi = String(qi);
+        if (q.header) block.appendChild(div('clarify-header', q.header));
+        block.appendChild(div('clarify-question', q.question || '请选择'));
+        const opts = div('clarify-options');
+        (q.options || []).forEach(o => {
+          const label = document.createElement('label');
+          label.className = 'clarify-option';
+          const input = document.createElement('input');
+          input.type = q.multiple ? 'checkbox' : 'radio';
+          input.name = `clarif-${req.request_id}-${qi}`;
+          input.value = o.label;
+          input.addEventListener('change', () => label.classList.toggle('is-selected', input.checked));
+          const text = document.createElement('span');
+          text.innerHTML = `<span>${escHtml(o.label)}</span>${o.description ? `<div class="clarify-option-desc">${escHtml(o.description)}</div>` : ''}`;
+          label.appendChild(input);
+          label.appendChild(text);
+          opts.appendChild(label);
+        });
+        block.appendChild(opts);
+        if (q.custom) {
+          const custom = document.createElement('input');
+          custom.className = 'clarify-custom-input';
+          custom.dataset.qi = String(qi);
+          custom.placeholder = '自定义回答';
+          block.appendChild(custom);
+        }
+        block.appendChild(div('clarify-status'));
+        card.appendChild(block);
+      });
+      const actions = div('clarify-actions');
+      const submit = document.createElement('button');
+      submit.className = 'btn btn-primary btn-sm';
+      submit.textContent = '提交';
+      submit.onclick = () => submitClarification(req.request_id, prompts);
+      const skip = document.createElement('button');
+      skip.className = 'btn btn-sm';
+      skip.textContent = '跳过';
+      skip.onclick = () => rejectClarification(req.request_id);
+      actions.appendChild(submit);
+      actions.appendChild(skip);
+      card.appendChild(actions);
+      const status = div('clarify-status');
+      status.dataset.role = 'status';
+      card.appendChild(status);
+      return card;
+    }
+
+    function collectClarificationAnswers(card, prompts) {
+      return prompts.map((q, qi) => {
+        const block = card.querySelector(`.clarify-question-block[data-qi="${qi}"]`);
+        if (!block) return [];
+        const answers = Array.from(block.querySelectorAll('input[type="radio"]:checked,input[type="checkbox"]:checked')).map(i => i.value);
+        const custom = block.querySelector('.clarify-custom-input');
+        if (custom && custom.value.trim()) answers.push(custom.value.trim());
+        return answers;
+      });
+    }
+
+    async function submitClarification(requestId, prompts) {
+      const card = document.querySelector(`.clarify-card[data-clarif-id="${requestId}"]`);
+      if (!card) return;
+      const answers = collectClarificationAnswers(card, prompts);
+      card.querySelectorAll('button,input').forEach(el => el.disabled = true);
+      const status = card.querySelector('[data-role="status"]');
+      if (status) status.textContent = '提交中...';
+      try {
+        await api(`/sessions/${currentSessionId}/questions/${requestId}/reply`, 'POST', { answers });
+        card.classList.add('is-readonly');
+        if (status) status.textContent = '已提交，等待 Agent 继续...';
+        triggerPoll();
+        if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+      } catch (e) {
+        card.querySelectorAll('button,input').forEach(el => el.disabled = false);
+        if (status) { status.classList.add('clarify-error'); status.textContent = '提交失败: ' + e.message; }
+        else toast('提交失败: ' + e.message, true);
+      }
+    }
+
+    async function rejectClarification(requestId) {
+      const card = document.querySelector(`.clarify-card[data-clarif-id="${requestId}"]`);
+      if (!card) return;
+      card.querySelectorAll('button,input').forEach(el => el.disabled = true);
+      try {
+        await api(`/sessions/${currentSessionId}/questions/${requestId}/reject`, 'POST');
+        card.remove();
+        triggerPoll();
+        if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+      } catch (e) {
+        toast('跳过失败: ' + e.message, true);
+        card.querySelectorAll('button,input').forEach(el => el.disabled = false);
+      }
+    }
+
+    function renderPendingClarifications(snap) {
+      const container = document.getElementById('messages');
+      if (!container) return;
+      container.querySelectorAll('.clarify-card').forEach(el => el.remove());
+      const pending = snap.pending_question_requests || [];
+      if (!pending.length) return;
+      const latest = pending[pending.length - 1];
+      const card = renderClarificationCard(latest);
+      const dots = document.getElementById('typing-dots');
+      if (dots) container.insertBefore(card, dots);
+      else container.appendChild(card);
+    }
     // ── Messaging ─────────────────────────────────────────────────────────
     async function sendMessage() {
       const inp = document.getElementById('msg-input');
@@ -2103,6 +2289,11 @@
           triggerPoll();   // mid-run state update (e.g. RUNNING after confirm)
         }
 
+      } else if (frame.type === 'question.asked') {
+        triggerPoll();
+      } else if (frame.type === 'question.updated' || frame.type === 'question.resolved') {
+        document.querySelectorAll('.clarify-card').forEach(el => el.remove());
+        triggerPoll();
       } else if (frame.type === 'error') {
         toast('引擎错误: ' + (frame.data?.detail || JSON.stringify(frame.data)), true);
       }
@@ -2150,6 +2341,10 @@
 
       const msgs = snap.last_messages || [];
       const meta = snap.meta || {};
+      if (snap.question_mode && snap.question_mode !== currentQuestionMode) {
+        currentQuestionMode = snap.question_mode;
+      }
+      updateModeToggleUI();
 
       // Header — use display_name if set
       const titleEl = document.getElementById('session-title');
@@ -2231,6 +2426,8 @@
       } else if (dotsEl) {
         dotsEl.remove();
       }
+      renderPendingClarifications(snap);
+
 
       // Scroll to bottom
       container.scrollTop = container.scrollHeight;

@@ -149,6 +149,7 @@ async def _build_engine(
     system_prompt: str,
     session_id: str,
     allowed_tools: list[str] | None = None,
+    question_mode: str = "noquestion",
 ) -> tuple[AgentEngine, list]:
     """
     Build an engine.
@@ -164,6 +165,7 @@ async def _build_engine(
             session_store=MemorySessionStore(),
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
+            question_mode=question_mode,
         )
         return engine, mcp_clients
 
@@ -175,6 +177,7 @@ async def _build_engine(
             session_store=MemorySessionStore(),
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
+            question_mode=question_mode,
         ),
         [],
     )
@@ -437,7 +440,8 @@ async def _handle_command(
 
 async def run_cli(provider_name: str, system_prompt: str,
                   allowed_tools: list[str] | None = None,
-                  persona_name: str = "") -> None:
+                  persona_name: str = "",
+                  question_mode: str = "noquestion") -> None:
     try:
         cfg = HarnessConfig.from_yaml("config.yaml")
     except FileNotFoundError:
@@ -453,7 +457,8 @@ async def run_cli(provider_name: str, system_prompt: str,
 
     session_id = str(uuid.uuid4())[:8]
     engine, mcp_clients = await _build_engine(
-        cfg, provider_name, system_prompt, session_id, allowed_tools=allowed_tools
+        cfg, provider_name, system_prompt, session_id,
+        allowed_tools=allowed_tools, question_mode=question_mode,
     )
     prev_count = 0
 
@@ -472,7 +477,22 @@ async def run_cli(provider_name: str, system_prompt: str,
                 print(_color("再见！", DIM))
                 break
 
-            # ── Unified command dispatch (all /-prefixed inputs) ─────
+            if user_input.lower() in ("/mode question", "/mode q"):
+                new_mode = await engine.set_question_mode("question")
+                question_mode = new_mode
+                print(_color(f"  Question mode enabled ({new_mode})", CYAN))
+                continue
+            if user_input.lower() in ("/mode noquestion", "/mode nq"):
+                new_mode = await engine.set_question_mode("noquestion")
+                question_mode = new_mode
+                print(_color(f"  Question mode disabled ({new_mode})", CYAN))
+                continue
+            if user_input.lower() == "/mode":
+                print(_color(f"  Current question mode: {engine.get_question_mode()}", DIM))
+                print(_color("  Usage: /mode question | /mode noquestion", DIM))
+                continue
+
+            # Unified command dispatch (all /-prefixed inputs)
             if user_input.startswith("/"):
                 _ensure_cmd_system(cfg, provider_name, system_prompt,
                                     allowed_tools, persona_name,
@@ -489,19 +509,17 @@ async def run_cli(provider_name: str, system_prompt: str,
                     session_id = str(uuid.uuid4())[:8]
                     engine, mcp_clients = await _build_engine(
                         cfg, provider_name, system_prompt, session_id,
-                        allowed_tools=allowed_tools
+                        allowed_tools=allowed_tools, question_mode=question_mode,
                     )
                     _cmd_ctx.engine = engine
                     _cmd_ctx.session_id = session_id
                     prev_count = 0
-                    print(_color(f"  [新会话已开启: {session_id}]", YELLOW))
+                    print(_color(f"  [new session started: {session_id}]", YELLOW))
                     continue
                 if handled == "continue":
-                    # Command was handled (prompt sent or internal action done)
                     prev_count = await _wait_for_completion(engine, prev_count)
                     print()
                     continue
-                # handled is None → not a command, send to AI as regular message
                 await engine.send_message(user_input)
                 prev_count = await _wait_for_completion(engine, prev_count)
                 print()
@@ -570,6 +588,12 @@ def main() -> None:
         action="store_true",
         help="列出所有可用 Persona 并退出",
     )
+    parser.add_argument(
+        "--question-mode",
+        choices=["question", "noquestion"],
+        default="noquestion",
+        help="提问模式：question=允许 AI 在需求模糊时主动提问；noquestion=直接执行（默认）",
+    )
     args = parser.parse_args()
 
     if args.list_personas:
@@ -618,7 +642,8 @@ def main() -> None:
 
     asyncio.run(run_cli(provider, system,
                         allowed_tools=allowed_tools,
-                        persona_name=persona_name))
+                        persona_name=persona_name,
+                        question_mode=args.question_mode))
 
 
 if __name__ == "__main__":

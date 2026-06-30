@@ -17,7 +17,7 @@ Concurrency model:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Any, Callable, Awaitable, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -27,10 +27,16 @@ from harness.llm.base import TokenCallback
 
 MessageListener = Callable[["Message"], Awaitable[None]]
 StateListener = Callable[[], Awaitable[None]]
+# EventListener receives structured, semantic engine events (e.g. question.asked,
+# question.resolved). The WS layer subscribes a push_event coroutine here so
+# the frontend can update reactively without polling the /state endpoint.
+EngineEvent = dict  # {"type": str, "data": dict}
+EventListener = Callable[[EngineEvent], Awaitable[None]]
 
-from harness.types.messages import Message, TextBlock
+from harness.types.messages import Message, TextBlock, new_message_id
 from harness.engine.state_machine import StateMachine, EngineState
-from harness.engine.loop import ReactLoop
+from harness.engine.loop import ReactLoop, InterruptSignal
+from harness.engine.prompt_cache import PromptCache
 from harness.storage.session import SessionStore
 from harness.observability.events import EventEmitter
 from harness.tools.registry import ToolRegistry
@@ -44,6 +50,65 @@ class EngineConfig:
     system_prompt: str = ""
     task_goal: str = ""
     confirm_tools: frozenset[str] = field(default_factory=frozenset)
+    provider_name: str = ""
+    spawn_depth: int = 0
+    question_mode: str = "noquestion"   # "question" | "noquestion"
+
+
+@dataclass
+class PendingCommand:
+    index: int
+    text: str
+    submitted_at: float  # unix timestamp
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class PendingSpawn:
+    index: int
+    sub_id: str
+    task: str
+    display_name: str
+    submitted_at: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class PendingQuestion:
+    """
+    Canonical type alias for QuestionRequest. The engine imports the canonical
+    type from harness.types.questions and re-exports it under this name so
+    that legacy callers keep compiling. New code MUST use QuestionRequest.
+    """
+    request_id: str
+    tool_call_id: str
+    questions: list
+    submitted_at: float
+    status: str = "pending"
+    answers: list | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "tool_call_id": self.tool_call_id,
+            "questions": [q.to_dict() for q in self.questions],
+            "submitted_at": self.submitted_at,
+            "status": self.status,
+        }
+
+
+# Wire the canonical type in — at this point both names point to the same
+# class, which is what the rest of the engine assumes.
+from harness.types.questions import QuestionRequest
+PendingQuestion = QuestionRequest
+
+
+# Backwards-compat alias — older code may still reference this name.
+PendingClarification = PendingQuestion
 
 
 def serialize_message(msg: Message) -> dict[str, Any]:
@@ -68,6 +133,7 @@ def serialize_message(msg: Message) -> dict[str, Any]:
         blocks.append(d)
     return {
         "role": msg.role,
+        "message_id": msg.message_id,
         "content": blocks,
         "round_index": msg.round_index,
         "is_compressed": msg.is_compressed,
@@ -82,12 +148,14 @@ class AgentEngine:
         session_store: SessionStore,
         emitter: EventEmitter,
         tool_registry: ToolRegistry,
+        prompt_cache: PromptCache | None = None,
     ) -> None:
         self._config = config
         self._loop = loop
         self._session_store = session_store
         self._emitter = emitter
         self._tool_registry = tool_registry
+        self._prompt_cache: PromptCache = prompt_cache if prompt_cache is not None else PromptCache()
 
         self._sm = StateMachine()
         self._messages: list[Message] = []
@@ -103,6 +171,45 @@ class AgentEngine:
         self._confirmation_event = asyncio.Event()
         self._confirmation_approved: bool = False
         self._pending_tool_calls: list[dict] | None = None
+
+        # Title generation state
+        self._title_generated: bool = False
+
+        # Rewrite/version tracking for history rollback detection
+        self._session_version: int = 0
+
+        # Question mode ("question" | "noquestion") — default noquestion
+        self._question_mode: str = getattr(
+            config, "question_mode", "noquestion"
+        ) or "noquestion"
+
+        # Pending QuestionRequest objects (set when ask_user tool fires).
+        # Each entry is a QuestionRequest, keyed by request_id.
+        # The engine is the SINGLE source of truth for this state.
+        self._pending_question_requests: dict[str, "QuestionRequest"] = {}
+        self._pending_question_requests_lock = asyncio.Lock()
+
+        # Resolved-question results, keyed by request_id. Populated when a
+        # request is answered / rejected / expired. Retained so that the
+        # engine can rewrite the matching tool_result block in messages.
+        self._question_request_results: dict[str, dict[str, Any]] = {}
+        self._question_request_results_lock = asyncio.Lock()
+
+        # WebSocket event channel — listeners are notified for every
+        # question.asked / question.updated / question.resolved. Frontends
+        # use this as the primary sync path; GET /state remains a
+        # snapshot-restore fallback.
+        self._event_listeners: list[EventListener] = []
+
+        # Pending command queue (commands sent while engine is RUNNING)
+        self._pending_commands: list[PendingCommand] = []
+        self._pending_commands_lock = asyncio.Lock()
+        self._pending_commands_counter: int = 0
+
+        # Pending spawn tasks (sub-agents launched non-blocking)
+        self._pending_spawns: list[PendingSpawn] = []
+        self._pending_spawns_lock = asyncio.Lock()
+        self._pending_spawns_counter: int = 0
 
         # Inject system prompt if provided
         if config.system_prompt:
@@ -140,11 +247,30 @@ class AgentEngine:
             return False
         async with self._state_lock:
             self._messages = record.messages
+            # Restore question_mode from metadata if present
+            if isinstance(record.metadata, dict):
+                qm = record.metadata.get("question_mode")
+                if qm in ("question", "noquestion"):
+                    self._question_mode = qm
             # Force state to WAITING_INPUT after reload — the engine is idle
             # and the user can send a new message to continue.
             # Skip if already in WAITING_INPUT (no-transition-from-itself).
             if self._sm.state != EngineState.WAITING_INPUT:
                 self._sm.transition(EngineState.WAITING_INPUT)
+        # Re-register ask_user if question mode is on
+        if self._question_mode == "question" and self._tool_registry is not None:
+            try:
+                from harness.tools.builtin.ask_user import (
+                    ASK_USER_SCHEMA, make_ask_user_tool,
+                )
+                # Avoid double-registration
+                existing = {t.schema.name for t in self._tool_registry.discover()}
+                if "ask_user" not in existing:
+                    self._tool_registry.register(
+                        ASK_USER_SCHEMA, make_ask_user_tool(self)
+                    )
+            except Exception:
+                pass
         return True
 
     def add_message_listener(self, listener: MessageListener) -> None:
@@ -194,10 +320,23 @@ class AgentEngine:
                 "last_messages": [
                     serialize_message(m) for m in self._messages[-20:]
                 ],
+                "session_version": self._session_version,
+                "question_mode": self._question_mode,
             }
             if self._pending_tool_calls is not None:
                 snap["pending_approval"] = self._pending_tool_calls
-            return snap
+
+        # Gather pending commands/spawns (reads from lock-free lists)
+        async with self._pending_commands_lock:
+            snap["pending_commands"] = [pc.to_dict() for pc in self._pending_commands]
+        async with self._pending_spawns_lock:
+            snap["pending_spawns"] = [ps.to_dict() for ps in self._pending_spawns]
+        async with self._pending_question_requests_lock:
+            snap["pending_question_requests"] = [
+                qr.to_dict() for qr in self._pending_question_requests.values()
+            ]
+
+        return snap
 
     async def send_message(self, text: str) -> None:
         """
@@ -209,13 +348,18 @@ class AgentEngine:
             state = self._sm.state
 
         if state == EngineState.RUNNING:
-            # Queue — will be injected after the current tool_result flushes
-            await self._intervention_queue.put(
-                Message(role="user", content=[TextBlock(text=text)])
-            )
+            # Track pending command for ordered execution after current run ends
+            async with self._pending_commands_lock:
+                self._pending_commands_counter += 1
+                pc = PendingCommand(
+                    index=self._pending_commands_counter,
+                    text=text,
+                    submitted_at=__import__("time").time(),
+                )
+                self._pending_commands.append(pc)
             self._emitter.emit(
                 "send_message", "triggered-intercepted",
-                detail={"reason": "engine_running", "queued": True},
+                detail={"reason": "engine_running", "queued": True, "index": pc.index},
             )
             return
 
@@ -236,13 +380,21 @@ class AgentEngine:
         # Fire-and-forget — all three outcome paths guarantee state restoration
         asyncio.create_task(self._run_loop_guarded())
 
-    async def run_to_completion(self, task: str) -> str:
+        # Trigger async title generation (only for top-level agents, only once)
+        if self._config.spawn_depth == 0 and not self._title_generated:
+            self._title_generated = True
+            asyncio.create_task(self._generate_title_async(text))
+
+    async def run_to_completion(self, task: str, parent_engine: "AgentEngine | None" = None) -> str:
         """
         Run a single task to completion (blocking). Intended for sub-agents.
 
         Unlike send_message(), this awaits the loop directly instead of
         creating a background task — the caller blocks until the engine reaches
         COMPLETED, WAITING_INPUT (cancel), or ERROR.
+
+        If parent_engine is provided, the pending spawn is registered there
+        and removed when the sub-agent completes.
 
         Returns the final assistant text response, or "(no response)" if the
         loop produced no text output.
@@ -256,6 +408,11 @@ class AgentEngine:
                 detail={"to": EngineState.RUNNING.name, "via": "run_to_completion"},
             )
         await self._run_loop_guarded()
+
+        # Notify parent engine that this sub-agent has completed
+        if parent_engine is not None:
+            await parent_engine.remove_completed_spawn(self._config.session_id)
+
         # Return the last assistant text
         for msg in reversed(self._messages):
             if msg.role == "assistant":
@@ -268,6 +425,9 @@ class AgentEngine:
     async def cancel(self) -> None:
         """Signal the running loop to stop at the next round boundary."""
         self._cancel_event.set()
+        # Expire any pending QuestionRequests so the WS event channel pushes
+        # question.resolved events and any paused loop wakes up.
+        await self.expire_pending_questions()
         self._emitter.emit("cancel_requested", "triggered-executed", detail={})
 
     async def confirm(self) -> None:
@@ -277,12 +437,67 @@ class AgentEngine:
                 return
             self._confirmation_approved = True
             self._sm.transition(EngineState.RUNNING)
-            self._emitter.emit(
-                "state_transition", "triggered-executed",
-                detail={"to": EngineState.RUNNING.name, "via": "confirm"},
+
+    async def cancel_pending_command(self, index: int) -> bool:
+        """
+        Remove a queued command by index. Returns True if found and removed.
+        The matching Message is left in the intervention_queue (will drain
+        harmlessly at the next safe point with no effect).
+        """
+        async with self._pending_commands_lock:
+            for i, pc in enumerate(self._pending_commands):
+                if pc.index == index:
+                    self._pending_commands.pop(i)
+                    return True
+            return False
+
+    async def cancel_pending_spawn(self, index: int) -> bool:
+        """
+        Cancel a pending sub-agent by its queue index.
+        Returns True if found and the sub-agent was cancelled; False if already done.
+        """
+        sub_id: str | None = None
+        async with self._pending_spawns_lock:
+            for i, ps in enumerate(self._pending_spawns):
+                if ps.index == index:
+                    sub_id = ps.sub_id
+                    self._pending_spawns.pop(i)
+                    break
+
+        if sub_id is None:
+            return False
+
+        # Cancel the sub-agent engine if it's still in _engines
+        from api import rest as rest_module
+        if hasattr(rest_module, "_engines") and sub_id in rest_module._engines:
+            try:
+                await rest_module._engines[sub_id].cancel()
+            except Exception:
+                pass
+        return True
+
+    async def remove_completed_spawn(self, sub_id: str) -> None:
+        """Remove a completed sub-agent from the pending_spawns list."""
+        async with self._pending_spawns_lock:
+            self._pending_spawns = [
+                ps for ps in self._pending_spawns if ps.sub_id != sub_id
+            ]
+
+    async def register_pending_spawn(
+        self, task: str, sub_id: str, display_name: str
+    ) -> int:
+        """Register a new pending sub-agent and return its queue index."""
+        async with self._pending_spawns_lock:
+            self._pending_spawns_counter += 1
+            ps = PendingSpawn(
+                index=self._pending_spawns_counter,
+                sub_id=sub_id,
+                task=task,
+                display_name=display_name,
+                submitted_at=__import__("time").time(),
             )
-        self._confirmation_event.set()
-        await self._notify_state_listeners()
+            self._pending_spawns.append(ps)
+            return ps.index
 
     async def deny(self) -> None:
         """Deny a pending tool action — loop raises CancelledError → WAITING_INPUT."""
@@ -295,7 +510,553 @@ class AgentEngine:
                 detail={"action": "denied"},
             )
         self._confirmation_event.set()
-        # State transition to WAITING_INPUT happens in _run_loop_guarded via CancelledError
+
+    async def rewrite_message(self, message_id: str, new_text: str) -> dict[str, Any]:
+        """
+        Rewrite a user message by message_id and roll back all subsequent messages.
+
+        This implements the "edit and regenerate" feature:
+        - Find the user message with the given message_id.
+        - Replace its text content with new_text.
+        - Delete all messages AFTER this message (user, assistant, tool — all roles).
+        - Increment session_version so the frontend detects the full re-render.
+        - Transition state to WAITING_INPUT so the user can re-run.
+
+        Returns a dict with:
+          found: bool — whether the message_id was found
+          rollback_count: int — how many messages were removed
+        """
+        rollback_count = 0
+        target_idx = -1
+
+        async with self._state_lock:
+            for i, m in enumerate(self._messages):
+                if m.role == "user" and m.message_id == message_id:
+                    target_idx = i
+                    break
+
+            if target_idx == -1:
+                return {"found": False, "rollback_count": 0}
+
+            # Replace the text content of the target user message
+            target = self._messages[target_idx]
+            # Find the first TextBlock and replace it, or prepend one
+            text_blocks = [b for b in target.content if b.type == "text"]
+            if text_blocks:
+                text_blocks[0].text = new_text
+            else:
+                # Prepend a new TextBlock
+                from harness.types.messages import TextBlock as TB
+                target.content.insert(0, TB(text=new_text))
+
+            # Roll back: remove everything after the target user message
+            rollback_count = len(self._messages) - target_idx - 1
+            self._messages = self._messages[:target_idx + 1]
+
+            # If rewriting the first user message, reset title generation
+            if target_idx == 1 and self._config.spawn_depth == 0:
+                self._title_generated = False
+
+            # Increment version so frontend fully re-renders
+            self._session_version += 1
+
+            # Clear any pending commands (they were for messages that are now gone)
+            async with self._pending_commands_lock:
+                self._pending_commands.clear()
+
+            # Clear pending clarifications (their context is now gone)
+            async with self._pending_clarifications_lock:
+                self._pending_clarifications.clear()
+            self._clarification_event.set()
+
+            # Stop any running loop — we're doing a clean restart
+            self._cancel_event.set()
+
+            # Transition to WAITING_INPUT so the frontend can trigger re-run
+            if self._sm.state == EngineState.RUNNING:
+                self._sm.transition(EngineState.WAITING_INPUT)
+            elif self._sm.state == EngineState.WAITING_CONFIRMATION:
+                # Also clear pending approval
+                self._pending_tool_calls = None
+                self._sm.transition(EngineState.WAITING_INPUT)
+
+            self._emitter.emit(
+                "message_rewritten", "triggered-executed",
+                detail={
+                    "message_id": message_id,
+                    "rollback_count": rollback_count,
+                    "new_session_version": self._session_version,
+                },
+            )
+
+        # Persist the rolled-back state
+        try:
+            await self._session_store.save(self._config.session_id, self._messages)
+        except Exception as exc:
+            self._emitter.emit_error("session_save_error", str(exc))
+
+        return {
+            "found": True,
+            "rollback_count": rollback_count,
+            "session_version": self._session_version,
+        }
+
+    async def re_run_from(self, message_id: str) -> None:
+        """
+        Re-execute the conversation starting from the user message identified by message_id.
+        The message must already have been updated in place by rewrite_message().
+        """
+        target_idx = -1
+        async with self._state_lock:
+            for i, m in enumerate(self._messages):
+                if m.role == "user" and m.message_id == message_id:
+                    target_idx = i
+                    break
+            if target_idx == -1:
+                return
+
+            if self._sm.state == EngineState.COMPLETED:
+                self._sm.transition(EngineState.WAITING_INPUT)
+            self._sm.transition(EngineState.RUNNING)
+
+            # CRITICAL: rewrite_message set cancel_event to stop the prior loop.
+            # Clear it here so the new loop can run, otherwise the very first
+            # cancel check at the top of ReactLoop.run() will immediately
+            # raise CancelledError and transition back to WAITING_INPUT.
+            self._cancel_event.clear()
+
+            # If rewriting the first user message (index 1), regenerate title
+            if target_idx == 1 and self._config.spawn_depth == 0:
+                self._title_generated = False
+
+        asyncio.create_task(self._run_loop_guarded())
+
+        # Trigger async title generation for top-level agents rewriting first message
+        if target_idx == 1 and self._config.spawn_depth == 0:
+            async with self._state_lock:
+                msgs_before = [m for m in self._messages if m.role == "user"]
+                first_text = msgs_before[0].text_content() if msgs_before else ""
+            if first_text:
+                # Set the flag before starting so _generate_title_async doesn't skip
+                self._title_generated = True
+                asyncio.create_task(self._generate_title_async(first_text))
+
+    # ──────────────────────────────────────────────────────────────────
+    # Question mode + clarifications
+    # ──────────────────────────────────────────────────────────────────
+
+    async def set_question_mode(self, mode: str) -> str:
+        """Update session question_mode ("question" | "noquestion"). Persist.
+
+        Also mutates the system message in the live conversation so that
+        the next LLM call sees the new mode's instructions. (Without
+        this, the LLM would never see _QUESTION_INSTRUCTIONS for sessions
+        that started in 'noquestion' and were toggled at runtime.)
+        """
+        if mode not in ("question", "noquestion"):
+            mode = "noquestion"
+        previous = self._question_mode
+        self._question_mode = mode
+
+        # Re-stamp the system message in the live conversation so the
+        # next LLM request picks up the new mode's block. We do this by
+        # replacing the _QUESTION_INSTRUCTIONS / _NOQUESTION_INSTRUCTIONS
+        # markers in the first system message.
+        if previous != mode:
+            self._restamp_system_prompt_for_question_mode(mode)
+
+        # Persist alongside any existing metadata
+        meta: dict = {}
+        try:
+            rec = await self._session_store.load(self._config.session_id)
+            if rec and isinstance(rec.metadata, dict):
+                meta = dict(rec.metadata)
+        except Exception:
+            pass
+        meta["question_mode"] = mode
+        try:
+            await self._session_store.save(
+                self._config.session_id, self._messages, metadata=meta
+            )
+        except Exception:
+            pass
+        return mode
+
+    def _restamp_system_prompt_for_question_mode(self, mode: str) -> None:
+        """
+        Replace the Question Mode block in the system message with the
+        new mode's block. The system message is the first message in
+        self._messages (role='system').
+
+        Also refreshes the PromptCache so the new mode block is available
+        to future callers without a re-import.
+        """
+        from harness.factory import QUESTION_INSTRUCTIONS, NOQUESTION_INSTRUCTIONS
+        new_block = QUESTION_INSTRUCTIONS if mode == "question" else NOQUESTION_INSTRUCTIONS
+
+        # Update the cache first — callers reading from the cache get the
+        # new block immediately without waiting for the in-place mutation.
+        self._prompt_cache.invalidate_mode(mode)
+        self._prompt_cache.set_mode_block(mode, new_block)
+        sentinels = (
+            "## Question Mode (STRUCTURED clarification only)",
+            "## Direct Execution Mode (no question mode)",
+        )
+        async def _do() -> None:
+            async with self._state_lock:
+                for msg in self._messages:
+                    if msg.role != "system":
+                        continue
+                    if not msg.content:
+                        break
+                    text_block = next(
+                        (b for b in msg.content if isinstance(b, TextBlock)),
+                        None,
+                    )
+                    if text_block is None:
+                        break
+                    text = text_block.text or ""
+                    replaced = False
+                    for s in sentinels:
+                        idx = text.find(s)
+                        if idx == -1:
+                            continue
+                        start = idx
+                        # Walk back to the "\n\n" that begins this block
+                        back = text.rfind("\n\n", 0, start)
+                        if back != -1:
+                            start = back
+                        tail_start = text.find("\n\n## ", idx + 1)
+                        if tail_start == -1:
+                            text = text[:start] + new_block
+                        else:
+                            text = text[:start] + new_block + text[tail_start:]
+                        replaced = True
+                        break
+                    if not replaced:
+                        # No prior block — append.
+                        text = text + new_block
+                    text_block.text = text
+                    break
+        # Schedule the mutation; set_question_mode is itself async so we
+        # are guaranteed to be in a running loop.
+        asyncio.create_task(_do())
+
+    def get_question_mode(self) -> str:
+        return self._question_mode
+
+    # ── QuestionRequest API (engine is the single source of truth) ──────────
+    #
+    # Lifecycle:
+    #   1. ask_user tool calls register_question_request(...)  → emits question.asked
+    #   2. The tool returns a NON-BLOCKING placeholder. The loop sees the
+    #      tool_result has is_interrupt=True and raises InterruptSignal.
+    #   3. The engine catches InterruptSignal in _run_loop_guarded and
+    #      transitions to WAITING_INTERRUPT.
+    #   4. The frontend subscribes to the WS event channel and renders the UI.
+    #   5. The user replies → REST → engine.submit_question_reply(...)
+    #      OR rejects → engine.reject_question(...). Either path:
+    #        - rewrites the placeholder tool_result in messages with the real text
+    #        - emits question.resolved
+    #        - restarts the run loop (RUNNING → ... → COMPLETED or another interrupt)
+    #
+    # No layer (tool, REST, WS) is allowed to hold or transition state.
+    # All transitions go through these methods, under the engine's locks.
+
+    async def register_question_request(
+        self,
+        request_id: str,
+        tool_call_id: str,
+        questions: list,
+    ) -> None:
+        """
+        Register a new pending question request. Called by the ask_user tool.
+
+        Emits the `question.asked` event to the WebSocket channel. The tool
+        itself MUST NOT block — it returns a placeholder immediately and the
+        run loop will pause at the engine level.
+        """
+        from harness.types.questions import QuestionRequest
+        qr = QuestionRequest(
+            request_id=request_id,
+            tool_call_id=tool_call_id,
+            questions=list(questions),
+            submitted_at=__import__("time").time(),
+            status="pending",
+        )
+        async with self._pending_question_requests_lock:
+            self._pending_question_requests[request_id] = qr
+
+        # Primary sync path: push a question.asked event to all WS listeners.
+        # The snapshot API remains available for restore-only flows.
+        await self._emit_event({
+            "type": "question.asked",
+            "data": qr.to_dict(),
+        })
+        await self._notify_state_listeners()
+
+    async def _rewrite_interrupt_tool_result(
+        self,
+        tool_call_id: str,
+        new_content: str,
+    ) -> None:
+        """
+        Replace the placeholder tool_result content in `self._messages`
+        with the real answer / rejection / expiration text.
+
+        This is what makes the interrupt model work: the conversation is
+        always in a valid (assistant tool_call → tool result) state, so the
+        next LLM call can proceed without re-validation.
+
+        Returns the message index of the rewritten tool message, or -1.
+        """
+        from harness.types.messages import ToolResultBlock
+        async with self._state_lock:
+            for idx, msg in enumerate(self._messages):
+                if msg.role != "tool":
+                    continue
+                for blk in msg.content:
+                    if isinstance(blk, ToolResultBlock) and blk.tool_call_id == tool_call_id:
+                        # Mutate in place — dataclass allows it (not frozen)
+                        blk.content = new_content
+                        blk.is_interrupt = False
+                        return idx
+        return -1
+
+    async def submit_question_reply(
+        self,
+        request_id: str,
+        answers: list,    # list[list[str]] — one inner list per question
+    ) -> dict[str, Any]:
+        """
+        User has submitted answers for a pending question.
+
+        On success:
+          1. Validates answers against the original questions
+          2. Transitions QuestionRequest → answered
+          3. Rewrites the placeholder tool_result with the real text
+          4. Emits question.updated → question.resolved
+          5. If engine is in WAITING_INTERRUPT, restarts the run loop
+
+        Returns {"ok": True, ...} on success, {"ok": False, "detail": ...} on
+        validation, state, or unknown-request errors. State transitions are
+        atomic; concurrent calls are idempotent (the second call returns
+        "already answered" without side effects).
+        """
+        from harness.types.questions import (
+            validate_answers_against_questions,
+            format_answers_for_llm,
+        )
+        from harness.types.messages import TextBlock as TB, Message
+
+        async with self._pending_question_requests_lock:
+            qr = self._pending_question_requests.get(request_id)
+            if qr is None:
+                async with self._question_request_results_lock:
+                    if request_id in self._question_request_results:
+                        prev = self._question_request_results[request_id]
+                        return {
+                            "ok": False,
+                            "detail": (
+                                f"QuestionRequest {request_id!r} is already "
+                                f"{prev.get('status')}; can only reply to pending"
+                            ),
+                        }
+                return {"ok": False, "detail": f"QuestionRequest {request_id!r} not found"}
+            if qr.status != "pending":
+                return {
+                    "ok": False,
+                    "detail": (
+                        f"QuestionRequest {request_id!r} is already {qr.status}; "
+                        f"can only reply to pending"
+                    ),
+                }
+            ok, err = validate_answers_against_questions(qr.questions, answers)
+            if not ok:
+                return {"ok": False, "detail": err, "code": "invalid_answers"}
+            # Atomic commit
+            qr.answers = answers
+            qr.status = "answered"
+            self._pending_question_requests.pop(request_id, None)
+            tool_call_id = qr.tool_call_id
+            resolved_text = format_answers_for_llm(qr.questions, answers)
+
+        async with self._question_request_results_lock:
+            self._question_request_results[request_id] = {
+                "status": "answered",
+                "answers": answers,
+                "tool_call_id": tool_call_id,
+                "request_id": request_id,
+            }
+
+        # Emit question.updated (status change) and question.resolved (terminal)
+        await self._emit_event({
+            "type": "question.updated",
+            "data": {
+                "request_id": request_id,
+                "status": "answered",
+            },
+        })
+
+        # Rewrite the placeholder tool_result with the real text so the
+        # assistant→tool message pair is valid for the next LLM call.
+        await self._rewrite_interrupt_tool_result(tool_call_id, resolved_text)
+
+        await self._emit_event({
+            "type": "question.resolved",
+            "data": {
+                "request_id": request_id,
+                "status": "answered",
+                "tool_call_id": tool_call_id,
+            },
+        })
+        await self._notify_state_listeners()
+
+        # If the engine is paused on this interrupt, resume the run.
+        await self._maybe_resume_after_interrupt()
+
+        return {
+            "ok": True,
+            "request_id": request_id,
+            "tool_call_id": tool_call_id,
+            "answers": answers,
+            "status": "answered",
+        }
+
+    async def reject_question(self, request_id: str) -> dict[str, Any]:
+        """
+        User explicitly skipped / rejected a pending question.
+
+        Transitions QuestionRequest → rejected, rewrites the placeholder
+        tool_result with a skip notice, emits question.resolved, and resumes
+        the run loop if the engine was paused.
+        """
+        async with self._pending_question_requests_lock:
+            qr = self._pending_question_requests.get(request_id)
+            if qr is None:
+                async with self._question_request_results_lock:
+                    if request_id in self._question_request_results:
+                        prev = self._question_request_results[request_id]
+                        return {
+                            "ok": False,
+                            "detail": (
+                                f"QuestionRequest {request_id!r} is already "
+                                f"{prev.get('status')}"
+                            ),
+                        }
+                return {"ok": False, "detail": f"QuestionRequest {request_id!r} not found"}
+            if qr.status != "pending":
+                return {
+                    "ok": False,
+                    "detail": f"QuestionRequest {request_id!r} is already {qr.status}",
+                }
+            qr.status = "rejected"
+            self._pending_question_requests.pop(request_id, None)
+            tool_call_id = qr.tool_call_id
+
+        async with self._question_request_results_lock:
+            self._question_request_results[request_id] = {
+                "status": "rejected",
+                "answers": None,
+                "tool_call_id": tool_call_id,
+                "request_id": request_id,
+            }
+
+        skip_text = (
+            "User explicitly skipped the clarification request. Proceed "
+            "with reasonable defaults and clearly state the assumptions "
+            "you made. If you cannot proceed safely, explain why."
+        )
+        await self._rewrite_interrupt_tool_result(tool_call_id, skip_text)
+
+        await self._emit_event({
+            "type": "question.resolved",
+            "data": {
+                "request_id": request_id,
+                "status": "rejected",
+                "tool_call_id": tool_call_id,
+            },
+        })
+        await self._notify_state_listeners()
+        await self._maybe_resume_after_interrupt()
+
+        return {
+            "ok": True,
+            "request_id": request_id,
+            "tool_call_id": tool_call_id,
+            "status": "rejected",
+        }
+
+    async def expire_pending_questions(self) -> None:
+        """
+        Mark every pending QuestionRequest as expired. Used by cancel() and
+        by the loop-detector's recovery path. Emits question.resolved for each.
+        """
+        async with self._pending_question_requests_lock:
+            pending = list(self._pending_question_requests.items())
+            for rid, qr in pending:
+                qr.status = "expired"
+                self._pending_question_requests.pop(rid, None)
+                async with self._question_request_results_lock:
+                    self._question_request_results[rid] = {
+                        "status": "expired",
+                        "answers": None,
+                        "tool_call_id": qr.tool_call_id,
+                        "request_id": rid,
+                    }
+                expire_text = (
+                    "Question expired without a user reply. Proceed with "
+                    "reasonable defaults and clearly state the assumptions."
+                )
+                await self._rewrite_interrupt_tool_result(qr.tool_call_id, expire_text)
+                await self._emit_event({
+                    "type": "question.resolved",
+                    "data": {
+                        "request_id": rid,
+                        "status": "expired",
+                        "tool_call_id": qr.tool_call_id,
+                    },
+                })
+        await self._notify_state_listeners()
+
+    async def _maybe_resume_after_interrupt(self) -> None:
+        """
+        If the engine is paused in WAITING_INTERRUPT, transition to RUNNING
+        and restart the run loop. Idempotent: a no-op if not in that state.
+        """
+        async with self._state_lock:
+            if self._sm.state != EngineState.WAITING_INTERRUPT:
+                return
+            try:
+                self._sm.transition(EngineState.RUNNING)
+            except Exception:
+                return
+            self._cancel_event = asyncio.Event()  # clear any leftover cancel
+        self._emitter.emit(
+            "state_transition", "triggered-executed",
+            detail={"to": EngineState.RUNNING.name, "via": "interrupt_resolved"},
+        )
+        # Restart the loop in the background
+        asyncio.create_task(self._run_loop_guarded())
+
+    # ── Event-listener API ──────────────────────────────────────────────────
+
+    def add_event_listener(self, listener: EventListener) -> None:
+        self._event_listeners.append(listener)
+
+    def remove_event_listener(self, listener: EventListener) -> None:
+        try:
+            self._event_listeners.remove(listener)
+        except ValueError:
+            pass
+
+    async def _emit_event(self, event: EngineEvent) -> None:
+        """Notify all event listeners. Safe — exceptions are swallowed."""
+        for listener in list(self._event_listeners):
+            try:
+                await listener(event)
+            except Exception:
+                pass
 
     # ──────────────────────────────────────────────────────────────────
     # Internal
@@ -349,11 +1110,39 @@ class AgentEngine:
 
         return True
 
+    async def _drain_and_dequeue(self, text: str) -> None:
+        """Called by ReactLoop at safe drain points — removes matching pending command."""
+        async with self._pending_commands_lock:
+            for i, pc in enumerate(self._pending_commands):
+                if pc.text == text:
+                    self._pending_commands.pop(i)
+                    break
+
+    async def _process_queued_command(self, pc: "PendingCommand") -> None:
+        """Run a queued user command: transition to RUNNING and fire the loop."""
+        user_msg = Message(role="user", content=[TextBlock(text=pc.text)])
+        async with self._state_lock:
+            # COMPLETED -> WAITING_INPUT -> RUNNING
+            if self._sm.state == EngineState.COMPLETED:
+                self._sm.transition(EngineState.WAITING_INPUT)
+            self._messages.append(user_msg)
+            self._sm.transition(EngineState.RUNNING)
+            self._emitter.emit(
+                "state_transition", "triggered-executed",
+                detail={"to": EngineState.RUNNING.name, "source": "queue_drain"},
+            )
+        asyncio.create_task(self._run_loop_guarded())
+
     async def _run_loop_guarded(self) -> None:
         """
         Wraps ReactLoop.run() and guarantees state is restored on all paths.
         Never let an exception escape without transitioning out of RUNNING.
+
+        InterruptSignal is caught before CancelledError/Exception because
+        it is a BaseException subclass. The signal is the engine-level
+        pause mechanism for interruptible tools (e.g. ask_user).
         """
+        interrupt_signal: InterruptSignal | None = None
         try:
             gate = self._confirmation_gate if self._config.confirm_tools else None
             await self._loop.run(
@@ -363,12 +1152,32 @@ class AgentEngine:
                 on_message=self._on_message,
                 on_token=self._on_token,
                 on_pre_execute=gate,
+                drain_callback=self._drain_and_dequeue,
             )
             async with self._state_lock:
                 self._sm.transition(EngineState.COMPLETED)
                 self._emitter.emit(
                     "state_transition", "triggered-executed",
                     detail={"to": EngineState.COMPLETED.name},
+                )
+            await self._notify_state_listeners()
+
+        except InterruptSignal as sig:
+            # Engine-level pause for a user interrupt. The tool has already
+            # returned a placeholder; the conversation is in a valid state.
+            # We just park here. The frontend will reply via submit_question_reply
+            # or reject_question, which will rewrite the placeholder tool_result
+            # and call _maybe_resume_after_interrupt() to restart the loop.
+            interrupt_signal = sig
+            async with self._state_lock:
+                self._sm.transition(EngineState.WAITING_INTERRUPT)
+                self._emitter.emit(
+                    "state_transition", "triggered-executed",
+                    detail={
+                        "to": EngineState.WAITING_INTERRUPT.name,
+                        "tool_call_id": sig.tool_call_id,
+                        "round": sig.round_idx,
+                    },
                 )
             await self._notify_state_listeners()
 
@@ -380,7 +1189,6 @@ class AgentEngine:
                     detail={"to": EngineState.WAITING_INPUT.name, "via": "cancel"},
                 )
             await self._notify_state_listeners()
-            # Do not re-raise — we handled it gracefully
 
         except Exception as exc:
             import traceback
@@ -393,7 +1201,6 @@ class AgentEngine:
             await self._notify_state_listeners()
 
         finally:
-            # Always clear the cancel signal and persist messages
             self._cancel_event.clear()
             try:
                 await self._session_store.save(
@@ -401,6 +1208,18 @@ class AgentEngine:
                 )
             except Exception as exc:
                 self._emitter.emit_error("session_save_error", str(exc))
+
+        # After completing (or erroring), drain queued commands sequentially.
+        # We use a fresh task chain so the finally block above runs first.
+        while True:
+            async with self._pending_commands_lock:
+                if not self._pending_commands:
+                    break
+                next_cmd = self._pending_commands.pop(0)
+            # Build message and transition — done inside the loop so each
+            # run has its own try/finally boundary via the recursive call
+            await self._process_queued_command(next_cmd)
+            return
 
     async def _on_message(self, msg: Message) -> None:
         """Called by ReactLoop for every new message (assistant or tool)."""
@@ -420,3 +1239,98 @@ class AgentEngine:
                 await listener(text)
             except Exception as exc:
                 self._emitter.emit_error("token_listener_error", str(exc))
+
+    async def _generate_title_async(self, first_user_text: str) -> None:
+        """
+        Generate a session title from the first user message using the LLM.
+        Runs in background — failures are silently ignored (fallback handled by frontend).
+        """
+        try:
+            # Wait briefly for the first assistant message to have some context
+            max_wait = 15.0  # seconds
+            waited = 0.0
+            while waited < max_wait:
+                await asyncio.sleep(0.5)
+                waited += 0.5
+                async with self._state_lock:
+                    has_assistant = any(
+                        m.role == "assistant" and any(
+                            b.type == "text" and b.text for b in m.content
+                        )
+                        for m in self._messages
+                    )
+                if has_assistant:
+                    break
+
+            # Build a short context: first user message + first assistant text
+            ctx_parts = [first_user_text]
+            async with self._state_lock:
+                for m in self._messages:
+                    if m.role == "assistant":
+                        for b in m.content:
+                            if b.type == "text" and b.text:
+                                ctx_parts.append(b.text)
+                                break
+                        break
+
+            context = "\n".join(ctx_parts)
+            # Truncate context for the title prompt
+            if len(context) > 500:
+                context = context[:500] + "…"
+
+            prompt = (
+                "请根据以下对话内容，生成一个简短的会话标题。\n"
+                "要求：\n"
+                "- 6 到 20 个中文字符\n"
+                "- 直接描述主题，不要用\"关于...\"、\"讨论...\"等空泛表述\n"
+                "- 不要带引号和句号\n"
+                "- 不要提及 session_id 或任何内部标识\n"
+                "- 只返回标题文本，不要其他内容\n\n"
+                f"对话内容：\n{context}"
+            )
+
+            llm = self._loop._llm
+            title_msg = Message(role="user", content=[TextBlock(text=prompt)])
+            result = await llm.chat([title_msg])
+            title = ""
+            for b in result.content:
+                if b.type == "text" and b.text:
+                    title = b.text.strip()
+                    break
+
+            # Clean up: remove quotes, trailing punctuation
+            title = title.strip("\"'").strip()
+            if title.endswith("。"):
+                title = title[:-1]
+            # Clamp length
+            if len(title) > 20:
+                title = title[:20].rstrip()
+            if len(title) < 3:
+                # Fallback: first 12 chars of user message
+                title = first_user_text[:12].rstrip()
+                if len(title) < 3:
+                    title = "新会话"
+
+            # Persist via the session store (metadata)
+            meta: dict = {}
+            try:
+                record = await self._session_store.load(self._config.session_id)
+                if record and isinstance(record.metadata, dict):
+                    meta = dict(record.metadata)
+            except Exception:
+                pass
+            meta["title"] = title
+            await self._session_store.save(
+                self._config.session_id,
+                self._messages,
+                metadata=meta,
+            )
+
+            # Notify via event emitter so REST layer can update _engine_meta
+            self._emitter.emit(
+                "title_generated", "triggered-executed",
+                detail={"title": title},
+            )
+
+        except Exception:
+            pass  # Silently ignore — frontend will use fallback

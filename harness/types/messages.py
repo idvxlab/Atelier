@@ -10,11 +10,16 @@ Violating either rule causes a 400 from every major LLM provider.
 """
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal, Union
 
 
 Role = Literal["system", "user", "assistant", "tool"]
+
+
+def new_message_id() -> str:
+    return str(uuid.uuid4())
 
 
 @dataclass
@@ -49,11 +54,15 @@ class ToolResultBlock:
     """
     The result that MUST immediately follow a ToolCallBlock in the next message.
     If `is_overflow_ref` is True, `content` is a storage key, not literal text.
+    If `is_interrupt` is True, the engine pauses the run loop here; the
+    placeholder `content` will be replaced by the real answer when the
+    interrupt is resolved (reply / reject / expire).
     """
     tool_call_id: str
     content: str
     is_error: bool = False
     is_overflow_ref: bool = False
+    is_interrupt: bool = False   # set by interruptible tools (e.g. ask_user)
     tool_name: str = ""
     type: Literal["tool_result"] = field(default="tool_result", init=False)
 
@@ -68,6 +77,7 @@ class Message:
     # Metadata — NOT sent to LLM; used by engine and storage
     round_index: int = 0
     is_compressed: bool = False
+    message_id: str = field(default_factory=new_message_id)
 
     def has_tool_calls(self) -> bool:
         return any(isinstance(b, ToolCallBlock) for b in self.content)

@@ -11,13 +11,14 @@ class SessionRecord:
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: dict = field(default_factory=dict)
+    title: str = ""
     display_name: str = ""
     pinned: bool = False
     archived: bool = False
 
 class SessionStore(ABC):
     @abstractmethod
-    async def save(self, session_id: str, messages: list[Message]) -> None: ...
+    async def save(self, session_id: str, messages: list[Message], title: str = "", metadata: dict | None = None) -> None: ...
 
     @abstractmethod
     async def load(self, session_id: str) -> SessionRecord | None: ...

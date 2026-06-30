@@ -111,6 +111,7 @@ def _messages_to_json(messages: list[Message]) -> str:
     data = [
         {
             "role": msg.role,
+            "message_id": msg.message_id,
             "round_index": msg.round_index,
             "is_compressed": msg.is_compressed,
             "content": [_block_to_dict(b) for b in msg.content],
@@ -129,6 +130,7 @@ def _messages_from_json(raw: str) -> list[Message]:
         messages.append(
             Message(
                 role=item["role"],
+                message_id=item.get("message_id", ""),
                 content=blocks,
                 round_index=item.get("round_index", 0),
                 is_compressed=item.get("is_compressed", False),
@@ -178,20 +180,45 @@ class SQLiteSessionStore(SessionStore):
         await self._ensure_tables(conn)
         return conn
 
-    async def save(self, session_id: str, messages: list[Message]) -> None:
+    async def save(self, session_id: str, messages: list[Message], title: str = "", metadata: dict | None = None) -> None:
         now = datetime.now(timezone.utc).isoformat()
         messages_json = _messages_to_json(messages)
         async with aiosqlite.connect(self._db_path) as conn:
             conn.row_factory = aiosqlite.Row
             await self._ensure_tables(conn)
-            # Upsert: insert or update. Preserve existing metadata/display_name/pinned/archived on conflict.
-            await conn.execute("""
-                INSERT INTO sessions (session_id, messages, created_at, updated_at, metadata)
-                VALUES (?, ?, ?, ?, '{}')
-                ON CONFLICT(session_id) DO UPDATE SET
-                    messages   = excluded.messages,
-                    updated_at = excluded.updated_at
-            """, (session_id, messages_json, now, now))
+            meta_json = json.dumps(metadata, ensure_ascii=False) if metadata is not None else None
+            if title:
+                existing_meta = {}
+                try:
+                    async with conn.execute(
+                        "SELECT metadata FROM sessions WHERE session_id = ?",
+                        (session_id,),
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                    if row and row["metadata"]:
+                        existing_meta = json.loads(row["metadata"])
+                except Exception:
+                    existing_meta = {}
+                existing_meta["title"] = title
+                meta_json = json.dumps(existing_meta, ensure_ascii=False)
+
+            if meta_json is not None:
+                await conn.execute("""
+                    INSERT INTO sessions (session_id, messages, created_at, updated_at, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        messages   = excluded.messages,
+                        updated_at = excluded.updated_at,
+                        metadata   = excluded.metadata
+                """, (session_id, messages_json, now, now, meta_json))
+            else:
+                await conn.execute("""
+                    INSERT INTO sessions (session_id, messages, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        messages   = excluded.messages,
+                        updated_at = excluded.updated_at
+                """, (session_id, messages_json, now, now))
             await conn.commit()
 
     async def load(self, session_id: str) -> SessionRecord | None:
