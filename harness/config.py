@@ -124,7 +124,7 @@ class HarnessConfig:
                 api_key = _first_env(list(api_key_env))
             providers[pname] = ProviderConfig(
                 name=pcfg.get("name", pname),
-                model=pcfg["model"],
+                model=_expand_env_ref(pcfg["model"]),
                 api_key=api_key,
                 base_url=_expand_env_ref(pcfg.get("base_url", "")),
                 timeout=float(pcfg.get("timeout", 60.0)),

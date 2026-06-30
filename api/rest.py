@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -73,6 +73,10 @@ async def _startup() -> None:
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT_DIR / "static"
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(status_code=204)
 
 @app.get("/", include_in_schema=False)
 async def serve_index() -> FileResponse:
@@ -270,6 +274,8 @@ async def get_state(session_id: str) -> dict[str, Any]:
                 meta["title"] = store_meta.get("title", "")
             if not meta.get("display_name"):
                 meta["display_name"] = store_meta.get("display_name", "")
+            if not meta.get("parent_session_id"):
+                meta["parent_session_id"] = store_meta.get("parent_session_id", "")
     except Exception:
         pass
     snapshot["meta"] = meta
@@ -430,6 +436,7 @@ async def list_sessions() -> dict[str, Any]:
             "pinned": rec.pinned,
             "archived": rec.archived,
             "spawn_depth": meta.get("spawn_depth", store_meta.get("spawn_depth", 0)),
+            "parent_session_id": meta.get("parent_session_id", store_meta.get("parent_session_id", "")),
             "question_mode": eng.get_question_mode() if eng else store_meta.get("question_mode", "noquestion"),
         })
 
@@ -446,6 +453,7 @@ async def list_sessions() -> dict[str, Any]:
                 "pinned": False,
                 "archived": False,
                 "spawn_depth": meta.get("spawn_depth", 0),
+                "parent_session_id": meta.get("parent_session_id", ""),
                 "question_mode": eng.get_question_mode(),
             })
     return {"sessions": sessions}

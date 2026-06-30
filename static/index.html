@@ -139,6 +139,37 @@
       color: var(--accent);
     }
 
+    .session-tree-item {
+      --depth: 0;
+      padding-left: calc(14px + (var(--depth) * 12px));
+    }
+
+    .session-depth-marker {
+      width: 8px;
+      flex: 0 0 8px;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .session-kind {
+      flex: 0 0 auto;
+      width: 28px;
+      font-size: 10px;
+      line-height: 16px;
+      text-align: center;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      text-transform: uppercase;
+    }
+
+    .session-kind.sub {
+      color: var(--accent);
+      border-color: var(--accent-dim);
+      background: rgba(88, 166, 255, .08);
+    }
     .sidebar-item .session-label {
       flex: 1 1 auto;
       min-width: 0;
@@ -1578,73 +1609,119 @@
       }
     }
 
+    function getSessionLabel(s) {
+      const manual = (s.display_name || '').trim();
+      if (manual) return manual;
+      const title = (s.title || '').trim();
+      if (title) return title;
+      if (s.persona) return s.persona;
+      if ((s.spawn_depth || 0) > 0) return `sub ${s.session_id.slice(4, 12)}`;
+      return s.session_id.slice(0, 8);
+    }
+
+    function buildSessionTree(sessions) {
+      const byId = new Map();
+      sessions.forEach((session, index) => {
+        byId.set(session.session_id, { session, children: [], index });
+      });
+
+      const roots = [];
+      for (const node of byId.values()) {
+        const parentId = node.session.parent_session_id || '';
+        const parent = parentId && parentId !== node.session.session_id ? byId.get(parentId) : null;
+        if (parent) parent.children.push(node);
+        else roots.push(node);
+      }
+
+      const sortNodes = (nodes) => {
+        nodes.sort((a, b) => {
+          const pinDiff = (b.session.pinned ? 1 : 0) - (a.session.pinned ? 1 : 0);
+          if (pinDiff) return pinDiff;
+          return a.index - b.index;
+        });
+        nodes.forEach(node => sortNodes(node.children));
+        return nodes;
+      };
+      return sortNodes(roots);
+    }
+
+    function renderSessionNode(node, container, depth = 0) {
+      const s = node.session;
+      const safeDepth = Math.min(depth, 6);
+      const stateClass = s.state === 'RUNNING' ? 'badge-run' : s.state === 'ERROR' ? 'badge-err' : s.state === 'WAITING_INPUT' ? 'badge-wait' : 'badge-done';
+      const stateText = s.state === 'RUNNING' ? 'Run' : s.state === 'ERROR' ? 'Err' : s.state === 'WAITING_INPUT' ? 'Wait' : 'Done';
+      const labelText = getSessionLabel(s);
+      const isSub = (s.spawn_depth || 0) > 0 || !!s.parent_session_id;
+
+      const el = document.createElement('div');
+      el.className = 'sidebar-item session-tree-item' + (s.session_id === currentSessionId ? ' active' : '');
+      el.style.paddingLeft = (14 + safeDepth * 12) + 'px';
+      el.onclick = (e) => {
+        if (e.target.classList.contains('session-menu-btn')) return;
+        switchSession(s.session_id);
+      };
+
+      const marker = document.createElement('span');
+      marker.className = 'session-depth-marker';
+      marker.textContent = depth > 0 ? '>' : '';
+      el.appendChild(marker);
+
+      const kind = document.createElement('span');
+      kind.className = 'session-kind' + (isSub ? ' sub' : '');
+      kind.textContent = isSub ? 'sub' : 'main';
+      kind.title = isSub ? 'Sub agent session' : 'Agent session';
+      el.appendChild(kind);
+
+      if (s.pinned) {
+        const pin = document.createElement('span');
+        pin.className = 'pin-icon';
+        pin.textContent = 'P';
+        pin.title = 'Pinned';
+        el.appendChild(pin);
+      }
+
+      const label = document.createElement('span');
+      label.className = 'session-label';
+      label.textContent = labelText;
+      label.title = `${labelText} (${s.session_id})`;
+      label.dataset.sessionId = s.session_id;
+      el.appendChild(label);
+
+      if (s.archived) {
+        const arch = document.createElement('span');
+        arch.style.cssText = 'font-size:10px;flex-shrink:0;opacity:.5';
+        arch.textContent = 'A';
+        arch.title = 'Archived';
+        el.appendChild(arch);
+      }
+
+      const badge = div('badge ' + stateClass, stateText);
+      el.appendChild(badge);
+
+      const menuBtn = document.createElement('span');
+      menuBtn.className = 'session-menu-btn';
+      menuBtn.textContent = '...';
+      menuBtn.title = 'More actions';
+      menuBtn.onclick = (e) => { e.stopPropagation(); openSessionMenu(e, s); };
+      el.appendChild(menuBtn);
+
+      container.appendChild(el);
+      node.children.forEach(child => renderSessionNode(child, container, depth + 1));
+    }
+
     function renderSessionsList() {
       const sl = document.getElementById('sessions-list');
       sl.innerHTML = '';
-      // Sort: pinned first, then by order from backend (already sorted)
-      const sorted = [...allSessions].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-      const visible = sorted.filter(s => !s.archived);
+      const visible = allSessions.filter(s => !s.archived);
 
       if (!visible.length) {
-        sl.innerHTML = '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无会话</div>';
+        sl.innerHTML = '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">No sessions</div>';
         return;
       }
-      visible.forEach(s => {
-        const stateClass = s.state === 'RUNNING' ? 'badge-run' : s.state === 'ERROR' ? 'badge-err' : 'badge-done';
-        const stateText = s.state === 'RUNNING' ? '运行' : s.state === 'ERROR' ? '错误' : s.state === 'WAITING_INPUT' ? '等待' : '完成';
-        const labelText = s.display_name || (s.persona ? `👤 ${s.persona}` : `💬 ${s.session_id.slice(0, 8)}`);
 
-        const el = document.createElement('div');
-        el.className = 'sidebar-item' + (s.session_id === currentSessionId ? ' active' : '');
-        el.onclick = (e) => {
-          // Don't switch if clicking the menu button
-          if (e.target.classList.contains('session-menu-btn')) return;
-          switchSession(s.session_id);
-        };
-
-        // Pin icon
-        if (s.pinned) {
-          const pin = document.createElement('span');
-          pin.className = 'pin-icon';
-          pin.textContent = '📌';
-          pin.title = '已置顶';
-          el.appendChild(pin);
-        }
-
-        // Label
-        const label = document.createElement('span');
-        label.className = 'session-label';
-        label.textContent = labelText;
-        label.title = labelText;
-        label.dataset.sessionId = s.session_id;
-        el.appendChild(label);
-
-        // Archived indicator
-        if (s.archived) {
-          const arch = document.createElement('span');
-          arch.style.cssText = 'font-size:10px;flex-shrink:0;opacity:.5';
-          arch.textContent = '📦';
-          arch.title = '已归档';
-          el.appendChild(arch);
-        }
-
-        // State badge
-        const badge = div('badge ' + stateClass, stateText);
-        el.appendChild(badge);
-
-        // Menu button
-        const menuBtn = document.createElement('span');
-        menuBtn.className = 'session-menu-btn';
-        menuBtn.textContent = '⋯';
-        menuBtn.title = '更多操作';
-        menuBtn.onclick = (e) => { e.stopPropagation(); openSessionMenu(e, s); };
-        el.appendChild(menuBtn);
-
-        sl.appendChild(el);
-      });
+      const tree = buildSessionTree(visible);
+      tree.forEach(node => renderSessionNode(node, sl, 0));
     }
-
-    // ── Modal ─────────────────────────────────────────────────────────────
     function populateModal() {
       const provSel = document.getElementById('sel-provider');
       provSel.innerHTML = '';
@@ -1840,7 +1917,7 @@
       // Find the label span in the sidebar
       const label = document.querySelector(`.session-label[data-session-id="${session.session_id}"]`);
       if (!label) return;
-      const current = session.display_name || session.persona || session.session_id.slice(0, 8);
+      const current = getSessionLabel(session);
       const input = document.createElement('input');
       input.type = 'text';
       input.value = current;
@@ -2346,12 +2423,15 @@
       }
       updateModeToggleUI();
 
-      // Header — use display_name if set
+      // Header: prefer manual name, then generated title, then fallback label
       const titleEl = document.getElementById('session-title');
       const metaEl = document.getElementById('session-meta');
-      const sessionInfo = allSessions.find(s => s.session_id === currentSessionId);
-      const dname = sessionInfo?.display_name || '';
-      titleEl.textContent = dname || currentSessionId.slice(0, 8);
+      const sessionInfo = allSessions.find(s => s.session_id === currentSessionId) || {};
+      const headerInfo = { ...sessionInfo, session_id: currentSessionId };
+      if (meta.display_name) headerInfo.display_name = meta.display_name;
+      if (meta.title) headerInfo.title = meta.title;
+      if (meta.persona) headerInfo.persona = meta.persona;
+      titleEl.textContent = getSessionLabel(headerInfo);
       const parts = [];
       if (meta.skill) parts.push(`Skill: <strong>${meta.skill}</strong>`);
       if (meta.persona) parts.push(`Persona: <strong>${meta.persona}</strong>`);

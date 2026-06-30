@@ -186,6 +186,8 @@ def make_spawn_agent_tool(
                     meta = dict(existing.metadata)
                 meta["display_name"] = display_name
                 meta["spawn_depth"] = spawn_depth + 1
+                if parent_session_id:
+                    meta["parent_session_id"] = parent_session_id
                 await session_store.save(sub_id, [], metadata=meta)
             except Exception:
                 pass
@@ -260,6 +262,8 @@ def make_spawn_agents_tool(
                     meta = dict(existing.metadata)
                 meta["display_name"] = display_name
                 meta["spawn_depth"] = spawn_depth + 1
+                if parent_session_id:
+                    meta["parent_session_id"] = parent_session_id
                 await session_store.save(sub_id, [], metadata=meta)
             except Exception:
                 pass

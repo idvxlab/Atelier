@@ -7,9 +7,30 @@
 # HARNESS_DEFAULT_PROVIDER supports the legacy alias my-361api.
 # ----------------------------------------------------------------------
 
-default_provider: 361api-openai
+default_provider: openai-hub
 
 providers:
+  # OpenAI-Hub OpenAI-compatible provider
+  openai-hub:
+    name: openai-compatible
+    model: "${OPENAI_HUB_MODEL}"
+    api_key: "${OPENAI_HUB_API_KEY}"
+    api_key_env:
+      - OPENAI_HUB_API_KEY
+    base_url: "${OPENAI_HUB_BASE_URL}"
+    max_tokens: 4096
+    temperature: 0.0
+
+  openai-hub-mini:
+    name: openai-compatible
+    model: "${OPENAI_HUB_MODEL}"
+    api_key: "${OPENAI_HUB_API_KEY}"
+    api_key_env:
+      - OPENAI_HUB_API_KEY
+    base_url: "${OPENAI_HUB_BASE_URL}"
+    max_tokens: 2048
+    temperature: 0.0
+
   # Primary OpenAI-compatible provider via 361API
   361api-openai:
     name: openai-compatible
@@ -92,7 +113,7 @@ compression:
   token_window: 128000
   auto_trigger_ratio: 0.65
   micro_keep_recent: 6
-  summary_provider: 361api-mini
+  summary_provider: openai-hub-mini
 
 storage:
   backend: sqlite
