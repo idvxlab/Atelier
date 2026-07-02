@@ -8,6 +8,7 @@ def test_provider_api_key_env_aliases(tmp_path, monkeypatch):
     monkeypatch.delenv("THREESIXONE_API_KEY", raising=False)
     monkeypatch.delenv("API_361_KEY", raising=False)
     monkeypatch.delenv("361API_API_KEY", raising=False)
+    monkeypatch.delenv("HARNESS_DEFAULT_PROVIDER", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -98,3 +99,78 @@ def test_from_env_accepts_bltcy_key_and_provider_alias(monkeypatch):
 
     assert cfg.default_provider == "361api-openai"
     assert cfg.providers["361api-openai"].api_key == "sk-bcompat"
+
+
+def test_from_env_adds_openai_hub_provider(monkeypatch):
+    monkeypatch.delenv("HARNESS_DEFAULT_PROVIDER", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_HUB_API_KEY", "sk-hub")
+    monkeypatch.setenv("OPENAI_HUB_BASE_URL", "https://api.openai-hub.com/v1")
+    monkeypatch.setenv("OPENAI_HUB_MODEL", "gpt-4o")
+
+    cfg = HarnessConfig.from_env()
+
+    assert cfg.default_provider == "openai-hub"
+    assert cfg.providers["openai-hub"].name == "openai-compatible"
+    assert cfg.providers["openai-hub"].api_key == "sk-hub"
+    assert cfg.providers["openai-hub"].base_url == "https://api.openai-hub.com/v1"
+    assert cfg.providers["openai-hub"].model == "gpt-4o"
+
+
+def test_from_env_accepts_hub_openai_alias(monkeypatch):
+    monkeypatch.setenv("HARNESS_DEFAULT_PROVIDER", "hub-openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_HUB_API_KEY", "sk-hub")
+
+    cfg = HarnessConfig.from_env()
+
+    assert cfg.default_provider == "openai-hub"
+    assert cfg.providers["openai-hub"].api_key == "sk-hub"
+
+
+def test_expand_env_ref_supports_default_fallback(monkeypatch, tmp_path):
+    """config.yaml-style ${VAR:-default} should fall back when VAR is unset."""
+    monkeypatch.delenv("OPENAI_HUB_MODEL_MINI", raising=False)
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+default_provider: openai-hub
+providers:
+  openai-hub-mini:
+    name: openai-compatible
+    model: "${OPENAI_HUB_MODEL_MINI:-gpt-4o-mini}"
+    api_key: "${OPENAI_HUB_API_KEY}"
+    base_url: "${OPENAI_HUB_BASE_URL:-https://api.openai-hub.com/v1}"
+""",
+        encoding="utf-8",
+    )
+
+    cfg = HarnessConfig.from_yaml(str(config_path))
+
+    assert cfg.providers["openai-hub-mini"].model == "gpt-4o-mini"
+    assert cfg.providers["openai-hub-mini"].base_url == "https://api.openai-hub.com/v1"
+
+
+def test_expand_env_ref_env_var_overrides_default(monkeypatch, tmp_path):
+    """When the env var IS set, ${VAR:-default} should use the env value."""
+    monkeypatch.setenv("OPENAI_HUB_MODEL_MINI", "gpt-4.1-mini")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+default_provider: openai-hub
+providers:
+  openai-hub-mini:
+    name: openai-compatible
+    model: "${OPENAI_HUB_MODEL_MINI:-gpt-4o-mini}"
+    api_key: "${OPENAI_HUB_API_KEY}"
+    base_url: "${OPENAI_HUB_BASE_URL:-https://api.openai-hub.com/v1}"
+""",
+        encoding="utf-8",
+    )
+
+    cfg = HarnessConfig.from_yaml(str(config_path))
+
+    assert cfg.providers["openai-hub-mini"].model == "gpt-4.1-mini"
+    assert cfg.providers["openai-hub-mini"].base_url == "https://api.openai-hub.com/v1"

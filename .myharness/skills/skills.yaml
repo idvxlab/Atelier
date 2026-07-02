@@ -4,7 +4,7 @@
 
 code-review:
   description: "代码审查助手"
-  provider: bltcy-anthropic
+  provider: openai-hub
   system_prompt: |
     你是一个资深软件工程师，专注于代码审查。
     审查时重点关注：
@@ -21,7 +21,7 @@ code-review:
 
 python-dev:
   description: "Python 开发助手"
-  provider: bltcy-anthropic
+  provider: openai-hub
   system_prompt: |
     你是一个 Python 专家。
     - 优先给出完整可运行的代码
@@ -36,7 +36,7 @@ python-dev:
 
 data-analyst:
   description: "数据分析助手"
-  provider: bltcy-anthropic
+  provider: openai-hub
   system_prompt: |
     你是一个数据分析专家。
     分析数据时：先描述数据结构，再做统计，最后给出洞察和建议。
@@ -49,7 +49,7 @@ data-analyst:
 
 file-organizer:
   description: "文件整理助手"
-  provider: bltcy-anthropic
+  provider: openai-hub
   system_prompt: |
     你是一个文件整理专家。
     操作文件前先说明计划，用户确认后再执行。
@@ -62,7 +62,7 @@ file-organizer:
 
 general:
   description: "通用助手（全工具）"
-  provider: bltcy-anthropic
+  provider: openai-hub
   system_prompt: |
     你是一个有帮助的 AI 助手，可以使用工具来完成任务。
     用中文回答。

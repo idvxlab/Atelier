@@ -361,6 +361,89 @@
       min-width: 0;
     }
 
+    #pending-queue-panel {
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    #pending-queue-panel.hidden { display: none; }
+    .pending-queue-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pending-queue-icon { font-size: 13px; }
+    .pending-queue-count {
+      margin-left: 4px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .pending-queue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pending-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: var(--bg);
+      border: 1px dashed var(--accent);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .pending-index {
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+      min-width: 32px;
+    }
+    .pending-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+    }
+    .pending-wait {
+      flex-shrink: 0;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      min-width: 56px;
+      text-align: right;
+    }
+    .pending-cancel {
+      flex-shrink: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: var(--font);
+    }
+    .pending-cancel:hover {
+      background: var(--danger, #f85149);
+      border-color: var(--danger, #f85149);
+      color: #fff;
+    }
+
     #input-bar {
       padding: 12px 16px;
       border-top: 1px solid var(--border);
@@ -1484,6 +1567,16 @@
           <div id="cmd-bar-hint">↑↓ 选择  Enter 填入输入框  Esc 关闭</div>
         </div>
 
+        <!-- Pending-command queue (messages sent while engine is RUNNING) -->
+        <div id="pending-queue-panel" class="hidden">
+          <div class="pending-queue-title">
+            <span class="pending-queue-icon">⏳</span>
+            <span>排队中</span>
+            <span class="pending-queue-count" id="pending-queue-count">0</span>
+          </div>
+          <div class="pending-queue-list" id="pending-queue-list"></div>
+        </div>
+
         <div id="input-bar">
           <button class="btn btn-icon" onclick="showCommandBar()" title="命令面板 (Ctrl+K)" style="width:32px;height:32px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;border-radius:6px;line-height:32px;text-align:center">/</button>
           <textarea id="msg-input" placeholder="输入消息，Shift+Enter 换行，Enter 发送…" rows="1"
@@ -1581,11 +1674,30 @@
     let doPollInFlight = false;
     let doPollQueued  = false;
 
+    // Pending command queue — messages the user sent while the engine was
+    // RUNNING. Stored client-side so we can render a "queued" panel and
+    // re-render it on page refresh / session switch. Backend is still the
+    // source of truth; we always reconcile against GET /pending and WS
+    // pending_command events.
+    let pendingQueue = [];           // [{index, text, submitted_at, _tick}]
+    let pendingQueueRenderTimer = null;
+
     // ── Boot ─────────────────────────────────────────────────────────────
     async function boot() {
       await loadOverview();
       await refreshSessions();
       fetchCommands();
+      // Wire the pending-queue cancel button (event delegation on the list).
+      const list = document.getElementById('pending-queue-list');
+      if (list && !list.dataset.wired) {
+        list.dataset.wired = '1';
+        list.addEventListener('click', (e) => {
+          const btn = e.target.closest('.pending-cancel');
+          if (!btn) return;
+          const idx = parseInt(btn.dataset.index || '', 10);
+          if (Number.isFinite(idx)) cancelPendingByIndex(idx);
+        });
+      }
     }
 
     async function loadOverview() {
@@ -1875,6 +1987,7 @@
       activeThinkingGroup = null;
       doPollInFlight = false;
       doPollQueued  = false;
+      clearPendingQueue();
       renderSessionsList();
       showChatArea();
 
@@ -1884,6 +1997,9 @@
         renderSnapshot(snap);
         if (snap.is_running) startPolling();
       } catch (e) { toast('加载会话失败: ' + e.message, true); }
+
+      // Restore pending-queue panel from backend (page refresh / session switch)
+      refreshPendingFromBackend();
 
       connectWS(id);
     }
@@ -1906,6 +2022,7 @@
         currentSessionId = null;
         lastMsgCount = 0;
         activeThinkingGroup = null;
+        clearPendingQueue();
         document.getElementById('messages').classList.add('hidden');
         document.getElementById('empty-state').classList.remove('hidden');
         document.getElementById('session-title').textContent = '未选择会话';
@@ -2238,13 +2355,24 @@
         if (!currentSessionId) {
           await createDefaultSession();
         }
-        appendOptimisticUserMessage(text);
-        await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
-        markCurrentSessionRunning();
-        triggerPoll();
-        if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
-        document.getElementById('cancel-btn').classList.remove('hidden');
+        const resp = await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
+        // Backend now distinguishes "started" (live user turn) from "queued"
+        // (waiting for the current run to finish). Render accordingly so a
+        // queued message never becomes a normal user bubble.
+        if (resp && resp.status === 'queued') {
+          addOrUpdatePending(resp);
+        } else {
+          // status === "started" or "completed-locally" — normal user bubble
+          appendOptimisticUserMessage(text);
+          markCurrentSessionRunning();
+          triggerPoll();
+          if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+          document.getElementById('cancel-btn').classList.remove('hidden');
+        }
       } catch (e) {
+        // Roll back any optimistic bubble we may have inserted before the
+        // request failed (started case). Queued items are server-side only
+        // so there is nothing to roll back here.
         rollbackOptimisticUserMessage(text);
         toast('发送失败: ' + e.message, true);
       } finally {
@@ -2266,12 +2394,16 @@
         inp.value = '';
         autoGrow(inp);
         try {
-          appendOptimisticUserMessage(text);
-          await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
-          markCurrentSessionRunning();
-          triggerPoll();
-          if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
-          document.getElementById('cancel-btn').classList.remove('hidden');
+          const resp = await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
+          if (resp && resp.status === 'queued') {
+            addOrUpdatePending(resp);
+          } else {
+            appendOptimisticUserMessage(text);
+            markCurrentSessionRunning();
+            triggerPoll();
+            if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+            document.getElementById('cancel-btn').classList.remove('hidden');
+          }
         } catch (e) {
           rollbackOptimisticUserMessage(text);
           toast('发送失败: ' + e.message, true);
@@ -2457,6 +2589,20 @@
         triggerPoll();
       } else if (frame.type === 'title_generated') {
         applyCurrentSessionTitle(frame.data?.title || '');
+      } else if (frame.type === 'pending_command') {
+        // Backend pushes this for queued / started / cancelled actions.
+        // `data` may carry a full snapshot (`queue`) we should adopt as the
+        // authoritative state. The most reliable strategy is:
+        //   - If `queue` is present, replace the local queue with it.
+        //   - Otherwise, on `started` action remove the matching index.
+        const d = frame.data || {};
+        if (Array.isArray(d.queue)) {
+          addOrUpdatePending({ queue: d.queue });
+        } else if (d.action === 'started' && typeof d.index === 'number') {
+          removePendingByIndex(d.index);
+        } else if (d.action === 'cancelled' && typeof d.index === 'number') {
+          removePendingByIndex(d.index);
+        }
       } else if (frame.type === 'error') {
         toast('引擎错误: ' + (frame.data?.detail || JSON.stringify(frame.data)), true);
       }
@@ -2649,6 +2795,14 @@
         dotsEl.remove();
       }
       renderPendingClarifications(snap);
+      // Server is the source of truth for the pending-command queue.
+      // snap.pending_commands was already populated by /state (kept for
+      // compatibility); we adopt it as the authoritative snapshot.
+      if (Array.isArray(snap.pending_commands)) {
+        addOrUpdatePending({ queue: snap.pending_commands });
+      } else {
+        renderPendingQueue();
+      }
 
 
       // Scroll to bottom
@@ -3069,6 +3223,138 @@
       pendingUserEchoes.push(text);
     }
 
+    // ── Pending command queue (RUNNING 期间入队的命令) ────────────────────────
+    function _truncate(s, max = 80) {
+      s = String(s || '');
+      return s.length > max ? s.slice(0, max) + '…' : s;
+    }
+
+    function _formatWait(seconds) {
+      seconds = Math.max(0, Math.floor(seconds));
+      if (seconds < 60) return `${seconds}s`;
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}m${s.toString().padStart(2, '0')}s`;
+    }
+
+    function _mergePendingIndex(list) {
+      // Build a map keyed by index so later entries win (status events
+      // carry the canonical queue snapshot).
+      const m = new Map();
+      for (const p of list || []) {
+        if (p && typeof p.index === 'number') m.set(p.index, p);
+      }
+      return [...m.values()].sort((a, b) => a.index - b.index);
+    }
+
+    function renderPendingQueue() {
+      const panel = document.getElementById('pending-queue-panel');
+      const list = document.getElementById('pending-queue-list');
+      const count = document.getElementById('pending-queue-count');
+      if (!panel || !list) return;
+      if (!pendingQueue.length) {
+        panel.classList.add('hidden');
+        list.innerHTML = '';
+        if (count) count.textContent = '0';
+        return;
+      }
+      panel.classList.remove('hidden');
+      if (count) count.textContent = String(pendingQueue.length);
+
+      const nowSec = Date.now() / 1000;
+      list.innerHTML = '';
+      for (const p of pendingQueue) {
+        const item = document.createElement('div');
+        item.className = 'pending-item';
+        item.dataset.pendingIndex = String(p.index);
+        const wait = _formatWait(nowSec - (p.submitted_at || nowSec));
+        item.innerHTML =
+          `<span class="pending-index">#${p.index}</span>` +
+          `<span class="pending-text" title="${escHtml(p.text)}">${escHtml(_truncate(p.text, 80))}</span>` +
+          `<span class="pending-wait">等待 ${wait}</span>` +
+          `<button class="pending-cancel" data-index="${p.index}" title="取消排队">取消</button>`;
+        list.appendChild(item);
+      }
+    }
+
+    function _startPendingTick() {
+      if (pendingQueueRenderTimer) return;
+      pendingQueueRenderTimer = setInterval(() => {
+        if (pendingQueue.length) renderPendingQueue();
+        else {
+          clearInterval(pendingQueueRenderTimer);
+          pendingQueueRenderTimer = null;
+        }
+      }, 1000);
+    }
+
+    function addOrUpdatePending(resp) {
+      // resp may be a single {index, text, submitted_at, queue} from POST
+      // /messages (status=queued) or a snapshot event with {queue: [...]}.
+      if (!resp) return;
+      if (Array.isArray(resp.queue)) {
+        // Use the snapshot as the source of truth and add submitted_at
+        // where missing.
+        pendingQueue = _mergePendingIndex(resp.queue).map(p => ({
+          index: p.index,
+          text: p.text,
+          submitted_at: p.submitted_at || Date.now() / 1000,
+        }));
+      } else if (typeof resp.index === 'number') {
+        // Replace by index so updates from the same entry don't duplicate.
+        const idx = pendingQueue.findIndex(p => p.index === resp.index);
+        const entry = {
+          index: resp.index,
+          text: resp.text,
+          submitted_at: resp.submitted_at || Date.now() / 1000,
+        };
+        if (idx >= 0) pendingQueue[idx] = entry;
+        else pendingQueue.push(entry);
+        pendingQueue.sort((a, b) => a.index - b.index);
+      }
+      renderPendingQueue();
+      _startPendingTick();
+    }
+
+    function removePendingByIndex(idx) {
+      const before = pendingQueue.length;
+      pendingQueue = pendingQueue.filter(p => p.index !== idx);
+      if (pendingQueue.length !== before) renderPendingQueue();
+    }
+
+    function clearPendingQueue() {
+      pendingQueue = [];
+      renderPendingQueue();
+    }
+
+    async function cancelPendingByIndex(idx) {
+      if (!currentSessionId) return;
+      try {
+        const resp = await api(
+          `/sessions/${currentSessionId}/pending/${idx}`, 'DELETE'
+        );
+        if (resp && Array.isArray(resp.queue)) {
+          addOrUpdatePending({ queue: resp.queue });
+        } else {
+          removePendingByIndex(idx);
+        }
+      } catch (e) {
+        toast('取消失败: ' + (e?.detail || e?.message || ''), true);
+      }
+    }
+
+    async function refreshPendingFromBackend() {
+      // Called on session switch / page reload to repopulate the panel.
+      if (!currentSessionId) { clearPendingQueue(); return; }
+      try {
+        const resp = await api(`/sessions/${currentSessionId}/pending`);
+        addOrUpdatePending({ queue: resp?.queue || [] });
+      } catch (e) {
+        // Backend may have nothing — treat as empty queue.
+        clearPendingQueue();
+      }
+    }
+
     function rollbackOptimisticUserMessage(text) {
       const container = document.getElementById('messages');
       if (!container) return;
@@ -3156,7 +3442,7 @@
         const name = inp.value.trim();
         if (!name) return;
         const tmpl = type === 'skill'
-          ? `---\nname: ${name}\ndescription: "${name}"\nprovider: bltcy-anthropic\ntask_goal: ""\ntools:\n  - read_file\n  - search\n---\n\n你是一个...`
+          ? `---\nname: ${name}\ndescription: "${name}"\nprovider: openai-hub\ntask_goal: ""\ntools:\n  - read_file\n  - search\n---\n\n你是一个...`
           : '你是一个...\n\n回答时用中文。';
         try {
           if (type === 'skill') await api('/config/skills', 'POST', { name, content: tmpl });

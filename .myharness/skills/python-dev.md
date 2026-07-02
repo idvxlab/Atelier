@@ -1,7 +1,7 @@
 ---
 name: python-dev
 description: "Python 开发助手"
-provider: bltcy-anthropic
+provider: openai-hub
 task_goal: "帮助用户完成 Python 开发任务，提供完整可运行的代码"
 
 tools:

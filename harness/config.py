@@ -13,10 +13,13 @@ load_dotenv(override=False)
 
 
 def _expand_env_ref(value: str) -> str:
-    """Expand a simple ${ENV_VAR} reference; leave literal values unchanged."""
+    """Expand a ${ENV_VAR} or ${ENV_VAR:-default} reference; leave literal values unchanged."""
     if value.startswith("${") and value.endswith("}"):
-        env_var = value[2:-1]
-        return os.environ.get(env_var, "")
+        inner = value[2:-1]
+        if ":-" in inner:
+            env_var, default = inner.split(":-", 1)
+            return os.environ.get(env_var, default)
+        return os.environ.get(inner, "")
     return value
 
 
@@ -32,6 +35,10 @@ _PROVIDER_ALIASES: dict[str, str] = {
     "361api": "361api-openai",
     "my-361api-mini": "361api-mini",
     "361api-mini": "361api-mini",
+    "hub-openai": "openai-hub",
+    "hub-mini": "openai-hub-mini",
+    "openai-hub": "openai-hub",
+    "openai-hub-mini": "openai-hub-mini",
 }
 
 
@@ -206,6 +213,23 @@ class HarnessConfig:
                 base_url=os.environ.get(
                     "THREE_SIX_ONE_BASE_URL",
                     "https://www.361api.com/v1",
+                ),
+            )
+
+        if key := _first_env(
+            [
+                "OPENAI_HUB_API_KEY",
+                "OPENAIHUB_API_KEY",
+                "HUB_OPENAI_API_KEY",
+            ]
+        ):
+            providers["openai-hub"] = ProviderConfig(
+                name="openai-compatible",
+                model=os.environ.get("OPENAI_HUB_MODEL", "gpt-4o"),
+                api_key=key,
+                base_url=os.environ.get(
+                    "OPENAI_HUB_BASE_URL",
+                    "https://api.openai-hub.com/v1",
                 ),
             )
 

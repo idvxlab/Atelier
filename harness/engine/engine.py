@@ -205,6 +205,10 @@ class AgentEngine:
         self._pending_commands: list[PendingCommand] = []
         self._pending_commands_lock = asyncio.Lock()
         self._pending_commands_counter: int = 0
+        # Index of the most-recent command promoted from the pending queue
+        # to a live user turn. ReactLoop's drain_callback uses this to
+        # remove the right entry (by index, never by text).
+        self._current_drain_index: int | None = None
 
         # Pending spawn tasks (sub-agents launched non-blocking)
         self._pending_spawns: list[PendingSpawn] = []
@@ -338,17 +342,31 @@ class AgentEngine:
 
         return snap
 
-    async def send_message(self, text: str) -> None:
+    async def send_message(self, text: str) -> dict[str, Any]:
         """
         Accept a user message.
-        If engine is RUNNING, queue the message as an intervention.
-        Otherwise transition to RUNNING and fire off the loop.
+
+        Returns a structured dict so callers (REST, WS) can distinguish a
+        message that started a run from one that was queued for later:
+
+          status="started" → this message is now the live user turn; the
+                              agent loop will process it.
+          status="queued"  → the engine is RUNNING; this message was
+                              appended to _pending_commands and will be
+                              promoted to a live user turn once the current
+                              run completes (FIFO, by index, never by text).
+
+        Important: a queued message is NOT appended to self._messages and
+        does NOT start a new loop. The frontend must render it in the
+        pending-queue panel, not as a normal user bubble.
         """
         async with self._state_lock:
             state = self._sm.state
 
         if state == EngineState.RUNNING:
-            # Track pending command for ordered execution after current run ends
+            # Track pending command for ordered execution after current run ends.
+            # Use a separate lock so the (frequent) queue writes don't contend
+            # with the (rare) state transitions.
             async with self._pending_commands_lock:
                 self._pending_commands_counter += 1
                 pc = PendingCommand(
@@ -357,19 +375,40 @@ class AgentEngine:
                     submitted_at=__import__("time").time(),
                 )
                 self._pending_commands.append(pc)
+                queue_snapshot = [p.to_dict() for p in self._pending_commands]
             self._emitter.emit(
                 "send_message", "triggered-intercepted",
-                detail={"reason": "engine_running", "queued": True, "index": pc.index},
+                detail={
+                    "reason": "engine_running",
+                    "queued": True,
+                    "index": pc.index,
+                    "text": pc.text,
+                    "submitted_at": pc.submitted_at,
+                    "queue_size": len(queue_snapshot),
+                    "queue": queue_snapshot,
+                },
             )
-            return
+            return {
+                "status": "queued",
+                "index": pc.index,
+                "text": pc.text,
+                "submitted_at": pc.submitted_at,
+                "queue_size": len(queue_snapshot),
+                "queue": queue_snapshot,
+            }
 
         user_msg = Message(role="user", content=[TextBlock(text=text)])
 
         # Concurrency rule: transition inside lock, then release before async work
         async with self._state_lock:
             # Session reuse: COMPLETED -> WAITING_INPUT implicitly before starting again
+            # Also recover from ERROR: the previous run died (e.g. upstream 400),
+            # so the user can retry by simply sending a new message.
             if self._sm.state == EngineState.COMPLETED:
                 self._sm.transition(EngineState.WAITING_INPUT)
+            elif self._sm.state == EngineState.ERROR:
+                self._sm.transition(EngineState.WAITING_INPUT)
+                self._last_error = ""
             self._messages.append(user_msg)
             self._sm.transition(EngineState.RUNNING)
             self._emitter.emit(
@@ -384,6 +423,8 @@ class AgentEngine:
         if self._config.spawn_depth == 0 and not self._title_generated:
             self._title_generated = True
             asyncio.create_task(self._generate_title_async(text))
+
+        return {"status": "started", "text": text, "queue_size": 0, "queue": []}
 
     async def run_to_completion(self, task: str, parent_engine: "AgentEngine | None" = None) -> str:
         """
@@ -439,18 +480,57 @@ class AgentEngine:
             self._sm.transition(EngineState.RUNNING)
         self._confirmation_event.set()
 
-    async def cancel_pending_command(self, index: int) -> bool:
+    async def cancel_pending_command(self, index: int) -> dict[str, Any]:
         """
-        Remove a queued command by index. Returns True if found and removed.
-        The matching Message is left in the intervention_queue (will drain
-        harmlessly at the next safe point with no effect).
+        Remove a queued command by its index (NOT by text — text can collide
+        when a user sends the same prompt twice in a row).
+
+        Returns a dict with the cancelled flag and the post-cancel queue
+        snapshot so the caller (REST / WS) can sync the UI without an
+        extra round-trip.
         """
         async with self._pending_commands_lock:
             for i, pc in enumerate(self._pending_commands):
                 if pc.index == index:
                     self._pending_commands.pop(i)
-                    return True
-            return False
+                    break
+            else:
+                # Not found — return a snapshot anyway so the caller can
+                # resync (the UI may have been out of date).
+                return {
+                    "cancelled": False,
+                    "index": index,
+                    "queue_size": len(self._pending_commands),
+                    "queue": [p.to_dict() for p in self._pending_commands],
+                }
+            queue_snapshot = [p.to_dict() for p in self._pending_commands]
+        # Emit so other listeners (e.g. WebSocket) can update.
+        self._emitter.emit(
+            "pending_command", "triggered-executed",
+            detail={
+                "action": "cancelled",
+                "index": index,
+                "queue_size": len(queue_snapshot),
+                "queue": queue_snapshot,
+            },
+        )
+        return {
+            "cancelled": True,
+            "index": index,
+            "queue_size": len(queue_snapshot),
+            "queue": queue_snapshot,
+        }
+
+    async def get_pending_commands(self) -> list[dict[str, Any]]:
+        """
+        Snapshot the current pending-command queue.
+
+        Used by REST (`GET /sessions/{id}/pending`) and by the frontend on
+        session restore (page reload, session switch) to repopulate the
+        pending-queue panel without trusting local state.
+        """
+        async with self._pending_commands_lock:
+            return [p.to_dict() for p in self._pending_commands]
 
     async def cancel_pending_spawn(self, index: int) -> bool:
         """
@@ -616,8 +696,12 @@ class AgentEngine:
             if target_idx == -1:
                 return
 
+            # Allow re-run after COMPLETED, ERROR, or already-idle state.
             if self._sm.state == EngineState.COMPLETED:
                 self._sm.transition(EngineState.WAITING_INPUT)
+            elif self._sm.state == EngineState.ERROR:
+                self._sm.transition(EngineState.WAITING_INPUT)
+                self._last_error = ""
             self._sm.transition(EngineState.RUNNING)
 
             # CRITICAL: rewrite_message set cancel_event to stop the prior loop.
@@ -1112,26 +1196,68 @@ class AgentEngine:
         return True
 
     async def _drain_and_dequeue(self, text: str) -> None:
-        """Called by ReactLoop at safe drain points — removes matching pending command."""
+        """
+        Called by ReactLoop at safe drain points.
+
+        We DO NOT match by text — two consecutive user messages can be
+        identical ("1", "1") and matching by text would either no-op the
+        second one or pop the wrong entry. Instead, we pop the oldest
+        pending command whose index matches the one we just promoted to a
+        live user turn via _process_queued_command().
+
+        The `text` parameter is ignored for matching; it's part of the
+        legacy ReactLoop signature and kept for backward compatibility.
+        """
         async with self._pending_commands_lock:
+            if self._current_drain_index is None:
+                return
+            target_idx = self._current_drain_index
+            self._current_drain_index = None
             for i, pc in enumerate(self._pending_commands):
-                if pc.text == text:
+                if pc.index == target_idx:
                     self._pending_commands.pop(i)
-                    break
+                    return
 
     async def _process_queued_command(self, pc: "PendingCommand") -> None:
-        """Run a queued user command: transition to RUNNING and fire the loop."""
+        """
+        Run a queued user command: append its user message, transition
+        to RUNNING, fire the loop, and emit a `pending_command.started`
+        event so the frontend can drop this entry from its queue panel.
+        """
         user_msg = Message(role="user", content=[TextBlock(text=pc.text)])
+        # Remember the index so the loop's drain_callback can pop the
+        # matching entry by index instead of by text.
+        self._current_drain_index = pc.index
+        # Snapshot the queue AFTER we conceptually remove this one.
+        async with self._pending_commands_lock:
+            queue_snapshot = [p.to_dict() for p in self._pending_commands if p.index != pc.index]
         async with self._state_lock:
             # COMPLETED -> WAITING_INPUT -> RUNNING
+            # ERROR -> WAITING_INPUT -> RUNNING (recovery: previous run died)
             if self._sm.state == EngineState.COMPLETED:
                 self._sm.transition(EngineState.WAITING_INPUT)
+            elif self._sm.state == EngineState.ERROR:
+                self._sm.transition(EngineState.WAITING_INPUT)
+                self._last_error = ""
             self._messages.append(user_msg)
             self._sm.transition(EngineState.RUNNING)
             self._emitter.emit(
                 "state_transition", "triggered-executed",
                 detail={"to": EngineState.RUNNING.name, "source": "queue_drain"},
             )
+        # Emit a dedicated event for the frontend pending-queue panel.
+        # Frontend removes the entry with this index from its panel.
+        self._emitter.emit(
+            "pending_command", "triggered-executed",
+            detail={
+                "action": "started",
+                "index": pc.index,
+                "text": pc.text,
+                "submitted_at": pc.submitted_at,
+                "queue_size": len(queue_snapshot),
+                "queue": queue_snapshot,
+            },
+        )
         asyncio.create_task(self._run_loop_guarded())
 
     async def _run_loop_guarded(self) -> None:

@@ -3,7 +3,7 @@ MyHarnessPy 交互式 CLI
 
 直接运行，无需启动 API 服务器：
     python cli.py
-    python cli.py --provider bltcy-openai
+    python cli.py --provider openai-hub
     python cli.py --persona coder
 """
 from __future__ import annotations
@@ -558,7 +558,7 @@ def main() -> None:
         epilog=textwrap.dedent("""
             示例:
               python cli.py
-              python cli.py --provider bltcy-openai
+              python cli.py --provider openai-hub
               python cli.py --persona coder
               python cli.py --list-personas
         """),

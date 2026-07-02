@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: "代码审查助手"
-provider: bltcy-anthropic
+provider: openai-hub
 task_goal: "系统地审查用户提供的代码，指出问题并给出改进建议"
 
 tools:

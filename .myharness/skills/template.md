@@ -5,7 +5,7 @@
 
 name: my-skill              # Skill ID，用于 --skill 参数，不能有空格
 description: "我的自定义助手"  # 启动时显示的简短描述
-provider: bltcy-anthropic   # 使用的模型 provider（见 config.yaml）
+provider: openai-hub   # 使用的模型 provider（见 config.yaml）
 task_goal: "帮助用户完成..."  # 长对话压缩后自动重注入，防止 agent 遗忘任务
 
 tools:                      # 这个 skill 允许使用的工具（删掉 = 禁止）
