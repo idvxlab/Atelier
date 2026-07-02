@@ -17,7 +17,12 @@ import pytest
 from harness.config import HarnessConfig, MCPServerConfig
 from harness.mcp.bridge import register_mcp_server
 from harness.mcp.client import MCPClient, MCPError
-from harness.mcp.stdio_transport import StdioTransport, TransportError
+from harness.mcp.http_transport import HttpTransport
+from harness.mcp.stdio_transport import (
+    StdioTransport,
+    TransportError,
+    _prepare_subprocess_command,
+)
 from harness.tools.registry import ToolRegistry
 
 # ---------------------------------------------------------------------------
@@ -110,6 +115,18 @@ def _mock_server_command() -> list[str]:
 # ---------------------------------------------------------------------------
 
 class TestStdioTransport:
+    def test_prepare_subprocess_command_wraps_cmd_on_windows(self):
+        with patch("harness.mcp.stdio_transport.os.name", "nt"), \
+             patch("harness.mcp.stdio_transport.shutil.which", return_value=r"C:\nodejs\npx.cmd"), \
+             patch.dict("harness.mcp.stdio_transport.os.environ", {"COMSPEC": r"C:\Windows\System32\cmd.exe"}):
+            mode, target = _prepare_subprocess_command(
+                ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."]
+            )
+
+        assert mode == "exec"
+        assert target[:4] == [r"C:\Windows\System32\cmd.exe", "/d", "/s", "/c"]
+        assert "npx.cmd" in target[4]
+
     @pytest.mark.asyncio
     async def test_start_and_close(self):
         t = StdioTransport()
@@ -117,6 +134,27 @@ class TestStdioTransport:
         assert t._process is not None
         await t.close()
         assert t._process is None
+
+    @pytest.mark.asyncio
+    async def test_start_falls_back_when_async_subprocess_not_supported(self):
+        t = StdioTransport()
+        with patch("harness.mcp.stdio_transport.asyncio.create_subprocess_exec", side_effect=NotImplementedError()):
+            await t.start(_mock_server_command())
+        assert t._sync_process is not None
+        rid = t.next_id()
+        resp = await t.send({
+            "jsonrpc": "2.0",
+            "id": rid,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0"},
+            },
+        })
+        assert resp["result"]["protocolVersion"] == "2024-11-05"
+        await t.close()
+        assert t._sync_process is None
 
     @pytest.mark.asyncio
     async def test_double_start_raises(self):
@@ -159,6 +197,34 @@ class TestStdioTransport:
         t = StdioTransport()
         ids = [t.next_id() for _ in range(5)]
         assert ids == list(range(1, 6))
+
+
+class TestHttpTransport:
+    @pytest.mark.asyncio
+    async def test_send_and_notify(self):
+        calls: list[dict] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content.decode())
+            calls.append(payload)
+            if payload.get("id") is None:
+                return httpx.Response(202, json={})
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": payload["id"], "result": {"ok": True}})
+
+        import httpx
+
+        transport = HttpTransport()
+        transport._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        transport._url = "https://example.com/mcp"
+
+        resp = await transport.send({"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {}})
+        assert resp["result"]["ok"] is True
+
+        await transport.notify({"jsonrpc": "2.0", "method": "notify", "params": {}})
+        assert len(calls) == 2
+        assert calls[1]["method"] == "notify"
+
+        await transport.close()
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +308,59 @@ class TestMCPClient:
         with pytest.raises(TransportError, match="not connected"):
             await client.call_tool("echo", {})
 
+    @pytest.mark.asyncio
+    async def test_connect_http_and_list_tools(self):
+        import httpx
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content.decode())
+            method = payload.get("method")
+            if method == "initialize":
+                return httpx.Response(200, json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "mock-http", "version": "0.0.1"},
+                    },
+                })
+            if method == "tools/list":
+                return httpx.Response(200, json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"tools": [{
+                        "name": "echo",
+                        "description": "Echo over HTTP.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"text": {"type": "string"}},
+                            "required": ["text"],
+                        },
+                    }]},
+                })
+            if method == "tools/call":
+                text = payload["params"]["arguments"].get("text", "")
+                return httpx.Response(200, json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"content": [{"type": "text", "text": text}]},
+                })
+            return httpx.Response(202, json={})
+
+        client = MCPClient(server_name="http-test")
+        client._transport = HttpTransport()
+        client._transport._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client._transport._url = "https://example.com/mcp"
+        await client._initialize()
+        try:
+            schemas = await client.list_tools()
+            assert [s.name for s in schemas] == ["echo"]
+            result = await client.call_tool("echo", {"text": "hello"})
+            assert result == "hello"
+        finally:
+            await client.close()
+
 
 # ---------------------------------------------------------------------------
 # Bridge unit tests
@@ -315,6 +434,8 @@ class TestMCPConfig:
         sc = MCPServerConfig(transport="stdio", command=["npx", "some-server"])
         assert sc.transport == "stdio"
         assert sc.command == ["npx", "some-server"]
+        assert sc.url == ""
+        assert sc.headers == {}
 
     def test_from_yaml_no_mcp_section(self, tmp_path: Path):
         yaml_content = "default_provider: test\nproviders: {}\n"
@@ -331,15 +452,25 @@ class TestMCPConfig:
             "  filesystem:\n"
             "    transport: stdio\n"
             "    command: [npx, -y, '@modelcontextprotocol/server-filesystem', '.']\n"
+            "  figma:\n"
+            "    transport: http\n"
+            "    url: ${FIGMA_MCP_URL}\n"
+            "    headers:\n"
+            "      Authorization: ${FIGMA_MCP_AUTH}\n"
         )
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(yaml_content)
-        cfg = HarnessConfig.from_yaml(str(cfg_file))
+        with patch.dict("os.environ", {"FIGMA_MCP_URL": "https://mcp.figma.com/mcp", "FIGMA_MCP_AUTH": "Bearer token"}):
+            cfg = HarnessConfig.from_yaml(str(cfg_file))
         assert "filesystem" in cfg.mcp_servers
         sc = cfg.mcp_servers["filesystem"]
         assert sc.transport == "stdio"
         assert sc.command[0] == "npx"
         assert "@modelcontextprotocol/server-filesystem" in sc.command
+        remote = cfg.mcp_servers["figma"]
+        assert remote.transport == "http"
+        assert remote.url == "https://mcp.figma.com/mcp"
+        assert remote.headers["Authorization"] == "Bearer token"
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +513,79 @@ class TestSetupMCPServers:
         clients = await setup_mcp_servers(registry, cfg)
         assert clients == []
         assert registry.discover() == []
+
+    @pytest.mark.asyncio
+    async def test_setup_mcp_servers_supports_http_transport(self):
+        from harness.factory import setup_mcp_servers
+
+        class FakeClient:
+            async def connect_http(self, url, headers=None, timeout=30.0):
+                self.url = url
+                self.headers = headers or {}
+
+            async def list_tools(self):
+                from harness.types.tools import ToolSchema, ToolParam
+                return [ToolSchema(name="echo", description="desc", params=[ToolParam(name="text", type="string", description="Text to echo")])]
+
+            async def call_tool(self, name, args):
+                return args.get("text", "")
+
+            async def close(self):
+                return None
+
+        cfg = HarnessConfig(
+            mcp_servers={
+                "figma": MCPServerConfig(
+                    transport="http",
+                    url="https://example.com/mcp",
+                    headers={"Authorization": "Bearer token"},
+                )
+            }
+        )
+        registry = ToolRegistry()
+        with patch("harness.mcp.client.MCPClient", return_value=FakeClient()):
+            clients = await setup_mcp_servers(registry, cfg)
+        assert len(clients) == 1
+        assert registry.get("figma__echo") is not None
+
+    @pytest.mark.asyncio
+    async def test_setup_mcp_servers_retries_then_succeeds(self):
+        from harness.factory import setup_mcp_servers
+
+        class FakeClient:
+            def __init__(self):
+                self.connect_calls = 0
+
+            async def connect(self, command):
+                self.connect_calls += 1
+                if self.connect_calls == 1:
+                    raise RuntimeError("transient startup failure")
+
+            async def list_tools(self):
+                from harness.types.tools import ToolSchema
+                return [ToolSchema(name="echo", description="desc", params=[])]
+
+            async def call_tool(self, name, args):
+                return "ok"
+
+            async def close(self):
+                return None
+
+        cfg = HarnessConfig(
+            mcp_servers={
+                "filesystem": MCPServerConfig(
+                    transport="stdio",
+                    command=["dummy"],
+                )
+            }
+        )
+        registry = ToolRegistry()
+        fake = FakeClient()
+        with patch("harness.mcp.client.MCPClient", return_value=fake):
+            clients = await setup_mcp_servers(registry, cfg)
+        assert len(clients) == 1
+        assert fake.connect_calls == 2
+        assert registry.get("filesystem__echo") is not None
 
     @pytest.mark.asyncio
     async def test_setup_mcp_servers_empty_config(self):

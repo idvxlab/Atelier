@@ -12,6 +12,8 @@ for calling ``await client.close()`` on each MCPClient when done.
 """
 from __future__ import annotations
 
+import asyncio
+
 import logging
 from pathlib import Path
 
@@ -429,21 +431,54 @@ async def setup_mcp_servers(
     from harness.mcp.client import MCPClient
     from harness.mcp.bridge import register_mcp_server
 
+    async def _connect_client_with_retries(
+        client: MCPClient,
+        server_name: str,
+        server_cfg,
+    ) -> bool:
+        attempts = 3
+        last_exc: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                if server_cfg.transport == "stdio":
+                    if not server_cfg.command:
+                        logger.warning("MCP Server '%s' has no command; skipping.", server_name)
+                        return False
+                    await client.connect(server_cfg.command)
+                elif server_cfg.transport in {"http", "https", "remote", "streamable_http"}:
+                    if not server_cfg.url:
+                        logger.warning("MCP Server '%s' has no URL; skipping.", server_name)
+                        return False
+                    await client.connect_http(server_cfg.url, headers=server_cfg.headers)
+                else:
+                    logger.warning(
+                        "MCP Server '%s' uses unsupported transport '%s'; skipping.",
+                        server_name, server_cfg.transport,
+                    )
+                    return False
+                return True
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(
+                    "MCP Server '%s' connect attempt %d/%d failed: %r",
+                    server_name, attempt, attempts, exc,
+                )
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+                if attempt < attempts:
+                    await asyncio.sleep(0.5 * attempt)
+        assert last_exc is not None
+        raise last_exc
+
     clients: list[MCPClient] = []
     for server_name, server_cfg in harness_cfg.mcp_servers.items():
-        if server_cfg.transport != "stdio":
-            logger.warning(
-                "MCP Server '%s' uses unsupported transport '%s'; skipping.",
-                server_name, server_cfg.transport,
-            )
-            continue
-        if not server_cfg.command:
-            logger.warning("MCP Server '%s' has no command; skipping.", server_name)
-            continue
-
         client = MCPClient(server_name=server_name)
         try:
-            await client.connect(server_cfg.command)
+            connected = await _connect_client_with_retries(client, server_name, server_cfg)
+            if not connected:
+                continue
             registered = await register_mcp_server(registry, client, prefix=server_name)
             logger.info(
                 "MCP Server '%s' connected; %d tool(s) registered: %s",
@@ -452,7 +487,7 @@ async def setup_mcp_servers(
             clients.append(client)
         except Exception as exc:
             logger.error(
-                "Failed to connect MCP Server '%s': %s", server_name, exc
+                "Failed to connect MCP Server '%s': %r", server_name, exc
             )
             await client.close()
 
@@ -466,6 +501,8 @@ async def build_engine_with_mcp(
     session_store: SessionStore,
     system_prompt: str = "",
     allowed_tools: list[str] | None = None,
+    engine_registry: dict | None = None,
+    provider_name: str = "",
     question_mode: str = "noquestion",
 ) -> tuple[AgentEngine, list]:  # tuple[AgentEngine, list[MCPClient]]
     """Async variant of build_engine() that also initialises MCP Servers.
@@ -502,6 +539,8 @@ async def build_engine_with_mcp(
         system_prompt=system_prompt,
         allowed_tools=allowed_tools,
         registry=registry,
+        engine_registry=engine_registry,
+        provider_name=provider_name,
         question_mode=question_mode,
     )
     return engine, mcp_clients

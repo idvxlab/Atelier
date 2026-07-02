@@ -88,8 +88,10 @@ class ToolsSettings:
 @dataclass
 class MCPServerConfig:
     """Configuration for a single MCP Server."""
-    transport: str          # currently only "stdio" is supported
-    command: list[str]      # executable + arguments to launch the server
+    transport: str = "stdio"     # "stdio" or remote HTTP-style transports
+    command: list[str] = field(default_factory=list)  # executable + args
+    url: str = ""                # remote MCP endpoint URL
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -146,9 +148,16 @@ class HarnessConfig:
 
         mcp_servers: dict[str, MCPServerConfig] = {}
         for sname, scfg in raw.get("mcp_servers", {}).items():
+            headers_raw = scfg.get("headers", {}) or {}
+            headers = {
+                str(k): _expand_env_ref(str(v))
+                for k, v in headers_raw.items()
+            } if isinstance(headers_raw, dict) else {}
             mcp_servers[sname] = MCPServerConfig(
                 transport=scfg.get("transport", "stdio"),
                 command=list(scfg.get("command", [])),
+                url=_expand_env_ref(str(scfg.get("url", ""))),
+                headers=headers,
             )
 
         default_provider = os.environ.get("HARNESS_DEFAULT_PROVIDER", "").strip()

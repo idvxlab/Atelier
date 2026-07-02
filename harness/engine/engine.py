@@ -437,6 +437,7 @@ class AgentEngine:
                 return
             self._confirmation_approved = True
             self._sm.transition(EngineState.RUNNING)
+        self._confirmation_event.set()
 
     async def cancel_pending_command(self, index: int) -> bool:
         """

@@ -165,6 +165,7 @@ async def _build_engine(
             session_store=MemorySessionStore(),
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
+            provider_name=provider_name,
             question_mode=question_mode,
         )
         return engine, mcp_clients

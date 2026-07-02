@@ -11,6 +11,7 @@ import json
 import logging
 from typing import Any
 
+from harness.mcp.http_transport import HttpTransport
 from harness.mcp.stdio_transport import StdioTransport, TransportError
 from harness.types.tools import ToolSchema, ToolParam
 
@@ -42,7 +43,7 @@ class MCPClient:
     """
 
     def __init__(self, server_name: str = "mcp-server") -> None:
-        self._transport = StdioTransport()
+        self._transport: StdioTransport | HttpTransport | None = None
         self._server_name = server_name
         self._connected = False
 
@@ -54,9 +55,23 @@ class MCPClient:
         Args:
             command: Command + args used to launch the server process.
         """
+        self._transport = StdioTransport()
         await self._transport.start(command)
+        await self._initialize()
 
-        # Step 1 — send initialize
+    async def connect_http(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        timeout: float = 30.0,
+    ) -> None:
+        """Connect to a remote MCP server over HTTP."""
+        self._transport = HttpTransport()
+        await self._transport.start(url, headers=headers, timeout=timeout)
+        await self._initialize()
+
+    async def _initialize(self) -> None:
+        assert self._transport is not None
         init_response = await self._rpc(
             "initialize",
             {
@@ -78,7 +93,8 @@ class MCPClient:
     async def close(self) -> None:
         """Gracefully shut down the connection."""
         self._connected = False
-        await self._transport.close()
+        if self._transport is not None:
+            await self._transport.close()
         logger.info("Disconnected from MCP Server '%s'.", self._server_name)
 
     # ── Tool discovery ────────────────────────────────────────────────────────
@@ -151,11 +167,9 @@ class MCPClient:
 
     async def _notify(self, method: str, params: dict[str, Any]) -> None:
         """Send a JSON-RPC notification (no id, no response expected)."""
-        assert self._transport._process and self._transport._process.stdin
         msg = {"jsonrpc": "2.0", "method": method, "params": params}
-        line = json.dumps(msg, ensure_ascii=False) + "\n"
-        self._transport._process.stdin.write(line.encode())
-        await self._transport._process.stdin.drain()
+        assert self._transport is not None
+        await self._transport.notify(msg)
         logger.debug("MCP notification → server: %s", method)
 
     # ── Schema conversion ─────────────────────────────────────────────────────

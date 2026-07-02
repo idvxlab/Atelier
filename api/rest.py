@@ -9,9 +9,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 import uuid
 from pathlib import Path
 from typing import Any
+
+if os.name == "nt" and hasattr(asyncio, "WindowsProactorEventLoopPolicy"):
+    # MCP stdio servers require subprocess support on Windows.
+    # Under SelectorEventLoopPolicy, asyncio subprocess APIs can fail with a
+    # blank NotImplementedError inside uvicorn/reload workers.
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from dotenv import load_dotenv
 load_dotenv(override=False)
@@ -30,7 +38,7 @@ from harness.commands import CommandSystem
 from harness.commands.models import CommandContext, CommandResult, substitute_args
 from harness.config import HarnessConfig
 from harness.engine.engine import AgentEngine
-from harness.factory import build_engine
+from harness.factory import build_engine, build_engine_with_mcp
 from harness.skills import (
     load_persona,
     list_skills, list_personas,
@@ -39,12 +47,14 @@ from harness.skills import (
 )
 from harness.storage.backends.memory import MemorySessionStore
 from harness.storage.backends.sqlite import SQLiteSessionStore
+from harness.types.messages import Message, TextBlock
 
 app = FastAPI(title="MyHarnessPy", version="0.1.0")
 
 # Active engines: session_id -> AgentEngine
 _engines: dict[str, AgentEngine] = {}
 _engine_meta: dict[str, dict[str, Any]] = {}   # session_id -> {persona, provider}
+_engine_mcp_clients: dict[str, list] = {}
 
 # Shared config — loaded once at startup
 _config: HarnessConfig | None = None
@@ -67,6 +77,12 @@ async def _startup() -> None:
 
     _cmd_system = CommandSystem()
     _cmd_system.initialize()
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    for session_id in list(_engine_mcp_clients.keys()):
+        await _close_session_mcp_clients(session_id)
 
 
 # ── Static files ───────────────────────────────────────────────────────
@@ -145,6 +161,149 @@ class CreateFileRequest(BaseModel):
     content: str
 
 
+async def _build_session_engine(
+    session_id: str,
+    provider_name: str,
+    cfg: HarnessConfig,
+    system_prompt: str,
+    allowed_tools: list[str] | None,
+    question_mode: str,
+) -> tuple[AgentEngine, list]:
+    if cfg.mcp_servers:
+        engine, mcp_clients = await build_engine_with_mcp(
+            session_id=session_id,
+            provider_cfg=cfg.providers[provider_name],
+            harness_cfg=cfg,
+            session_store=_session_store,
+            system_prompt=system_prompt,
+            allowed_tools=allowed_tools,
+            engine_registry=_engines,
+            provider_name=provider_name,
+            question_mode=question_mode,
+        )
+        return engine, mcp_clients
+
+    return (
+        build_engine(
+            session_id=session_id,
+            provider_cfg=cfg.providers[provider_name],
+            harness_cfg=cfg,
+            session_store=_session_store,
+            system_prompt=system_prompt,
+            allowed_tools=allowed_tools,
+            engine_registry=_engines,
+            provider_name=provider_name,
+            question_mode=question_mode,
+        ),
+        [],
+    )
+
+
+async def _close_session_mcp_clients(session_id: str) -> None:
+    clients = _engine_mcp_clients.pop(session_id, [])
+    for client in clients:
+        try:
+            await client.close()
+        except Exception:
+            pass
+
+
+_TOOL_QUERY_PATTERNS = [
+    re.compile(r"(?:what|which|list|show).{0,20}tools?", re.IGNORECASE),
+    re.compile(r"available tools?", re.IGNORECASE),
+]
+
+_TOOL_QUERY_KEYWORDS_ZH = [
+    ("\u5de5\u5177", "\u5217\u51fa"),
+    ("\u5de5\u5177", "\u663e\u793a"),
+    ("\u5de5\u5177", "\u67e5\u770b"),
+    ("\u5de5\u5177", "\u770b\u770b"),
+    ("\u5de5\u5177", "\u5f53\u524d"),
+    ("\u5de5\u5177", "\u73b0\u5728"),
+    ("\u5de5\u5177", "\u53ef\u7528"),
+]
+
+
+def _is_tool_inventory_query(text: str) -> bool:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return False
+    if cleaned.startswith("/"):
+        return False
+    if any(p.search(cleaned) for p in _TOOL_QUERY_PATTERNS):
+        return True
+    return any(all(token in cleaned for token in pair) for pair in _TOOL_QUERY_KEYWORDS_ZH)
+
+
+def _render_tool_inventory(engine: AgentEngine) -> str:
+    schemas = sorted(engine.tool_schemas, key=lambda s: s.name)
+    if not schemas:
+        return "\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u5de5\u5177\u3002"
+
+    mcp_tools = [s for s in schemas if "__" in s.name]
+    builtin_tools = [s for s in schemas if "__" not in s.name]
+
+    lines = ["\u4ee5\u4e0b\u662f\u5f53\u524d\u4f1a\u8bdd\u91cc\u771f\u5b9e\u53ef\u8c03\u7528\u7684\u5de5\u5177\uff1a"]
+    if _config and _config.mcp_servers and not mcp_tools:
+        configured = ", ".join(sorted(_config.mcp_servers.keys()))
+        lines.append("")
+        lines.append(
+            "\u8b66\u544a\uff1a\u5df2\u914d\u7f6e MCP \u670d\u52a1\u5668"
+            f" ({configured})\uff0c\u4f46\u5f53\u524d\u4f1a\u8bdd\u6ca1\u6709\u6210\u529f\u8fde\u4e0a\u5b83\u4eec\u3002"
+        )
+        lines.append(
+            "\u8fd9\u901a\u5e38\u610f\u5473\u7740\u540e\u7aef\u542f\u52a8\u65f6 MCP \u8fde\u63a5\u5931\u8d25\uff0c"
+            "\u8bf7\u91cd\u542f\u540e\u7aef\u5e76\u65b0\u5efa\u4f1a\u8bdd\uff0c\u540c\u65f6\u67e5\u770b\u65e5\u5fd7\u91cc "
+            "'Failed to connect MCP Server' \u6216 'connect attempt' \u76f8\u5173\u4fe1\u606f\u3002"
+        )
+    if mcp_tools:
+        lines.append("")
+        lines.append("MCP \u5de5\u5177\uff1a")
+        for s in mcp_tools:
+            desc = (s.description or "").strip()
+            lines.append(f"- {s.name}: {desc}")
+    if builtin_tools:
+        lines.append("")
+        lines.append("\u5185\u5efa\u5de5\u5177\uff1a")
+        for s in builtin_tools:
+            desc = (s.description or "").strip()
+            lines.append(f"- {s.name}: {desc}")
+    return "\n".join(lines)
+
+
+async def _respond_with_local_text(
+    session_id: str,
+    engine: AgentEngine,
+    user_text: str,
+    assistant_text: str,
+) -> None:
+    user_msg = Message(role="user", content=[TextBlock(text=user_text)])
+    assistant_msg = Message(role="assistant", content=[TextBlock(text=assistant_text)])
+
+    async with engine._state_lock:
+        engine._messages.append(user_msg)
+        engine._messages.append(assistant_msg)
+
+    for listener in list(engine._message_listeners):
+        try:
+            await listener(assistant_msg)
+        except Exception:
+            pass
+
+    try:
+        rec = await _session_store.load(session_id)
+        meta = dict(rec.metadata) if rec and isinstance(rec.metadata, dict) else None
+    except Exception:
+        meta = None
+
+    try:
+        await _session_store.save(session_id, engine._messages, metadata=meta)
+    except Exception:
+        pass
+
+    await engine._notify_state_listeners()
+
+
 # ── Session routes ─────────────────────────────────────────────────────
 
 @app.post("/sessions", status_code=201)
@@ -169,19 +328,19 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
             question_mode = rec.metadata.get("question_mode", "noquestion") or "noquestion"
     except Exception:
         pass
-    engine = build_engine(
+    engine, mcp_clients = await _build_session_engine(
         session_id=session_id,
-        provider_cfg=cfg.providers[provider_name],
-        harness_cfg=cfg,
-        session_store=_session_store,
+        provider_name=provider_name,
+        cfg=cfg,
         system_prompt=system_prompt,
         allowed_tools=allowed_tools,
-        engine_registry=_engines,
-        provider_name=provider_name,
         question_mode=question_mode,
     )
+    if session_id in _engines:
+        await _close_session_mcp_clients(session_id)
     await engine.restore_from_store()
     _engines[session_id] = engine
+    _engine_mcp_clients[session_id] = mcp_clients
     _engine_meta[session_id] = {
         "provider": provider_name,
         "persona":  req.persona,
@@ -202,6 +361,16 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
 @app.post("/sessions/{session_id}/messages")
 async def send_message(session_id: str, req: SendMessageRequest) -> dict[str, Any]:
     engine = _get_engine(session_id)
+    if _is_tool_inventory_query(req.text):
+        snap = await engine.get_snapshot()
+        if not snap.get("is_running"):
+            await _respond_with_local_text(
+                session_id=session_id,
+                engine=engine,
+                user_text=req.text,
+                assistant_text=_render_tool_inventory(engine),
+            )
+            return {"status": "completed-locally"}
     await engine.send_message(req.text)
     return {"status": "accepted"}
 
@@ -247,18 +416,17 @@ async def get_state(session_id: str) -> dict[str, Any]:
         if provider_name not in cfg.providers:
             provider_name = cfg.default_provider
         question_mode = store_meta.get("question_mode", "noquestion") or "noquestion"
-        engine = build_engine(
+        engine, mcp_clients = await _build_session_engine(
             session_id=session_id,
-            provider_cfg=cfg.providers[provider_name],
-            harness_cfg=cfg,
-            session_store=_session_store,
-            system_prompt="",
-            engine_registry=_engines,
             provider_name=provider_name,
+            cfg=cfg,
+            system_prompt="",
+            allowed_tools=None,
             question_mode=question_mode,
         )
         await engine.restore_from_store()
         _engines[session_id] = engine
+        _engine_mcp_clients[session_id] = mcp_clients
         _engine_meta[session_id] = {
             "provider": provider_name,
             "persona": store_meta.get("persona", ""),
@@ -479,6 +647,7 @@ async def delete_session(session_id: str):
     if engine is not None:
         await engine.cancel()
         _engine_meta.pop(session_id, None)
+    await _close_session_mcp_clients(session_id)
     # Always delete from persistent store
     await _session_store.delete(session_id)
 

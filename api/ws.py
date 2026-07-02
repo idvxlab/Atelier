@@ -29,7 +29,13 @@ import json
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.routing import APIRouter
 
-from api.rest import _get_engine, _engines
+from api.rest import (
+    _engines,
+    _get_engine,
+    _is_tool_inventory_query,
+    _render_tool_inventory,
+    _respond_with_local_text,
+)
 from harness.engine.engine import serialize_message
 from harness.types.messages import Message
 
@@ -134,7 +140,16 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
             if msg_type == "message":
                 text = msg.get("text", "")
                 if text:
-                    await engine.send_message(text)
+                    snapshot = await engine.get_snapshot()
+                    if _is_tool_inventory_query(text) and not snapshot.get("is_running"):
+                        await _respond_with_local_text(
+                            session_id=session_id,
+                            engine=engine,
+                            user_text=text,
+                            assistant_text=_render_tool_inventory(engine),
+                        )
+                    else:
+                        await engine.send_message(text)
                 snapshot = await engine.get_snapshot()
                 await websocket.send_text(
                     json.dumps({"type": "state", "data": snapshot})

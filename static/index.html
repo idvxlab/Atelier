@@ -114,6 +114,14 @@
       padding: 8px 14px 4px;
     }
 
+    .session-group-title {
+      padding: 14px 16px 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: .01em;
+    }
+
     .sidebar-item {
       display: flex;
       align-items: center;
@@ -179,8 +187,27 @@
     }
 
     .sidebar-item .pin-icon {
-      font-size: 10px;
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
       flex-shrink: 0;
+      color: var(--text-muted);
+    }
+
+    .sidebar-item .pin-badge {
+      flex: 0 0 auto;
+      font-size: 9px;
+      line-height: 1;
+      padding: 3px 5px;
+      border-radius: 999px;
+      color: var(--text-muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      letter-spacing: .08em;
+      font-weight: 700;
     }
 
     .sidebar-item .session-menu-btn {
@@ -1654,7 +1681,9 @@
       const isSub = (s.spawn_depth || 0) > 0 || !!s.parent_session_id;
 
       const el = document.createElement('div');
-      el.className = 'sidebar-item session-tree-item' + (s.session_id === currentSessionId ? ' active' : '');
+      el.className = 'sidebar-item session-tree-item'
+        + (s.session_id === currentSessionId ? ' active' : '')
+        + (s.pinned ? ' pinned-session' : '');
       el.style.paddingLeft = (14 + safeDepth * 12) + 'px';
       el.onclick = (e) => {
         if (e.target.classList.contains('session-menu-btn')) return;
@@ -1675,17 +1704,25 @@
       if (s.pinned) {
         const pin = document.createElement('span');
         pin.className = 'pin-icon';
-        pin.textContent = 'P';
-        pin.title = 'Pinned';
+        pin.textContent = '📌';
+        pin.title = 'Pinned session';
         el.appendChild(pin);
       }
 
       const label = document.createElement('span');
       label.className = 'session-label';
       label.textContent = labelText;
-      label.title = `${labelText} (${s.session_id})`;
+      label.title = labelText;
       label.dataset.sessionId = s.session_id;
       el.appendChild(label);
+
+      if (s.pinned) {
+        const pinBadge = document.createElement('span');
+        pinBadge.className = 'pin-badge';
+        pinBadge.textContent = 'PIN';
+        pinBadge.title = 'Pinned session';
+        el.appendChild(pinBadge);
+      }
 
       if (s.archived) {
         const arch = document.createElement('span');
@@ -1720,7 +1757,25 @@
       }
 
       const tree = buildSessionTree(visible);
-      tree.forEach(node => renderSessionNode(node, sl, 0));
+      const pinned = tree.filter(node => node.session.pinned);
+      const recents = tree.filter(node => !node.session.pinned);
+
+      const appendGroupTitle = (text) => {
+        const heading = document.createElement('div');
+        heading.className = 'session-group-title';
+        heading.textContent = text;
+        sl.appendChild(heading);
+      };
+
+      if (pinned.length) {
+        appendGroupTitle('Pinned');
+        pinned.forEach(node => renderSessionNode(node, sl, 0));
+      }
+
+      if (recents.length) {
+        appendGroupTitle('Recents');
+        recents.forEach(node => renderSessionNode(node, sl, 0));
+      }
     }
     function populateModal() {
       const provSel = document.getElementById('sel-provider');
@@ -1972,7 +2027,7 @@
 
     async function deleteSessionFromMenu(session) {
       closeSessionMenu();
-      if (!await showConfirm('删除会话', `确认删除会话「${session.display_name || session.session_id.slice(0, 8)}」？此操作不可恢复。`)) return;
+      if (!await showConfirm('删除会话', `确认删除会话「${getSessionLabel(session)}」？此操作不可恢复。`)) return;
       try {
         await api(`/sessions/${session.session_id}`, 'DELETE');
         if (session.session_id === currentSessionId) {

@@ -150,3 +150,8 @@ mcp_servers:
   filesystem:
     transport: stdio
     command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."]
+  # figma:
+  #   transport: http
+  #   url: "${FIGMA_MCP_URL}"
+  #   headers:
+  #     Authorization: "${FIGMA_MCP_AUTH}"
