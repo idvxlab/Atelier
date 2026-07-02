@@ -1453,8 +1453,8 @@
         <!-- Messages or empty state -->
         <div id="messages-wrap">
           <div id="empty-state">
-            <p>选择一个Persona新建会话</p>
-            <button class="btn btn-primary" onclick="openNewSession()">+ 新建会话</button>
+            <p>直接在下方输入即可开始普通会话，或使用 Persona 创建会话</p>
+            <button class="btn btn-primary" onclick="openNewSession()">使用 Persona 创建会话</button>
           </div>
           <div id="messages" class="hidden"></div>
         </div>
@@ -1675,8 +1675,21 @@
     function renderSessionNode(node, container, depth = 0) {
       const s = node.session;
       const safeDepth = Math.min(depth, 6);
-      const stateClass = s.state === 'RUNNING' ? 'badge-run' : s.state === 'ERROR' ? 'badge-err' : s.state === 'WAITING_INPUT' ? 'badge-wait' : 'badge-done';
-      const stateText = s.state === 'RUNNING' ? 'Run' : s.state === 'ERROR' ? 'Err' : s.state === 'WAITING_INPUT' ? 'Wait' : 'Done';
+      const waitingStates = new Set(['WAITING_CONFIRMATION', 'WAITING_INTERRUPT']);
+      const stateClass = s.state === 'RUNNING'
+        ? 'badge-run'
+        : s.state === 'ERROR'
+          ? 'badge-err'
+          : waitingStates.has(s.state)
+            ? 'badge-wait'
+            : 'badge-done';
+      const stateText = s.state === 'RUNNING'
+        ? 'Run'
+        : s.state === 'ERROR'
+          ? 'Err'
+          : waitingStates.has(s.state)
+            ? 'Wait'
+            : 'Done';
       const labelText = getSessionLabel(s);
       const isSub = (s.spawn_depth || 0) > 0 || !!s.parent_session_id;
 
@@ -1843,6 +1856,13 @@
         btn.disabled = false;
         btn.textContent = '创建';
       }
+    }
+
+    async function createDefaultSession() {
+      const r = await api('/sessions', 'POST', {});
+      await refreshSessions();
+      await switchSession(r.session_id);
+      return r.session_id;
     }
 
     // ── Session management ────────────────────────────────────────────────
@@ -2198,10 +2218,14 @@
       const inp = document.getElementById('msg-input');
       const btn = document.getElementById('send-btn');
       const text = inp.value.trim();
-      if (!text || !currentSessionId || btn.disabled) return;
+      if (!text || btn.disabled) return;
 
       // Detect slash commands in the input
       if (text.startsWith('/')) {
+        if (!currentSessionId) {
+          toast('请先创建会话后再使用命令', true);
+          return;
+        }
         await _handleSlashInput(text, inp, btn);
         return;
       }
@@ -2211,8 +2235,12 @@
       autoGrow(inp);
 
       try {
+        if (!currentSessionId) {
+          await createDefaultSession();
+        }
         appendOptimisticUserMessage(text);
         await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
+        markCurrentSessionRunning();
         triggerPoll();
         if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
         document.getElementById('cancel-btn').classList.remove('hidden');
@@ -2240,6 +2268,7 @@
         try {
           appendOptimisticUserMessage(text);
           await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
+          markCurrentSessionRunning();
           triggerPoll();
           if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
           document.getElementById('cancel-btn').classList.remove('hidden');
@@ -2426,6 +2455,8 @@
       } else if (frame.type === 'question.updated' || frame.type === 'question.resolved') {
         document.querySelectorAll('.clarify-card').forEach(el => el.remove());
         triggerPoll();
+      } else if (frame.type === 'title_generated') {
+        applyCurrentSessionTitle(frame.data?.title || '');
       } else if (frame.type === 'error') {
         toast('引擎错误: ' + (frame.data?.detail || JSON.stringify(frame.data)), true);
       }
@@ -2439,6 +2470,21 @@
       const dots = document.getElementById('typing-dots');
       if (dots) container.insertBefore(streamEl, dots);
       else container.appendChild(streamEl);
+    }
+
+    function applyCurrentSessionTitle(title) {
+      if (!currentSessionId || !title) return;
+      const idx = allSessions.findIndex(s => s.session_id === currentSessionId);
+      if (idx !== -1) {
+        allSessions[idx] = { ...allSessions[idx], title };
+        renderSessionsList();
+      }
+      const titleEl = document.getElementById('session-title');
+      if (!titleEl) return;
+      const sessionInfo = idx !== -1
+        ? allSessions[idx]
+        : { session_id: currentSessionId, title };
+      titleEl.textContent = getSessionLabel({ ...sessionInfo, session_id: currentSessionId, title });
     }
 
     // Trigger an immediate incremental poll, deduplicating concurrent calls.
@@ -2465,11 +2511,52 @@
       } catch (e) { }
     }
 
+    function syncCurrentSessionSummaryFromSnapshot(snap) {
+      if (!currentSessionId) return;
+      const idx = allSessions.findIndex(s => s.session_id === currentSessionId);
+      if (idx === -1) return;
+
+      const meta = snap.meta || {};
+      const prev = allSessions[idx];
+      const next = { ...prev, state: snap.state || prev.state };
+
+      if (meta.display_name) next.display_name = meta.display_name;
+      if (meta.title) next.title = meta.title;
+      if (meta.persona) next.persona = meta.persona;
+      if (meta.provider) next.provider = meta.provider;
+      if (typeof meta.spawn_depth === 'number') next.spawn_depth = meta.spawn_depth;
+      if (typeof meta.parent_session_id === 'string') next.parent_session_id = meta.parent_session_id;
+
+      const changed =
+        next.state !== prev.state ||
+        next.display_name !== prev.display_name ||
+        next.title !== prev.title ||
+        next.persona !== prev.persona ||
+        next.provider !== prev.provider ||
+        next.spawn_depth !== prev.spawn_depth ||
+        next.parent_session_id !== prev.parent_session_id;
+
+      if (!changed) return;
+      allSessions[idx] = next;
+      renderSessionsList();
+    }
+
+    function markCurrentSessionRunning() {
+      if (!currentSessionId) return;
+      const idx = allSessions.findIndex(s => s.session_id === currentSessionId);
+      if (idx === -1) return;
+      if (allSessions[idx].state === 'RUNNING') return;
+      allSessions[idx] = { ...allSessions[idx], state: 'RUNNING' };
+      renderSessionsList();
+    }
+
     // ── Rendering ─────────────────────────────────────────────────────────
     function renderSnapshot(snap) {
       // Remove streaming bubble only when the engine finishes — while still running,
       // the bubble is owned by the WS token stream and must not be cleared by polling.
       if (streamEl && !snap.is_running) { streamEl.remove(); streamEl = null; streamText = ''; streamThinkingText = ''; streamIsThinking = false; }
+
+      syncCurrentSessionSummaryFromSnapshot(snap);
 
       const msgs = snap.last_messages || [];
       const meta = snap.meta || {};

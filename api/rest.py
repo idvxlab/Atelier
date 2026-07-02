@@ -208,6 +208,21 @@ async def _close_session_mcp_clients(session_id: str) -> None:
             pass
 
 
+def _attach_engine_meta_sync(session_id: str, engine: AgentEngine) -> None:
+    """Keep lightweight session metadata aligned with engine events."""
+
+    async def _on_event(event: dict[str, Any]) -> None:
+        if event.get("type") != "title_generated":
+            return
+        detail = event.get("data") or {}
+        title = (detail.get("title") or "").strip()
+        if not title:
+            return
+        _engine_meta.setdefault(session_id, {})["title"] = title
+
+    engine.add_event_listener(_on_event)
+
+
 _TOOL_QUERY_PATTERNS = [
     re.compile(r"(?:what|which|list|show).{0,20}tools?", re.IGNORECASE),
     re.compile(r"available tools?", re.IGNORECASE),
@@ -339,6 +354,7 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
     if session_id in _engines:
         await _close_session_mcp_clients(session_id)
     await engine.restore_from_store()
+    _attach_engine_meta_sync(session_id, engine)
     _engines[session_id] = engine
     _engine_mcp_clients[session_id] = mcp_clients
     _engine_meta[session_id] = {
@@ -425,6 +441,7 @@ async def get_state(session_id: str) -> dict[str, Any]:
             question_mode=question_mode,
         )
         await engine.restore_from_store()
+        _attach_engine_meta_sync(session_id, engine)
         _engines[session_id] = engine
         _engine_mcp_clients[session_id] = mcp_clients
         _engine_meta[session_id] = {

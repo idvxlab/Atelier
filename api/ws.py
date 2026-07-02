@@ -46,7 +46,12 @@ _THINKING_TOKEN_PREFIX = "\x00THINKING_TOKEN\x00"
 
 # Event types that originate from the engine's event channel and are
 # forwarded verbatim to the WS client. QuestionMode events live here.
-_FORWARDED_EVENT_TYPES = {"question.asked", "question.updated", "question.resolved"}
+_FORWARDED_EVENT_TYPES = {
+    "question.asked",
+    "question.updated",
+    "question.resolved",
+    "title_generated",
+}
 
 
 @router.websocket("/ws/{session_id}")
