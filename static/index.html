@@ -1351,6 +1351,83 @@
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
       flex-shrink: 0;
     }
+
+    /* ── Queued messages panel (shown while engine is RUNNING) ────── */
+    #queue-panel {
+      margin: 8px 16px 0;
+      padding: 10px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+      flex-shrink: 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #queue-panel.hidden { display: none; }
+    .queue-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .queue-header .queue-badge {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      padding: 1px 8px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .queue-header .queue-hint {
+      margin-left: auto;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 400;
+    }
+    .queue-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 6px 8px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .queue-item:first-of-type { border-top: none; }
+    .queue-item-text {
+      flex: 1;
+      min-width: 0;
+      color: var(--text);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.5;
+    }
+    .queue-item-index {
+      flex-shrink: 0;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: var(--mono);
+      padding-top: 2px;
+    }
+    .queue-item-cancel {
+      flex-shrink: 0;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all .1s;
+    }
+    .queue-item-cancel:hover {
+      color: var(--red);
+      border-color: var(--red);
+    }
     .confirm-header {
       color: #f59e0b;
       font-weight: 600;
@@ -1467,6 +1544,16 @@
             <button class="btn btn-danger btn-sm" onclick="denyAction()">拒绝</button>
             <button class="btn btn-approve btn-sm" onclick="confirmAction()">允许执行</button>
           </div>
+        </div>
+
+        <!-- Queued messages panel (shown while engine is RUNNING with queued inputs) -->
+        <div id="queue-panel" class="hidden">
+          <div class="queue-header">
+            <span>排队中</span>
+            <span class="queue-badge" id="queue-badge">0</span>
+            <span class="queue-hint">等待当前回复完成后按顺序执行</span>
+          </div>
+          <div id="queue-list"></div>
         </div>
 
         <div id="mode-toolbar">
@@ -2213,6 +2300,64 @@
       if (dots) container.insertBefore(card, dots);
       else container.appendChild(card);
     }
+
+    function renderPendingCommands(items) {
+      const panel = document.getElementById('queue-panel');
+      const list = document.getElementById('queue-list');
+      const badge = document.getElementById('queue-badge');
+      if (!panel || !list || !badge) return;
+      list.innerHTML = '';
+      const arr = Array.isArray(items) ? items : [];
+      badge.textContent = String(arr.length);
+      if (!arr.length) {
+        panel.classList.add('hidden');
+        return;
+      }
+      panel.classList.remove('hidden');
+      for (const it of arr) {
+        const idx = (it && typeof it.index === 'number') ? it.index : '';
+        const txt = (it && it.text) ? String(it.text) : '';
+        const row = document.createElement('div');
+        row.className = 'queue-item';
+
+        const idxEl = document.createElement('span');
+        idxEl.className = 'queue-item-index';
+        idxEl.textContent = '#' + idx;
+        row.appendChild(idxEl);
+
+        const txtEl = document.createElement('div');
+        txtEl.className = 'queue-item-text';
+        txtEl.textContent = txt;
+        row.appendChild(txtEl);
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'queue-item-cancel';
+        cancelBtn.textContent = '取消';
+        cancelBtn.title = '从排队中移除这条消息';
+        cancelBtn.onclick = () => cancelPendingCommand(idx);
+        row.appendChild(cancelBtn);
+
+        list.appendChild(row);
+      }
+    }
+
+    async function cancelPendingCommand(index) {
+      if (typeof index !== 'number') return;
+      try {
+        const r = await api(
+          `/sessions/${currentSessionId}/pending/${index}`,
+          'DELETE'
+        );
+        if (r && r.cancelled) {
+          toast('已从排队中移除 #' + index);
+          triggerPoll();
+          return;
+        }
+        toast('未找到该排队项 #' + index, true);
+      } catch (e) {
+        toast('取消失败: ' + e.message, true);
+      }
+    }
     // ── Messaging ─────────────────────────────────────────────────────────
     async function sendMessage() {
       const inp = document.getElementById('msg-input');
@@ -2238,8 +2383,28 @@
         if (!currentSessionId) {
           await createDefaultSession();
         }
+        const resp = await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
+
+        if (resp && resp.status === 'queued') {
+          // Engine is RUNNING; this message was appended to _pending_commands.
+          // Do NOT optimistically render a user bubble — it will appear in
+          // the chat flow only after the current run drains it via
+          // _process_queued_command(). Just refresh the queued panel.
+          renderPendingCommands(resp.pending_commands || []);
+          triggerPoll();
+          if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+          return;
+        }
+
+        if (resp && resp.status === 'completed-locally') {
+          // Tool-inventory short-circuit; backend handled it locally.
+          triggerPoll();
+          if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
+          return;
+        }
+
+        // Normal started path (status === 'started' or unset for back-compat)
         appendOptimisticUserMessage(text);
-        await api(`/sessions/${currentSessionId}/messages`, 'POST', { text });
         markCurrentSessionRunning();
         triggerPoll();
         if (!ws || ws.readyState !== WebSocket.OPEN) startPolling();
@@ -2457,6 +2622,14 @@
         triggerPoll();
       } else if (frame.type === 'title_generated') {
         applyCurrentSessionTitle(frame.data?.title || '');
+      } else if (frame.type === 'message_queued') {
+        // Backend confirms a message was appended to _pending_commands.
+        // Update the queued panel immediately; the next state/snapshot tick
+        // will keep it in sync.
+        if (frame.data && Array.isArray(frame.data.pending_commands)) {
+          renderPendingCommands(frame.data.pending_commands);
+        }
+        triggerPoll();
       } else if (frame.type === 'error') {
         toast('引擎错误: ' + (frame.data?.detail || JSON.stringify(frame.data)), true);
       }
@@ -2649,6 +2822,7 @@
         dotsEl.remove();
       }
       renderPendingClarifications(snap);
+      renderPendingCommands(snap.pending_commands || []);
 
 
       // Scroll to bottom

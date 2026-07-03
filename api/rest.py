@@ -387,8 +387,12 @@ async def send_message(session_id: str, req: SendMessageRequest) -> dict[str, An
                 assistant_text=_render_tool_inventory(engine),
             )
             return {"status": "completed-locally"}
-    await engine.send_message(req.text)
-    return {"status": "accepted"}
+    result = await engine.send_message(req.text)
+    # result == {"status": "started"|"queued", "queued": bool,
+    #            "index": int|None, "text": str,
+    #            "pending_commands": [...]} — pass through verbatim so
+    # the frontend can show queued items in a dedicated panel.
+    return result
 
 
 @app.patch("/sessions/{session_id}/messages/{message_id}")

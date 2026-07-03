@@ -101,20 +101,36 @@ Agent 可使用以下工具执行任务。工具由 `config.yaml` 的 `tools.ena
 | `query`       | string  | ✓    | 搜索词                        |
 | `max_results` | integer | —    | 最大结果数（默认 5，最大 10） |
 
-**搜索后端优先级**（在 `web_search_tool` 内部按此顺序探测）：
+**搜索后端优先级**（在 `web_search_tool` 内部按此顺序探测，命中即停）：
 
-| 优先级 | 提供方                                | 需要的 Key             | 推荐场景                                           |
-| ------ | ------------------------------------- | ---------------------- | -------------------------------------------------- |
-| 1      | **Serper.dev**（Google 结果）         | `SERPER_API_KEY`       | ★ 首选：中文/英文都强，每月 2,500 次免费           |
-| 2      | **Brave Search**                      | `BRAVE_SEARCH_API_KEY` | 海外替代，质量接近 Google                          |
-| 3      | **DuckDuckGo Instant Answer**（兜底） | 无                     | **仅做事实查询**（天气、定义），不是真正的网页搜索 |
+| 优先级 | 提供方                                | 环境变量                 | 端点                                              | 鉴权方式                       | 免费额度       | 推荐场景                                              |
+| ------ | ------------------------------------- | ------------------------ | ------------------------------------------------- | ------------------------------ | -------------- | ----------------------------------------------------- |
+| 1      | **Serper.dev**（Google 搜索）         | `SERPER_API_KEY`         | `POST https://google.serper.dev/search`           | header `X-API-KEY`             | 2,500 次/月    | ★ 首选：中文/英文都强，附带 People Also Ask、知识图谱 |
+| 2      | **Brave Search**                      | `BRAVE_SEARCH_API_KEY`   | `GET https://api.search.brave.com/res/v1/web/search` | header `X-Subscription-Token` | 2,000 次/月    | 海外替代，不走 Google，隐私友好                       |
+| 3      | **DuckDuckGo Instant Answer**（兜底） | （无需 key）             | `GET https://api.duckduckgo.com/`                 | —                              | 无限制         | **只回答事实型问题**（天气、定义、人物），不做网页搜索 |
 
-#### 推荐配置：Serper（Google 搜索）
+> 实现位置：`harness/tools/builtin/web_search.py`。key 直接用 `os.getenv` 读取，**只在请求时实时探测**，改完 `.env` 重启进程即可生效。
 
-1. 去 https://serper.dev 注册（GitHub/Google 账号即可）
-2. Dashboard 复制 API Key
-3. 在 `.env` 加一行：`SERPER_API_KEY=你的key`
-4. 重启 harness 即可
+---
+
+#### 配置 1：Serper（Google 搜索）—— 推荐
+
+1. 打开 https://serper.dev ，用 GitHub 或 Google 账号注册
+2. 登录后 Dashboard → 复制 `API Key`
+3. 在项目根目录的 `.env` 加一行：
+   ```env
+   SERPER_API_KEY=your-serper-key-here
+   ```
+4. 重启 harness（`uvicorn` 进程 / `python -m harness` 进程）
+
+Serper 用 **POST** + JSON body，header 走 `X-API-KEY`。真实请求大致是：
+
+```bash
+curl -sS -X POST "https://google.serper.dev/search" \
+  -H "X-API-KEY: $SERPER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"q": "Python asyncio 文档", "num": 5}'
+```
 
 返回结果示例：
 
@@ -132,8 +148,7 @@ Agent 可使用以下工具执行任务。工具由 `config.yaml` 的 `tools.ena
       "snippet": "asyncio is a library to write concurrent code...",
       "date": "2 days ago",
       "source": "google_serper"
-    },
-    ...
+    }
   ],
   "knowledge_graph": {"title": "Python", "description": "..."},
   "people_also_ask": [{"question": "...", "snippet": "..."}],
@@ -142,9 +157,60 @@ Agent 可使用以下工具执行任务。工具由 `config.yaml` 的 `tools.ena
 }
 ```
 
-#### 不配置 Key 会发生什么
+---
 
-会走 DDG Instant Answer 兜底，返回结构化但**几乎是空**的结果（DDG 只回答事实型问题，不做网页搜索）。要看到真实搜索结果，**必须配置至少一个 Key**。
+#### 配置 2：Brave Search —— 不想用 Google 时的备选
+
+1. 打开 https://api.search.brave.com ，注册账号（信用卡可免，但需填）
+2. 进入 Dashboard → **Subscribe** → 选 Free 套餐
+3. 在 **API Keys** 页面点 **Generate API Key**，复制保存（只显示一次）
+4. 在 `.env` 加一行：
+   ```env
+   BRAVE_SEARCH_API_KEY=your-brave-key-here
+   ```
+5. 重启 harness
+
+Brave 用 **GET** + query string，header 走 `X-Subscription-Token`：
+
+```bash
+curl -sS "https://api.search.brave.com/res/v1/web/search?q=Python+asyncio&count=5" \
+  -H "X-Subscription-Token: $BRAVE_SEARCH_API_KEY"
+```
+
+> 注意：同一个 key 同时配了 `SERPER_API_KEY` 和 `BRAVE_SEARCH_API_KEY` 时，**Serper 优先**。想强制走 Brave，把 Serper 那行清空或注释掉。
+
+---
+
+#### 配置 3：什么都不配 —— DuckDuckGo 兜底
+
+不写任何 key，工具会自动落到 `https://api.duckduckgo.com/` 的 Instant Answer 接口。
+
+⚠️ 这个接口**不是真正的网页搜索**——它只对事实型问题（"北京今天天气"、"Python 是什么"）返回一条摘要；其他查询基本返回空 `results`。响应里会有 `meta.warning` 提示你配 Brave/Serper。
+
+```json
+{
+  "ok": true,
+  "provider": "duckduckgo_instant_answer_fallback",
+  "is_full_web_search": false,
+  "meta": {
+    "warning": "DuckDuckGo Instant Answer is not a full web search API. Configure BRAVE_SEARCH_API_KEY for real search results."
+  }
+}
+```
+
+---
+
+#### 一键验证 Key 是否生效
+
+在 harness 启动后，调用 `web_search` 时观察返回的 `provider` 字段：
+
+```json
+{"ok": true, "provider": "serper"}          // 配了 Serper → 命中优先级 1
+{"ok": true, "provider": "brave_search"}    // 只配了 Brave → 命中优先级 2
+{"ok": true, "provider": "duckduckgo_instant_answer_fallback"}  // 都没配
+```
+
+如果看到 `provider` 字段缺失或为 `null`，说明进程读取的 `.env` 不是你刚改的那一份——重启 harness。
 
 ---
 

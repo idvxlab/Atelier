@@ -338,11 +338,26 @@ class AgentEngine:
 
         return snap
 
-    async def send_message(self, text: str) -> None:
+    async def send_message(self, text: str) -> dict[str, Any]:
         """
         Accept a user message.
-        If engine is RUNNING, queue the message as an intervention.
-        Otherwise transition to RUNNING and fire off the loop.
+
+        Returns a structured dict so callers can distinguish "started a new
+        run" from "queued behind an in-flight run":
+
+          - {"status": "started", "queued": False, "index": None,
+             "text": text, "pending_commands": [...current snapshot...]}
+              → engine transitioned to RUNNING; loop will start in background.
+
+          - {"status": "queued", "queued": True, "index": <int>,
+             "text": text, "pending_commands": [...includes this entry...]}
+              → engine is RUNNING; message is appended to _pending_commands
+                and will be popped (FIFO) when the current loop ends via
+                _process_queued_command().
+
+        NOTE: this never raises for the queueing-vs-starting decision. It
+        only returns None-style state via the dict. Callers that previously
+        ignored the return value keep working unchanged.
         """
         async with self._state_lock:
             state = self._sm.state
@@ -361,7 +376,15 @@ class AgentEngine:
                 "send_message", "triggered-intercepted",
                 detail={"reason": "engine_running", "queued": True, "index": pc.index},
             )
-            return
+            return {
+                "status": "queued",
+                "queued": True,
+                "index": pc.index,
+                "text": pc.text,
+                "pending_commands": [
+                    p.to_dict() for p in self._pending_commands
+                ],
+            }
 
         user_msg = Message(role="user", content=[TextBlock(text=text)])
 
@@ -384,6 +407,19 @@ class AgentEngine:
         if self._config.spawn_depth == 0 and not self._title_generated:
             self._title_generated = True
             asyncio.create_task(self._generate_title_async(text))
+
+        # Pending list is empty at this point (we just transitioned out of
+        # any RUNNING state), but we still serialize it for API symmetry.
+        async with self._pending_commands_lock:
+            pending_snapshot = [p.to_dict() for p in self._pending_commands]
+
+        return {
+            "status": "started",
+            "queued": False,
+            "index": None,
+            "text": text,
+            "pending_commands": pending_snapshot,
+        }
 
     async def run_to_completion(self, task: str, parent_engine: "AgentEngine | None" = None) -> str:
         """

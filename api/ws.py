@@ -154,11 +154,18 @@ async def session_websocket(websocket: WebSocket, session_id: str) -> None:
                             assistant_text=_render_tool_inventory(engine),
                         )
                     else:
-                        await engine.send_message(text)
+                        send_result = await engine.send_message(text)
                 snapshot = await engine.get_snapshot()
-                await websocket.send_text(
-                    json.dumps({"type": "state", "data": snapshot})
-                )
+                # If the message was queued (engine was RUNNING), surface a
+                # dedicated event so the frontend can update the queued panel
+                # immediately, without waiting for the next snapshot tick.
+                ws_payload: dict[str, Any] = {"type": "state", "data": snapshot}
+                if 'send_result' in locals() and send_result.get("queued"):
+                    ws_payload = {
+                        "type": "message_queued",
+                        "data": send_result,
+                    }
+                await websocket.send_text(json.dumps(ws_payload))
 
             elif msg_type == "confirm":
                 await engine.confirm()
