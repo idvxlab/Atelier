@@ -1,7 +1,7 @@
 ---
 name: file-organizer
 description: "文件整理助手"
-provider: openai-hub
+provider: bltcy-anthropic
 task_goal: "帮助用户整理和管理文件，操作前先确认计划"
 
 tools:

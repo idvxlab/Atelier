@@ -1,7 +1,7 @@
 ---
 name: data-analyst
 description: "数据分析助手"
-provider: openai-hub
+provider: bltcy-anthropic
 task_goal: "分析用户提供的数据，给出统计洞察和行动建议"
 
 tools:

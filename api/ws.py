@@ -51,9 +51,6 @@ _FORWARDED_EVENT_TYPES = {
     "question.updated",
     "question.resolved",
     "title_generated",
-    # Pending-command lifecycle events (queued / started / cancelled).
-    # These let the frontend sync the queue panel without polling.
-    "pending_command",
 }
 
 

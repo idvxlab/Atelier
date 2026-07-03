@@ -386,30 +386,9 @@ async def send_message(session_id: str, req: SendMessageRequest) -> dict[str, An
                 user_text=req.text,
                 assistant_text=_render_tool_inventory(engine),
             )
-            return {
-                "status": "completed-locally",
-                "text": req.text,
-                "queue_size": 0,
-                "queue": [],
-            }
-    result = await engine.send_message(req.text)
-    # result is one of:
-    #   {"status": "started", "text", "queue_size", "queue"}  → live user turn
-    #   {"status": "queued",  "index", "text", "submitted_at",
-    #    "queue_size", "queue"}                                → wait for current run
-    return result
-
-
-@app.get("/sessions/{session_id}/pending")
-async def get_pending(session_id: str) -> dict[str, Any]:
-    """
-    Snapshot of the pending-command queue (messages sent while the engine
-    was RUNNING). The frontend calls this on session restore / page reload
-    to repopulate the pending-queue panel.
-    """
-    engine = _get_engine(session_id)
-    queue = await engine.get_pending_commands()
-    return {"session_id": session_id, "queue_size": len(queue), "queue": queue}
+            return {"status": "completed-locally"}
+    await engine.send_message(req.text)
+    return {"status": "accepted"}
 
 
 @app.patch("/sessions/{session_id}/messages/{message_id}")
@@ -513,42 +492,19 @@ async def deny_action(session_id: str) -> dict[str, Any]:
 async def cancel_pending_command(session_id: str, index: int) -> dict[str, Any]:
     """
     Cancel a queued command (pending_commands index) or pending sub-agent spawn.
-
-    Returns the post-cancel queue snapshot so the frontend can update
-    without a follow-up GET. If nothing was cancelled, the snapshot is
-    still returned and `cancelled: false` is set.
+    Returns {"cancelled": true} if found, 404 otherwise.
     """
     engine = _get_engine(session_id)
 
     # Try pending commands first
-    result = await engine.cancel_pending_command(index)
-    if result.get("cancelled"):
-        return {
-            "cancelled": True,
-            "type": "command",
-            "index": index,
-            "queue_size": result["queue_size"],
-            "queue": result["queue"],
-        }
+    if await engine.cancel_pending_command(index):
+        return {"cancelled": True, "type": "command", "index": index}
 
     # Try pending spawns
     if await engine.cancel_pending_spawn(index):
-        snap = await engine.get_pending_commands()
-        return {
-            "cancelled": True,
-            "type": "spawn",
-            "index": index,
-            "queue_size": len(snap),
-            "queue": snap,
-        }
+        return {"cancelled": True, "type": "spawn", "index": index}
 
-    # Neither queue had this index — return a fresh snapshot to let the
-    # caller resync.
-    snap = await engine.get_pending_commands()
-    raise HTTPException(
-        status_code=404,
-        detail=f"Pending item {index} not found",
-    )
+    raise HTTPException(status_code=404, detail=f"Pending item {index} not found")
 
 
 @app.patch("/sessions/{session_id}/mode")

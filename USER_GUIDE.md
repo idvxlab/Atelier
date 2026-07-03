@@ -34,10 +34,9 @@ python cli.py --persona coder
 API Key 通过 `.env` 文件或环境变量配置：
 
 ```bash
-# .env 文件 — OpenAI-Hub (https://www.openai-hub.com/)
-OPENAI_HUB_API_KEY=sk-...
-OPENAI_HUB_BASE_URL=https://api.openai-hub.com/v1
-OPENAI_HUB_MODEL=gpt-4o
+# .env 文件
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
 ```
 
 ---
@@ -212,7 +211,7 @@ allowed_tools:
   - read_file
   - search
   - shell
-# provider: openai-hub   # 可选：指定该身份使用的 provider
+# provider: bltcy-anthropic   # 可选：指定该身份使用的 provider
 ---
 
 你是一个资深软件工程师，有 10 年以上工程经验。
@@ -335,7 +334,7 @@ my-skill/
 python cli.py
 
 # 指定 provider
-python cli.py --provider openai-hub
+python cli.py --provider bltcy-openai
 
 # 指定 Persona（推荐，包含身份 + 工具权限）
 python cli.py --persona coder
@@ -371,7 +370,7 @@ $ python cli.py --persona coder
 ╔══════════════════════════════════════╗
 ║      MyHarnessPy  Interactive CLI    ║
 ╚══════════════════════════════════════╝
-  Provider : openai-hub
+  Provider : bltcy-anthropic
   Model    : claude-sonnet-4-6
   Persona  : coder
 
@@ -708,30 +707,24 @@ engine.add_event_listener(listener)
 
 ```yaml
 # ── Provider 配置 ──────────────────────────────────
-default_provider: openai-hub # 默认使用的 provider
+default_provider: bltcy-anthropic # 默认使用的 provider
 
 providers:
-  # OpenAI-Hub (https://www.openai-hub.com/) OpenAI-compatible relay
-  openai-hub:
-    name: openai-compatible
-    model: "${OPENAI_HUB_MODEL:-gpt-4o}"
-    api_key: "${OPENAI_HUB_API_KEY}"
-    api_key_env:
-      - OPENAI_HUB_API_KEY
-    base_url: "${OPENAI_HUB_BASE_URL:-https://api.openai-hub.com/v1}"
-    max_tokens: 4096
+  bltcy-anthropic:
+    name: anthropic
+    model: claude-sonnet-4-6
+    api_key: "${ANTHROPIC_API_KEY}" # 从环境变量读取
+    max_tokens: 8192
     temperature: 0.0
+    extra:
+      thinking:
+        enabled: false # Anthropic 扩展思考
 
-  # Lower-cost summarization model for compression
-  openai-hub-mini:
-    name: openai-compatible
-    model: "${OPENAI_HUB_MODEL_MINI:-gpt-4o-mini}"
-    api_key: "${OPENAI_HUB_API_KEY}"
-    api_key_env:
-      - OPENAI_HUB_API_KEY
-    base_url: "${OPENAI_HUB_BASE_URL:-https://api.openai-hub.com/v1}"
-    max_tokens: 2048
-    temperature: 0.0
+  bltcy-openai:
+    name: openai
+    model: gpt-4o
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://..." # OpenAI 兼容接口填这里
 
 # ── 引擎配置 ───────────────────────────────────────
 engine:
@@ -742,7 +735,7 @@ compression:
   token_window: 128000 # token 上限
   auto_trigger_ratio: 0.65 # 达到 65% 时触发自动压缩
   micro_keep_recent: 6 # Micro 压缩保留最近 N 轮完整
-  summary_provider: openai-hub-mini # 做摘要用的（便宜）模型
+  summary_provider: bltcy-mini # 做摘要用的（便宜）模型
 
 # ── 存储 ───────────────────────────────────────────
 storage:
