@@ -1531,13 +1531,7 @@
 
           <div class="divider"></div>
 
-          <!-- Skills -->
-          <div class="sidebar-section">
-            <div class="sidebar-label">Skills</div>
-            <div id="skills-list">
-              <div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">加载中…</div>
-            </div>
-          </div>
+          <!-- Skills (hidden) -->
         </div>
 
         <!-- Sidebar bottom -->
@@ -1735,19 +1729,7 @@
 
     // ── Render Sidebar ───────────────────────────────────────────────────
     function renderSidebar() {
-      // Skills
-      const sl = document.getElementById('skills-list');
-      sl.innerHTML = '';
-      if (!overview.skills.length) {
-        sl.innerHTML = '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无 Skill</div>';
-      } else {
-        overview.skills.forEach(s => {
-          const el = div('sidebar-item', `🔧 ${s.name}`);
-          el.title = s.description || s.name;
-          el.onclick = () => loadConfigFile('skill', s.name);
-          sl.appendChild(el);
-        });
-      }
+      // Skills section removed — kept as no-op for caller compatibility
     }
 
     function getSessionLabel(s) {
