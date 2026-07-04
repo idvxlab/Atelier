@@ -371,6 +371,48 @@
       background: var(--surface);
     }
 
+    #composer-persona-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #11161d;
+      flex-shrink: 0;
+    }
+
+    #composer-persona-wrap label {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    #composer-persona {
+      min-width: 156px;
+      height: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      cursor: pointer;
+      padding-right: 8px;
+    }
+
+    #composer-persona:disabled {
+      cursor: default;
+      color: var(--text-muted);
+      opacity: 1;
+    }
+
+    #composer-persona option {
+      background: var(--surface);
+      color: var(--text);
+    }
+
     /* question mode */
     #mode-toolbar {
       padding: 8px 16px;
@@ -1496,16 +1538,6 @@
               <div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">加载中…</div>
             </div>
           </div>
-
-          <div class="divider"></div>
-
-          <!-- Personas -->
-          <div class="sidebar-section">
-            <div class="sidebar-label">身份 Personas</div>
-            <div id="personas-list">
-              <div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">加载中…</div>
-            </div>
-          </div>
         </div>
 
         <!-- Sidebar bottom -->
@@ -1572,10 +1604,16 @@
         </div>
 
         <div id="input-bar">
-          <button class="btn btn-icon" onclick="showCommandBar()" title="命令面板 (Ctrl+K)" style="width:32px;height:32px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;border-radius:6px;line-height:32px;text-align:center">/</button>
-          <textarea id="msg-input" placeholder="输入消息，Shift+Enter 换行，Enter 发送…" rows="1"
+          <button class="btn btn-icon" onclick="showCommandBar()" title="Command panel (Ctrl+K)" style="width:32px;height:32px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;border-radius:6px;line-height:32px;text-align:center">/</button>
+          <textarea id="msg-input" placeholder="Type a message, Shift+Enter for newline, Enter to send..." rows="1"
             onkeydown="handleInputKey(event)" oninput="autoGrow(this)"></textarea>
-          <button class="btn btn-primary" onclick="sendMessage()" id="send-btn">发送</button>
+          <div id="composer-persona-wrap">
+            <label for="composer-persona">Persona</label>
+            <select id="composer-persona" aria-label="Select persona for new session">
+              <option value="">不使用</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="sendMessage()" id="send-btn">&#21457;&#36865;</button>
         </div>
       </div>
 
@@ -1664,6 +1702,7 @@
     let currentQuestionMode = 'noquestion';
     let selectedCmdIndex = -1;  // index in filteredCommands
     let menuSessionId = null;    // which session's menu is open
+    let composerPersonaDraft = '';
     // Poll deduplication: at most one doPoll in-flight + one queued
     let doPollInFlight = false;
     let doPollQueued  = false;
@@ -1673,6 +1712,7 @@
       await loadOverview();
       await refreshSessions();
       fetchCommands();
+      updateModeToggleUI();
     }
 
     async function loadOverview() {
@@ -1681,6 +1721,7 @@
         overview = r;
         renderSidebar();
         populateModal();
+        populateComposerPersona();
       } catch (e) { toast('加载配置失败: ' + e.message, true); }
     }
 
@@ -1705,20 +1746,6 @@
           el.title = s.description || s.name;
           el.onclick = () => loadConfigFile('skill', s.name);
           sl.appendChild(el);
-        });
-      }
-
-      // Personas
-      const pl = document.getElementById('personas-list');
-      pl.innerHTML = '';
-      if (!overview.personas.length) {
-        pl.innerHTML = '<div class="sidebar-item" style="color:var(--text-muted);font-size:12px;padding-left:16px">暂无 Persona</div>';
-      } else {
-        overview.personas.forEach(p => {
-          const el = div('sidebar-item', `👤 ${p.name}`);
-          el.title = p.description || p.name;
-          el.onclick = () => openNewSession(p.name);
-          pl.appendChild(el);
         });
       }
     }
@@ -1905,6 +1932,49 @@
       };
     }
 
+    function populateComposerPersona() {
+      const personaSel = document.getElementById('composer-persona');
+      if (!personaSel) return;
+
+      const current = allSessions.find(s => s.session_id === currentSessionId);
+      const previousValue = currentSessionId
+        ? ((current && current.persona) || '')
+        : (personaSel.value || composerPersonaDraft || '');
+
+      personaSel.innerHTML = '<option value="">不使用</option>';
+      overview.personas.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        opt.title = p.description || p.name;
+        personaSel.appendChild(opt);
+      });
+
+      personaSel.value = overview.personas.some(p => p.name === previousValue) ? previousValue : '';
+      composerPersonaDraft = personaSel.value;
+      personaSel.onchange = () => {
+        composerPersonaDraft = personaSel.value;
+      };
+    }
+
+    function syncComposerPersonaControl(persona = '', locked = false) {
+      const personaSel = document.getElementById('composer-persona');
+      if (!personaSel) return;
+
+      if (!locked) {
+        if (overview.personas.some(p => p.name === composerPersonaDraft)) {
+          personaSel.value = composerPersonaDraft;
+        } else if (!overview.personas.some(p => p.name === personaSel.value)) {
+          personaSel.value = '';
+        }
+      } else {
+        personaSel.value = overview.personas.some(p => p.name === persona) ? persona : '';
+      }
+
+      personaSel.disabled = locked;
+      personaSel.title = locked ? 'Persona locked to this session' : 'Choose a persona for the next new session';
+    }
+
     function openNewSession(prePersona = '') {
       document.getElementById('modal-overlay').classList.remove('hidden');
       if (prePersona) {
@@ -1946,7 +2016,14 @@
     }
 
     async function createDefaultSession() {
-      const r = await api('/sessions', 'POST', {});
+      const persona = document.getElementById('composer-persona')?.value || '';
+      const body = {};
+      if (persona) body.persona = persona;
+      const r = await api('/sessions', 'POST', body);
+      // Apply current question mode to new session immediately
+      try {
+        await api(`/sessions/${r.session_id}/mode`, 'PATCH', { question_mode: currentQuestionMode });
+      } catch (e) { /* non-critical */ }
       await refreshSessions();
       await switchSession(r.session_id);
       return r.session_id;
@@ -1993,6 +2070,7 @@
         currentSessionId = null;
         lastMsgCount = 0;
         activeThinkingGroup = null;
+        syncComposerPersonaControl('', false);
         document.getElementById('messages').classList.add('hidden');
         document.getElementById('empty-state').classList.remove('hidden');
         document.getElementById('session-title').textContent = '未选择会话';
@@ -2143,6 +2221,7 @@
           currentSessionId = null;
           lastMsgCount = 0;
           activeThinkingGroup = null;
+          syncComposerPersonaControl('', false);
           document.getElementById('messages').classList.add('hidden');
           document.getElementById('empty-state').classList.remove('hidden');
           document.getElementById('session-title').textContent = '未选择会话';
@@ -2158,15 +2237,15 @@
     // Question mode + clarification cards
     function setQuestionMode(mode) {
       if (mode !== 'question' && mode !== 'noquestion') return;
-      if (!currentSessionId) { toast('请先选择或创建一个会话', true); return; }
       if (mode === currentQuestionMode) return;
-      api(`/sessions/${currentSessionId}/mode`, 'PATCH', { question_mode: mode })
-        .then(data => {
-          currentQuestionMode = data.question_mode || mode;
-          updateModeToggleUI();
-          toast(currentQuestionMode === 'question' ? '已开启提问模式' : '已切换为直接执行模式');
-        })
-        .catch(e => toast('切换模式失败: ' + e.message, true));
+
+      currentQuestionMode = mode;
+      updateModeToggleUI();
+
+      if (currentSessionId) {
+        api(`/sessions/${currentSessionId}/mode`, 'PATCH', { question_mode: mode })
+          .catch(e => toast('切换模式失败: ' + e.message, true));
+      }
     }
 
     function updateModeToggleUI() {
@@ -2746,6 +2825,7 @@
       if (meta.display_name) headerInfo.display_name = meta.display_name;
       if (meta.title) headerInfo.title = meta.title;
       if (meta.persona) headerInfo.persona = meta.persona;
+      syncComposerPersonaControl(headerInfo.persona || '', !!currentSessionId);
       titleEl.textContent = getSessionLabel(headerInfo);
       const parts = [];
       if (meta.skill) parts.push(`Skill: <strong>${meta.skill}</strong>`);
