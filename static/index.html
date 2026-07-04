@@ -1952,8 +1952,17 @@
 
       personaSel.value = overview.personas.some(p => p.name === previousValue) ? previousValue : '';
       composerPersonaDraft = personaSel.value;
-      personaSel.onchange = () => {
-        composerPersonaDraft = personaSel.value;
+
+      personaSel.onchange = async () => {
+        const newVal = personaSel.value;
+        composerPersonaDraft = newVal;
+        if (currentSessionId) {
+          try {
+            const r = await api(`/sessions/${currentSessionId}`, 'PATCH', { persona: newVal });
+            toast(r.persona === '' ? '已清除 Persona' : `已切换 Persona: ${r.persona}`);
+            await refreshSessions();
+          } catch (e) { toast('切换 Persona 失败: ' + e.message, true); }
+        }
       };
     }
 
@@ -1971,8 +1980,11 @@
         personaSel.value = overview.personas.some(p => p.name === persona) ? persona : '';
       }
 
-      personaSel.disabled = locked;
-      personaSel.title = locked ? 'Persona locked to this session' : 'Choose a persona for the next new session';
+      // Persona is now always switchable — never lock the dropdown
+      personaSel.disabled = false;
+      personaSel.title = currentSessionId
+        ? 'Switch persona for this session'
+        : 'Choose a persona for the next new session';
     }
 
     function openNewSession(prePersona = '') {
