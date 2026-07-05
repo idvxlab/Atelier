@@ -53,6 +53,10 @@ class EngineConfig:
     provider_name: str = ""
     spawn_depth: int = 0
     question_mode: str = "noquestion"   # "question" | "noquestion"
+    approval_mode: str = "ask"          # "ask" | "auto" | "full"
+                                       #   ask  — prompt user before each confirm_tools call
+                                       #   auto — auto-approve confirm_tools calls (no panel)
+                                       #   full — bypass confirm_tools entirely (no gating)
 
 
 @dataclass
@@ -183,6 +187,13 @@ class AgentEngine:
             config, "question_mode", "noquestion"
         ) or "noquestion"
 
+        # Approval mode ("ask" | "auto" | "full") — default ask (safest).
+        # Mirrors question_mode: "ask" requires user approval per dangerous
+        # tool call; "auto" auto-approves without showing the panel; "full"
+        # bypasses confirm_tools entirely.
+        am = getattr(config, "approval_mode", "ask") or "ask"
+        self._approval_mode: str = am if am in ("ask", "auto", "full") else "ask"
+
         # Pending QuestionRequest objects (set when ask_user tool fires).
         # Each entry is a QuestionRequest, keyed by request_id.
         # The engine is the SINGLE source of truth for this state.
@@ -252,6 +263,9 @@ class AgentEngine:
                 qm = record.metadata.get("question_mode")
                 if qm in ("question", "noquestion"):
                     self._question_mode = qm
+                am = record.metadata.get("approval_mode")
+                if am in ("ask", "auto", "full"):
+                    self._approval_mode = am
             # Force state to WAITING_INPUT after reload — the engine is idle
             # and the user can send a new message to continue.
             # Skip if already in WAITING_INPUT (no-transition-from-itself).
@@ -322,6 +336,7 @@ class AgentEngine:
                 ],
                 "session_version": self._session_version,
                 "question_mode": self._question_mode,
+                "approval_mode": self._approval_mode,
             }
             if self._pending_tool_calls is not None:
                 snap["pending_approval"] = self._pending_tool_calls
@@ -824,6 +839,41 @@ class AgentEngine:
             pass
         return mode
 
+    async def set_approval_mode(self, mode: str) -> str:
+        """Update session approval_mode ("ask" | "auto" | "full"). Persist.
+
+        Unlike question_mode, approval_mode does not mutate the system
+        prompt — it only gates tool execution. The change takes effect on
+        the NEXT tool call (the in-flight one, if any, is unaffected).
+        """
+        if mode not in ("ask", "auto", "full"):
+            mode = "ask"
+        previous = self._approval_mode
+        self._approval_mode = mode
+
+        # Persist alongside any existing metadata
+        meta: dict = {}
+        try:
+            rec = await self._session_store.load(self._config.session_id)
+            if rec and isinstance(rec.metadata, dict):
+                meta = dict(rec.metadata)
+        except Exception:
+            pass
+        meta["approval_mode"] = mode
+        try:
+            await self._session_store.save(
+                self._config.session_id, self._messages, metadata=meta
+            )
+        except Exception:
+            pass
+
+        if previous != mode:
+            self._emitter.emit(
+                "state_transition", "triggered-executed",
+                detail={"reason": f"approval_mode changed: {previous} → {mode}"},
+            )
+        return mode
+
     def _restamp_system_prompt_for_question_mode(self, mode: str) -> None:
         """
         Replace the Question Mode block in the system message with the
@@ -1221,10 +1271,41 @@ class AgentEngine:
 
         Returns True if approved (execution proceeds).
         Raises asyncio.CancelledError if denied (loop stops, state → WAITING_INPUT).
+
+        Honors the session's approval_mode:
+          - "ask"  : present the approval panel; user must approve/deny.
+          - "auto" : auto-approve (no panel); still records the bypass in
+                     audit by emitting a state_transition event with detail.
+          - "full" : bypass confirm_tools entirely; gate is a no-op even
+                     for confirm_tools matches.
         """
         from harness.types.messages import ToolCallBlock as _TCB  # noqa: F401
         if not any(c.tool_name in self._config.confirm_tools for c in tool_calls):
             return True  # No dangerous tool — auto-approve
+
+        # approval_mode == "full" → treat as if confirm_tools were empty.
+        if self._approval_mode == "full":
+            self._emitter.emit(
+                "state_transition", "triggered-executed",
+                detail={
+                    "reason": "approval_mode=full; bypassed confirm_tools gate",
+                    "tools": [c.tool_name for c in tool_calls
+                              if c.tool_name in self._config.confirm_tools],
+                },
+            )
+            return True
+
+        # approval_mode == "auto" → auto-approve without showing the panel.
+        if self._approval_mode == "auto":
+            self._emitter.emit(
+                "state_transition", "triggered-executed",
+                detail={
+                    "reason": "approval_mode=auto; auto-approved confirm_tools batch",
+                    "tools": [c.tool_name for c in tool_calls
+                              if c.tool_name in self._config.confirm_tools],
+                },
+            )
+            return True
 
         async with self._state_lock:
             self._pending_tool_calls = [

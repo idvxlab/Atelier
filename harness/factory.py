@@ -161,6 +161,7 @@ def build_engine(
     engine_registry: dict | None = None,
     provider_name: str = "",
     question_mode: str = "noquestion",
+    approval_mode: str = "ask",
 ) -> AgentEngine:
     """
     Build a fully wired AgentEngine for a session.
@@ -390,6 +391,7 @@ def build_engine(
             provider_name=provider_name,
             spawn_depth=spawn_depth,
             question_mode=question_mode,
+            approval_mode=approval_mode,
         ),
         loop=loop,
         session_store=session_store,
@@ -504,6 +506,7 @@ async def build_engine_with_mcp(
     engine_registry: dict | None = None,
     provider_name: str = "",
     question_mode: str = "noquestion",
+    approval_mode: str = "ask",
 ) -> tuple[AgentEngine, list]:  # tuple[AgentEngine, list[MCPClient]]
     """Async variant of build_engine() that also initialises MCP Servers.
 
@@ -542,5 +545,6 @@ async def build_engine_with_mcp(
         engine_registry=engine_registry,
         provider_name=provider_name,
         question_mode=question_mode,
+        approval_mode=approval_mode,
     )
     return engine, mcp_clients

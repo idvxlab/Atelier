@@ -122,6 +122,7 @@ class CreateSessionRequest(BaseModel):
     persona: str = ""           # load from personas/{name}.md (preferred)
     system_prompt: str = ""     # fallback if no persona
     allowed_tools: list[str] | None = None
+    approval_mode: str = "ask"  # "ask" | "auto" | "full" — picked at session start
 
 
 class SendMessageRequest(BaseModel):
@@ -140,6 +141,10 @@ class RewriteMessageRequest(BaseModel):
 
 class SetModeRequest(BaseModel):
     question_mode: str   # "question" | "noquestion"
+
+
+class SetApprovalModeRequest(BaseModel):
+    approval_mode: str   # "ask" | "auto" | "full"
 
 
 class ClarificationAnswerRequest(BaseModel):
@@ -168,6 +173,7 @@ async def _build_session_engine(
     system_prompt: str,
     allowed_tools: list[str] | None,
     question_mode: str,
+    approval_mode: str = "ask",
 ) -> tuple[AgentEngine, list]:
     if provider_name not in cfg.providers:
         # Paranoid guard: caller should have already validated/fallen back,
@@ -202,6 +208,7 @@ async def _build_session_engine(
             engine_registry=_engines,
             provider_name=provider_name,
             question_mode=question_mode,
+            approval_mode=approval_mode,
         )
         return engine, mcp_clients
 
@@ -216,6 +223,7 @@ async def _build_session_engine(
             engine_registry=_engines,
             provider_name=provider_name,
             question_mode=question_mode,
+            approval_mode=approval_mode,
         ),
         [],
     )
@@ -359,10 +367,18 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
     session_id = req.session_id or str(uuid.uuid4())
     # If restoring an existing session, load its previous question_mode
     question_mode = "question"
+    approval_mode = req.approval_mode if req.approval_mode in ("ask", "auto", "full") else "ask"
     try:
         rec = await _session_store.load(session_id)
         if rec and isinstance(rec.metadata, dict):
             question_mode = rec.metadata.get("question_mode", "question") or "question"
+            # Only honor a *stored* approval_mode when the caller didn't
+            # explicitly pick one in this request body — that way the new
+            # modal can pick a mode for already-persisted sessions.
+            if not req.approval_mode:
+                stored_am = rec.metadata.get("approval_mode")
+                if stored_am in ("ask", "auto", "full"):
+                    approval_mode = stored_am
     except Exception:
         pass
     engine, mcp_clients = await _build_session_engine(
@@ -372,6 +388,7 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
         system_prompt=system_prompt,
         allowed_tools=allowed_tools,
         question_mode=question_mode,
+        approval_mode=approval_mode,
     )
     if session_id in _engines:
         await _close_session_mcp_clients(session_id)
@@ -383,6 +400,7 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
         "provider": provider_name,
         "persona":  req.persona,
         "question_mode": question_mode,
+        "approval_mode": approval_mode,
     }
     # Ensure the session appears in the persistent store immediately
     try:
@@ -505,6 +523,9 @@ async def get_state(session_id: str) -> dict[str, Any]:
             )
             provider_name = fallback
         question_mode = store_meta.get("question_mode", "question") or "question"
+        approval_mode = store_meta.get("approval_mode", "ask") or "ask"
+        if approval_mode not in ("ask", "auto", "full"):
+            approval_mode = "ask"
         engine, mcp_clients = await _build_session_engine(
             session_id=session_id,
             provider_name=provider_name,
@@ -512,6 +533,7 @@ async def get_state(session_id: str) -> dict[str, Any]:
             system_prompt="",
             allowed_tools=None,
             question_mode=question_mode,
+            approval_mode=approval_mode,
         )
         await engine.restore_from_store()
         _attach_engine_meta_sync(session_id, engine)
@@ -521,6 +543,7 @@ async def get_state(session_id: str) -> dict[str, Any]:
             "provider": provider_name,
             "persona": store_meta.get("persona", ""),
             "question_mode": question_mode,
+            "approval_mode": approval_mode,
         }
     snapshot = await engine.get_snapshot()
     meta = dict(_engine_meta.get(session_id, {}))
@@ -610,6 +633,26 @@ async def set_session_mode(session_id: str, req: SetModeRequest) -> dict[str, An
     # Push state so frontend sees the change
     await engine._notify_state_listeners()
     return {"session_id": session_id, "question_mode": new_mode}
+
+
+@app.patch("/sessions/{session_id}/approval-mode")
+async def set_session_approval_mode(
+    session_id: str, req: SetApprovalModeRequest
+) -> dict[str, Any]:
+    """
+    Update a session's approval mode at runtime ("ask" | "auto" | "full").
+
+    Takes effect on the NEXT tool call — the in-flight one, if any, is
+    unaffected. Persists to session metadata so the mode survives restarts.
+    """
+    engine = _get_engine(session_id)
+    new_mode = await engine.set_approval_mode(req.approval_mode)
+    if _engine_meta.get(session_id) is not None:
+        _engine_meta[session_id]["approval_mode"] = new_mode
+
+    # Push state so frontend sees the change
+    await engine._notify_state_listeners()
+    return {"session_id": session_id, "approval_mode": new_mode}
 
 
 @app.post("/sessions/{session_id}/clarifications")

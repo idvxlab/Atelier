@@ -349,6 +349,44 @@
         color: var(--accent);
       }
 
+      /* Approval-mode pill (mirrors Claude Code's "permissions" chip) */
+      .approval-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px 3px 8px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.12s, border-color 0.12s, background 0.12s;
+        line-height: 1.2;
+      }
+      .approval-pill:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+        background: rgba(88, 166, 255, 0.08);
+      }
+      .approval-pill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        flex: 0 0 auto;
+        transition: background 0.12s;
+      }
+      .approval-pill[data-mode="ask"]  .dot { background: #f0b400; }
+      .approval-pill[data-mode="auto"] .dot { background: #58a6ff; }
+      .approval-pill[data-mode="full"] .dot { background: #56d364; }
+      .approval-pill[data-mode="ask"]  { color: var(--text-muted); }
+      .approval-pill[data-mode="auto"] { color: var(--accent); }
+      .approval-pill[data-mode="full"] { color: var(--text); border-color: #56d36444; }
+      .approval-pill .label { white-space: nowrap; }
+
       #messages {
         flex: 1;
         overflow-y: auto;
@@ -1742,6 +1780,16 @@
               >未选择会话</span
             >
             <span id="session-meta" class="meta hidden"></span>
+            <button
+              id="approval-mode-pill"
+              class="approval-pill hidden"
+              type="button"
+              title="点击切换权限模式"
+              onclick="cycleApprovalMode()"
+            >
+              <span class="dot"></span>
+              <span class="label">权限模式</span>
+            </button>
             <div style="margin-left: auto; display: flex; gap: 6px">
               <button
                 id="cancel-btn"
@@ -1918,6 +1966,23 @@
           </select>
           <div
             id="persona-desc"
+            style="
+              font-size: 12px;
+              color: var(--text-muted);
+              margin-top: 4px;
+              min-height: 16px;
+            "
+          ></div>
+        </div>
+        <div class="form-group">
+          <label>权限模式（本次会话）</label>
+          <select id="sel-approval-mode">
+            <option value="ask">询问给权限（每次高危操作需手动确认）</option>
+            <option value="auto">自动审批（高危操作自动放行）</option>
+            <option value="full">完全授权（不拦截任何工具）</option>
+          </select>
+          <div
+            id="approval-mode-desc"
             style="
               font-size: 12px;
               color: var(--text-muted);
@@ -2278,8 +2343,9 @@
 
         const persona = document.getElementById("sel-persona").value;
         const provider = document.getElementById("sel-provider").value;
+        const approvalMode = document.getElementById("sel-approval-mode").value;
 
-        const body = { provider };
+        const body = { provider, approval_mode: approvalMode };
         if (persona) body.persona = persona;
 
         try {
@@ -2354,6 +2420,7 @@
           document.getElementById("session-meta").classList.add("hidden");
           document.getElementById("delete-btn").classList.add("hidden");
           document.getElementById("cancel-btn").classList.add("hidden");
+          document.getElementById("approval-mode-pill")?.classList.add("hidden");
           await refreshSessions();
           toast("会话已关闭");
         } catch (e) {
@@ -2392,6 +2459,46 @@
           toast("已发送停止信号");
         } catch (e) {
           toast("停止失败: " + e.message, true);
+        }
+      }
+
+      // ── Approval mode (per-session permission policy) ───────────────────────
+      const APPROVAL_LABELS = {
+        ask:  "询问给权限",
+        auto: "自动审批",
+        full: "完全授权",
+      };
+      const APPROVAL_CYCLE = ["ask", "auto", "full"];
+
+      function renderApprovalModePill(mode) {
+        const pill = document.getElementById("approval-mode-pill");
+        if (!pill) return;
+        pill.dataset.mode = mode;
+        pill.querySelector(".label").textContent =
+          APPROVAL_LABELS[mode] || "询问给权限";
+        // Pill is visible whenever there's a current session.
+        pill.classList.toggle("hidden", !currentSessionId);
+      }
+
+      async function cycleApprovalMode() {
+        if (!currentSessionId) return;
+        const pill = document.getElementById("approval-mode-pill");
+        const current = pill?.dataset?.mode || "ask";
+        const idx = APPROVAL_CYCLE.indexOf(current);
+        const next = APPROVAL_CYCLE[(idx + 1) % APPROVAL_CYCLE.length];
+        // Optimistic update — don't wait for the server round-trip.
+        renderApprovalModePill(next);
+        try {
+          await api(
+            `/sessions/${currentSessionId}/approval-mode`,
+            "PATCH",
+            { approval_mode: next },
+          );
+          toast(`权限模式已切换：${APPROVAL_LABELS[next]}`);
+        } catch (e) {
+          // Revert on failure.
+          renderApprovalModePill(current);
+          toast("切换权限模式失败: " + e.message, true);
         }
       }
 
@@ -3325,6 +3432,9 @@
           currentQuestionMode = snap.question_mode;
         }
         updateModeToggleUI();
+
+        // Approval-mode pill: keep label + colour in sync with backend snapshot
+        renderApprovalModePill(snap.approval_mode || "ask");
 
         // Header: prefer manual name, then generated title, then fallback label
         const titleEl = document.getElementById("session-title");
