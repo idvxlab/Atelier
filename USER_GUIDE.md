@@ -502,6 +502,55 @@ You > /code-review                                 ← 用户手动触发 Skill
 | 查看工具调用详情 | 点击 🔧 折叠块展开                 |
 | 切换会话         | 点击侧边栏 Sessions 列表中的条目   |
 | 删除会话         | 鼠标悬停在会话条目上，点击右侧 ×   |
+| **编辑历史消息并重新生成** | 点击每条 user 消息下方的 **✎ 编辑 · 重新生成这条消息** |
+
+### 编辑历史消息并重新生成
+
+类似 ChatGPT 的"从该处重新生成"行为，把任何一条历史用户消息改成新文本，从那一处开始重新执行。
+
+**前端行为**：
+
+1. 每条历史的 **user 气泡**（"You"）**正下方常驻**一行小提示：`✎ 编辑 · 重新生成这条消息`。点击该提示即进入编辑模式。
+2. 点击 → 气泡变成 textarea（预填原文本），下方出现 **取消** / **保存并重新生成** 按钮
+3. 快捷键：`Esc` 取消，`Ctrl/Cmd+Enter` 保存
+4. **保存** → 前端调用 `PATCH /sessions/{sid}/messages/{mid}?re_run=true`
+5. 后端回滚该消息之后的所有内容，前端收到 `message_rewritten` 事件后清空消息容器并整体重绘
+
+**后端安全约束**：
+
+- **运行中**：所有编辑按钮被禁用（`aria-disabled` + tooltip"任务运行中，停止后可编辑历史消息"），常驻提示文本变灰。即使前端绕过，REST 也会返回 **HTTP 409** + `message_rewrite_refused` 事件。
+- **系统提示**：拒绝编辑（即返回 422），避免误改 persona 身份。
+- **空文本**：返回 400。
+- **持久化**：回滚后立即存盘，刷新页面只看到新分支历史。
+
+**会话回滚的副作用**：
+
+- 该消息之后的所有 `assistant` / `tool` / 子 agent 状态被丢弃
+- `pending_commands`（你已发送但还在排队的消息）、`pending_question_requests`、`pending_spawns` 全部清空
+- `session_version` 自增 1，前端见到此变化时强制全量重绘（而不是继续增量追加）
+- `title_generated` 在改写第一条用户消息时会被重置，重新生成会话标题
+
+**不会做的事**：
+
+- 不会真的删除 SQLite/JSON 数据库里的旧 messages——`session_store.save` 整体覆盖当前 `_messages`，所以历史分支自然就消失了（之前保存的版本是上一个分支）。
+- 不会向 LLM 发送任何修改提示——引擎只在回滚后从该消息**完整重新发起**一轮 ReAct loop。
+
+**接口参考**：
+
+```http
+PATCH /sessions/{session_id}/messages/{message_id}?re_run=false
+Content-Type: application/json
+
+{"text": "修改后的内容"}
+```
+
+| 状态码 | 含义 |
+| ------ | ---- |
+| 200 | `{found: true, busy: false, is_system: false, rollback_count: N, session_version: V}` |
+| 400 | `text` 为空 |
+| 404 | `message_id` 不存在 |
+| 409 | 引擎正在 `RUNNING`，必须先 `cancel()` |
+| 422 | 目标是 system prompt |
 
 ---
 

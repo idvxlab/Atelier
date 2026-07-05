@@ -336,11 +336,11 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
 
     session_id = req.session_id or str(uuid.uuid4())
     # If restoring an existing session, load its previous question_mode
-    question_mode = "noquestion"
+    question_mode = "question"
     try:
         rec = await _session_store.load(session_id)
         if rec and isinstance(rec.metadata, dict):
-            question_mode = rec.metadata.get("question_mode", "noquestion") or "noquestion"
+            question_mode = rec.metadata.get("question_mode", "question") or "question"
     except Exception:
         pass
     engine, mcp_clients = await _build_session_engine(
@@ -403,20 +403,45 @@ async def rewrite_message(
 ) -> dict[str, Any]:
     """
     Rewrite a user message by message_id and roll back all subsequent messages.
+
     Body: { "text": "new message content" }
     Query param re_run=true: immediately re-execute from the rewritten message.
-    Returns {found, rollback_count, session_version}.
+
+    Status codes:
+      200 — rewrite succeeded; result has {found: True, busy: False, ...}
+      404 — message_id not found
+      409 — engine is RUNNING (must cancel first)
+      422 — target is the synthetic system prompt (idx 0 role=system)
+
+    Returns {found, busy, is_system, rollback_count, session_version}.
     """
     engine = _get_engine(session_id)
     if req is None:
         raise HTTPException(status_code=400, detail="Request body required")
-    result = await engine.rewrite_message(message_id, req.text)
+    new_text = (req.text or "").strip()
+    if not new_text:
+        raise HTTPException(status_code=400, detail="text must be non-empty")
+    result = await engine.rewrite_message(message_id, new_text)
     if not result["found"]:
         raise HTTPException(status_code=404, detail=f"Message {message_id!r} not found")
+    if result.get("busy"):
+        # Engine is RUNNING — frontend should disable the edit button during RUNNING.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Engine is currently RUNNING. Cancel the current run before "
+                "rewriting a historical message."
+            ),
+        )
+    if result.get("is_system"):
+        # Refuse to edit the synthetic system prompt; return 422 (Unprocessable Entity)
+        raise HTTPException(
+            status_code=422,
+            detail="Cannot edit the synthetic system prompt",
+        )
     if re_run:
-        # Find the rewritten message to get its message_id for re_run_from
+        # Fire-and-forget — re_run_from is async and non-blocking
         result["re_run_triggered"] = True
-        # re_run_from needs the message_id — it's the same one we just rewrote
         asyncio.create_task(engine.re_run_from(message_id))
     return result
 
@@ -435,7 +460,7 @@ async def get_state(session_id: str) -> dict[str, Any]:
         provider_name = store_meta.get("provider") or cfg.default_provider
         if provider_name not in cfg.providers:
             provider_name = cfg.default_provider
-        question_mode = store_meta.get("question_mode", "noquestion") or "noquestion"
+        question_mode = store_meta.get("question_mode", "question") or "question"
         engine, mcp_clients = await _build_session_engine(
             session_id=session_id,
             provider_name=provider_name,

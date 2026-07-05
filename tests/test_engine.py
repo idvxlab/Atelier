@@ -119,7 +119,7 @@ class _MockLLM:
         return "Summary."
 
 
-def _build_engine(reply_text: str = "Done.") -> AgentEngine:
+def _build_engine(reply_text: str = "Done.", system_prompt: str = "") -> AgentEngine:
     session_id = "test-engine"
     emitter = EventEmitter(session_id)
     llm = _MockLLM(reply_text)
@@ -140,12 +140,32 @@ def _build_engine(reply_text: str = "Done.") -> AgentEngine:
         max_rounds=10,
     )
     return AgentEngine(
-        config=EngineConfig(session_id=session_id),
+        config=EngineConfig(session_id=session_id, system_prompt=system_prompt),
         loop=loop,
         session_store=store,
         emitter=emitter,
         tool_registry=registry,
     )
+
+
+def _seed_messages(engine: AgentEngine, items: list[tuple[str, str]]) -> list[str]:
+    """
+    Synchronously inject messages into the engine's _messages list while
+    the engine is in WAITING_INPUT. Returns the message_ids of the user
+    messages in the same order they were inserted.
+
+    Direct mutation is safe for tests because:
+    - We only do this before/after the engine enters RUNNING.
+    - The engine holds the state lock only during state transitions and
+      I/O; once we're past the initial setup, the lock is free.
+    """
+    ids: list[str] = []
+    for role, text in items:
+        msg = Message(role=role, content=[TextBlock(text=text)])
+        engine._messages.append(msg)
+        if role == "user":
+            ids.append(msg.message_id)
+    return ids
 
 
 @pytest.mark.asyncio
@@ -215,3 +235,176 @@ async def test_engine_session_reuse():
     await engine.send_message("Second message.")
     await asyncio.sleep(0.1)
     assert (await engine.get_snapshot())["state"] == "COMPLETED"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Edit-and-regenerate (rewrite_message)
+# ──────────────────────────────────────────────────────────────────────
+
+
+# Reuses the synchronous _seed_messages defined above.
+
+
+class TestRewriteMessage:
+    @pytest.mark.asyncio
+    async def test_rewrite_replaces_text_and_preserves_message_id(self):
+        engine = _build_engine("Done.")
+        # Pre-seed without a system prompt: first message is user A.
+        ids = _seed_messages(engine, [
+            ("user", "user A message"),
+            ("assistant", "assistant A1"),
+            ("user", "user B message"),
+            ("assistant", "assistant B1"),
+        ])
+        a_id = ids[0]
+        b_id = ids[1]
+
+        result = await engine.rewrite_message(a_id, "user A REWRITTEN")
+        assert result["found"] is True
+        assert result["busy"] is False
+        assert result["is_system"] is False
+        assert result["rollback_count"] == 3   # A1, B, B1
+        assert result["session_version"] >= 1
+
+        # Memory state: only the rewritten user A survives (no system prompt configured)
+        msgs = engine._messages
+        assert len(msgs) == 1
+        # The user message is the ORIGINAL object — ID preserved
+        assert msgs[-1].message_id == a_id
+        assert msgs[-1].text_content() == "user A REWRITTEN"
+
+        # Snapshot reflects the same content
+        snap = await engine.get_snapshot()
+        assert snap["session_version"] == result["session_version"]
+        assert snap["last_messages"][-1]["message_id"] == a_id
+        assert snap["last_messages"][-1]["content"][0]["text"] == "user A REWRITTEN"
+        assert b_id not in {m["message_id"] for m in snap["last_messages"]}
+
+    @pytest.mark.asyncio
+    async def test_rewrite_clears_pending_queues(self):
+        engine = _build_engine("Done.")
+        ids = _seed_messages(engine, [("user", "anchor")])
+        # Populate pending states that should be cleared
+        async with engine._pending_commands_lock:
+            engine._pending_commands.append(_PendingFakeCmd())
+        async with engine._pending_spawns_lock:
+            engine._pending_spawns.append(_PendingFakeSpawn())
+        await engine.rewrite_message(ids[0], "rewritten")
+        async with engine._pending_commands_lock:
+            assert engine._pending_commands == []
+        async with engine._pending_spawns_lock:
+            assert engine._pending_spawns == []
+
+    @pytest.mark.asyncio
+    async def test_rewrite_unknown_message_id_returns_not_found(self):
+        engine = _build_engine("Done.")
+        result = await engine.rewrite_message("does-not-exist", "x")
+        assert result["found"] is False
+        assert result["busy"] is False
+        assert result["rollback_count"] == 0
+        # session_version unchanged
+        assert result["session_version"] == 0
+
+    @pytest.mark.asyncio
+    async def test_rewrite_refuses_when_engine_is_running(self):
+        """
+        Use a slow LLM so send_message keeps engine RUNNING. Then attempt
+        to rewrite and verify busy=True and that _messages is unchanged.
+        """
+        class _SlowLLM:
+            async def chat(self, messages, tools=None):
+                await asyncio.sleep(10)
+                return Message(role="assistant", content=[TextBlock(text="never")])
+            async def stream_chat(self, messages, tools=None, on_token=None):
+                return await self.chat(messages, tools)
+            async def complete(self, prompt):
+                return ""
+
+        emitter = EventEmitter("running-rewrite")
+        llm = _SlowLLM()
+        store = MemorySessionStore()
+        registry = ToolRegistry()
+        overflow = OverflowStore()
+        executor = ToolExecutor(registry=registry, overflow=overflow, emitter=emitter)
+        compressor = ContextCompressor(summarizer=llm, config=CompressionConfig())
+        loop = ReactLoop(
+            llm=llm, tool_registry=registry, tool_executor=executor,
+            compressor=compressor, emitter=emitter, max_rounds=2,
+        )
+        engine = AgentEngine(
+            config=EngineConfig(session_id="running-rewrite"),
+            loop=loop, session_store=store, emitter=emitter, tool_registry=registry,
+        )
+
+        await engine.send_message("go slow")
+        await asyncio.sleep(0.05)
+        snap = await engine.get_snapshot()
+        assert snap["state"] == "RUNNING"
+
+        ids = _seed_messages(engine, [("user", "seeded for rewrite")])
+        before_len = len(engine._messages)
+        result = await engine.rewrite_message(ids[0], "anything")
+        assert result["found"] is True
+        assert result["busy"] is True
+        assert result["rollback_count"] == 0
+        # No rollback should have happened
+        assert len(engine._messages) == before_len
+
+        await engine.cancel()
+
+    @pytest.mark.asyncio
+    async def test_rewrite_refuses_system_prompt(self):
+        engine = _build_engine("Done.", system_prompt="SYS")
+        # Seed a user + assistant for context, then point rewrite at idx 0 (system)
+        _seed_messages(engine, [
+            ("user", "user A"),
+            ("assistant", "assistant A1"),
+        ])
+        system_msg = engine._messages[0]
+        assert system_msg.role == "system"
+        result = await engine.rewrite_message(system_msg.message_id, "hijack")
+        assert result["found"] is True
+        assert result["is_system"] is True
+        assert result["rollback_count"] == 0
+        # System prompt unchanged
+        assert engine._messages[0].text_content() == "SYS"
+        # All other messages still present
+        assert len(engine._messages) == 3
+
+    @pytest.mark.asyncio
+    async def test_rewrite_persists_to_session_store(self):
+        engine = _build_engine("Done.")
+        ids = _seed_messages(engine, [
+            ("user", "anchor"),
+            ("assistant", "reply1"),
+            ("user", "tobedeleted"),
+            ("assistant", "reply2"),
+        ])
+        await engine.rewrite_message(ids[0], "rewritten anchor")
+        # Load from the store — session_store persisted
+        stored = await engine._session_store.load("test-engine")
+        assert stored is not None
+        stored_texts = [m.text_content() for m in stored.messages]
+        # Only system + rewritten-anchor survive on disk
+        assert stored_texts[-1] == "rewritten anchor"
+        assert "tobedeleted" not in stored_texts
+
+
+def _PendingFakeCmd():
+    from harness.engine.engine import PendingCommand
+    return PendingCommand(
+        index=99,
+        text="stale",
+        submitted_at=0.0,
+    )
+
+
+def _PendingFakeSpawn():
+    from harness.engine.engine import PendingSpawn
+    return PendingSpawn(
+        index=99,
+        sub_id="sub_fake",
+        task="stale task",
+        display_name="stale",
+        submitted_at=0.0,
+    )

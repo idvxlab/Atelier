@@ -559,30 +559,96 @@ class AgentEngine:
         - Increment session_version so the frontend detects the full re-render.
         - Transition state to WAITING_INPUT so the user can re-run.
 
+        Safety guards:
+        - If engine is currently RUNNING: refuse (return {found: True, busy: True}).
+          Frontend must disable the edit button during RUNNING — see USER_GUIDE.
+          We cannot safely mutate `_messages` while ReactLoop holds an in-flight
+          reference and `_on_message` may still append new messages after lock release.
+        - Reject edits to the system prompt (index 0, role='system'). Editing the
+          system message would change persona identity without consent.
+
         Returns a dict with:
           found: bool — whether the message_id was found
+          busy: bool — RUNNING at the time of call (rewrite refused if True)
+          is_system: bool — target was the system prompt (rewrite refused if True)
           rollback_count: int — how many messages were removed
+          session_version: int — bumped to N+1 on success
         """
         rollback_count = 0
         target_idx = -1
+        # Snapshot of messages + version, captured under the lock so we can
+        # persist OUTSIDE the lock without racing with re_run_from().
+        persist_messages: list | None = None
+        persist_version = -1
 
         async with self._state_lock:
+            # ── Guard 1: refuse to roll back while the loop is in flight ──
+            if self._sm.state == EngineState.RUNNING:
+                self._emitter.emit(
+                    "message_rewrite_refused", "triggered-intercepted",
+                    detail={"reason": "engine_running", "message_id": message_id},
+                )
+                return {
+                    "found": True,
+                    "busy": True,
+                    "is_system": False,
+                    "rollback_count": 0,
+                    "session_version": self._session_version,
+                }
+
+            # Find the message. We track the *first* matching message_id
+            # regardless of role, so we can refuse to edit the system prompt
+            # explicitly. User-message rewrite proceeds only if role=="user".
+            message_idx = -1
             for i, m in enumerate(self._messages):
-                if m.role == "user" and m.message_id == message_id:
-                    target_idx = i
+                if m.message_id == message_id:
+                    message_idx = i
                     break
 
-            if target_idx == -1:
-                return {"found": False, "rollback_count": 0}
+            if message_idx == -1:
+                return {
+                    "found": False,
+                    "busy": False,
+                    "is_system": False,
+                    "rollback_count": 0,
+                    "session_version": self._session_version,
+                }
+
+            # ── Guard 2: refuse to edit the synthetic system prompt ──
+            if (
+                self._messages[message_idx].role == "system"
+                and message_idx == 0
+            ):
+                self._emitter.emit(
+                    "message_rewrite_refused", "triggered-intercepted",
+                    detail={"reason": "system_prompt", "message_id": message_id},
+                )
+                return {
+                    "found": True,
+                    "busy": False,
+                    "is_system": True,
+                    "rollback_count": 0,
+                    "session_version": self._session_version,
+                }
+
+            # Only user-role messages can be rewritten
+            if self._messages[message_idx].role != "user":
+                return {
+                    "found": False,
+                    "busy": False,
+                    "is_system": False,
+                    "rollback_count": 0,
+                    "session_version": self._session_version,
+                }
+
+            target_idx = message_idx
 
             # Replace the text content of the target user message
             target = self._messages[target_idx]
-            # Find the first TextBlock and replace it, or prepend one
             text_blocks = [b for b in target.content if b.type == "text"]
             if text_blocks:
                 text_blocks[0].text = new_text
             else:
-                # Prepend a new TextBlock
                 from harness.types.messages import TextBlock as TB
                 target.content.insert(0, TB(text=new_text))
 
@@ -590,32 +656,33 @@ class AgentEngine:
             rollback_count = len(self._messages) - target_idx - 1
             self._messages = self._messages[:target_idx + 1]
 
-            # If rewriting the first user message, reset title generation
             if target_idx == 1 and self._config.spawn_depth == 0:
                 self._title_generated = False
 
-            # Increment version so frontend fully re-renders
             self._session_version += 1
 
-            # Clear any pending commands (they were for messages that are now gone)
+            # Clear pending command / question / sub-agent queues — they
+            # were anchored to messages that no longer exist.
             async with self._pending_commands_lock:
                 self._pending_commands.clear()
+            async with self._pending_question_requests_lock:
+                self._pending_question_requests.clear()
+            async with self._pending_spawns_lock:
+                self._pending_spawns.clear()
 
-            # Clear pending clarifications (their context is now gone)
-            async with self._pending_clarifications_lock:
-                self._pending_clarifications.clear()
-            self._clarification_event.set()
+            # Defensive: clear cancel — we're not RUNNING here, but a stale
+            # signal could otherwise leak into re_run_from().
+            self._cancel_event.clear()
 
-            # Stop any running loop — we're doing a clean restart
-            self._cancel_event.set()
-
-            # Transition to WAITING_INPUT so the frontend can trigger re-run
-            if self._sm.state == EngineState.RUNNING:
-                self._sm.transition(EngineState.WAITING_INPUT)
-            elif self._sm.state == EngineState.WAITING_CONFIRMATION:
-                # Also clear pending approval
+            # Transition to WAITING_INPUT (covers WAITING_CONFIRMATION too)
+            if self._sm.state == EngineState.WAITING_CONFIRMATION:
                 self._pending_tool_calls = None
                 self._sm.transition(EngineState.WAITING_INPUT)
+            elif self._sm.state not in (EngineState.WAITING_INPUT, EngineState.COMPLETED):
+                try:
+                    self._sm.transition(EngineState.WAITING_INPUT)
+                except Exception:
+                    pass
 
             self._emitter.emit(
                 "message_rewritten", "triggered-executed",
@@ -626,22 +693,45 @@ class AgentEngine:
                 },
             )
 
-        # Persist the rolled-back state
+            # Capture a shallow list-copy for persistence (outside the lock).
+            # The references inside are still the same Message objects, but
+            # session_store.save is allowed to iterate freely.
+            persist_messages = list(self._messages)
+            persist_version = self._session_version
+
+        # ── Persist outside the lock ──
+        # We deliberately do NOT hold the state lock across I/O. session_store
+        # implementations (sqlite, memory) don't mutate engine state, so this
+        # is safe. Bumping session_version inside the lock guarantees the
+        # frontend sees the new version before (or simultaneously with) the
+        # disk write — never a contradictory old on-screen + new on-disk view.
         try:
-            await self._session_store.save(self._config.session_id, self._messages)
+            await self._session_store.save(self._config.session_id, persist_messages)
         except Exception as exc:
             self._emitter.emit_error("session_save_error", str(exc))
 
         return {
             "found": True,
+            "busy": False,
+            "is_system": False,
             "rollback_count": rollback_count,
-            "session_version": self._session_version,
+            "session_version": persist_version,
         }
 
     async def re_run_from(self, message_id: str) -> None:
         """
-        Re-execute the conversation starting from the user message identified by message_id.
-        The message must already have been updated in place by rewrite_message().
+        Re-execute the conversation starting from the user message identified
+        by message_id. The message must already have been updated in place
+        by rewrite_message().
+
+        No-op if:
+        - The message_id can't be found
+        - A loop is already running (caller should call cancel() first)
+
+        The state machine path is:
+          COMPLETED -> WAITING_INPUT -> RUNNING
+          WAITING_INPUT -> RUNNING
+          WAITING_CONFIRMATION -> WAITING_INPUT -> RUNNING  (via cancel())
         """
         target_idx = -1
         async with self._state_lock:
@@ -652,14 +742,29 @@ class AgentEngine:
             if target_idx == -1:
                 return
 
-            if self._sm.state == EngineState.COMPLETED:
-                self._sm.transition(EngineState.WAITING_INPUT)
-            self._sm.transition(EngineState.RUNNING)
+            # Refuse to start a second loop. Caller must cancel first.
+            if self._sm.state == EngineState.RUNNING:
+                return
 
-            # CRITICAL: rewrite_message set cancel_event to stop the prior loop.
-            # Clear it here so the new loop can run, otherwise the very first
-            # cancel check at the top of ReactLoop.run() will immediately
-            # raise CancelledError and transition back to WAITING_INPUT.
+            try:
+                if self._sm.state == EngineState.COMPLETED:
+                    self._sm.transition(EngineState.WAITING_INPUT)
+                # WAITING_INPUT -> RUNNING, and WAITING_CONFIRMATION -> ??? are
+                # handled below. State machine validates; swallow only the
+                # InvalidTransition so we can fall through to WAITING_INPUT first.
+                if self._sm.state == EngineState.WAITING_CONFIRMATION:
+                    self._pending_tool_calls = None
+                    self._sm.transition(EngineState.WAITING_INPUT)
+                self._sm.transition(EngineState.RUNNING)
+            except Exception:
+                # If the transition path is blocked, give up silently — the
+                # frontend can re-trigger via the input bar instead.
+                return
+
+            # CRITICAL: if a previous cancel_event.set() leaked into this
+            # session, clear it here. (rewrite_message() also clears it
+            # defensively, but we re-clear for the case where re_run_from
+            # is invoked independently.)
             self._cancel_event.clear()
 
             # If rewriting the first user message (index 1), regenerate title

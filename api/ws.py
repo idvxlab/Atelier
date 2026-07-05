@@ -51,6 +51,11 @@ _FORWARDED_EVENT_TYPES = {
     "question.updated",
     "question.resolved",
     "title_generated",
+    # Rewrite history ("edit and regenerate"): the engine emits these on
+    # success (message_rewritten) and on refusal (message_rewrite_refused).
+    # Forwarding them lets the frontend react without polling.
+    "message_rewritten",
+    "message_rewrite_refused",
 }
 
 
