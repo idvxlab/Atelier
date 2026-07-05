@@ -2053,9 +2053,19 @@
       if (isOpen) {
         closePersonaDropdown();
       } else {
-        // Position the dropdown below the trigger
+        // Position the dropdown — prefer below, flip upward if not enough room
         const rect = trigger.getBoundingClientRect();
-        dropdown.style.top = (rect.bottom + 6) + 'px';
+        const dropdownH = 280; // max-height from CSS
+        const gap = 6;
+        const spaceBelow = window.innerHeight - rect.bottom - gap;
+        const spaceAbove = rect.top - gap;
+        if (spaceBelow < dropdownH && spaceAbove > spaceBelow) {
+          dropdown.style.top = (rect.top - gap) + 'px';
+          dropdown.style.transform = 'translateY(-100%)';
+        } else {
+          dropdown.style.top = (rect.bottom + gap) + 'px';
+          dropdown.style.transform = '';
+        }
         dropdown.style.left = Math.min(rect.left, window.innerWidth - 260) + 'px';
         dropdown.classList.add('open');
         trigger.classList.add('open');
