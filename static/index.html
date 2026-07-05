@@ -381,16 +381,7 @@
       border-radius: 10px;
       background: #11161d;
       flex-shrink: 0;
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
-
-    #composer-persona-wrap:hover {
-      border-color: var(--text-muted);
-    }
-
-    #composer-persona-wrap:focus-within {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
+      position: relative;
     }
 
     #composer-persona-wrap label {
@@ -400,56 +391,91 @@
     }
 
     #composer-persona {
-      min-width: 160px;
+      position: relative;
+    }
+
+    #composer-persona-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       height: 100%;
+      min-width: 156px;
+      padding: 0 8px;
       border: none;
       outline: none;
       background: transparent;
       color: var(--text);
       font-family: var(--font);
-      font-size: 13px;
+      font-size: 14px;
       cursor: pointer;
-      padding: 0 24px 0 4px;
-      appearance: none;
-      -webkit-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 6px center;
+      white-space: nowrap;
     }
 
-    #composer-persona:hover {
-      color: #fff;
-    }
-
-    #composer-persona:focus {
-      color: #fff;
-    }
-
-    #composer-persona:disabled {
-      cursor: default;
+    #composer-persona-trigger .chevron {
+      font-size: 10px;
       color: var(--text-muted);
-      opacity: 1;
+      transition: transform .15s;
+      margin-left: auto;
     }
 
-    #composer-persona optgroup {
-      font-style: normal;
-      font-weight: 600;
+    #composer-persona-trigger.open .chevron {
+      transform: rotate(180deg);
+    }
+
+    #composer-persona-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      min-width: 180px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .04);
+      padding: 4px;
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+    }
+
+    #composer-persona-dropdown.open {
+      display: flex;
+    }
+
+    .persona-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+      transition: background .1s;
+    }
+
+    .persona-option:hover {
+      background: var(--surface2);
+    }
+
+    .persona-option.selected {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .persona-option .opt-desc {
       font-size: 11px;
       color: var(--text-muted);
-      letter-spacing: 0.06em;
-      padding: 4px 0;
+      margin-left: auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 120px;
     }
 
-    #composer-persona option {
-      background: var(--surface);
-      color: var(--text);
-      font-size: 13px;
-      padding: 6px 10px;
-      font-weight: 400;
-    }
-
-    #composer-persona option:hover {
-      background: var(--accent-dim);
+    .persona-option.selected .opt-desc {
+      color: var(--accent);
+      opacity: .7;
     }
 
     /* question mode */
@@ -1641,10 +1667,14 @@
           <textarea id="msg-input" placeholder="Type a message, Shift+Enter for newline, Enter to send..." rows="1"
             onkeydown="handleInputKey(event)" oninput="autoGrow(this)"></textarea>
           <div id="composer-persona-wrap">
-            <label for="composer-persona">Persona</label>
-            <select id="composer-persona" aria-label="Select persona for new session">
-              <option value="">不使用</option>
-            </select>
+            <label>Persona</label>
+            <div id="composer-persona">
+              <button id="composer-persona-trigger" onclick="togglePersonaDropdown(event)" aria-label="Select persona">
+                <span id="composer-persona-text">不使用</span>
+                <span class="chevron">▾</span>
+              </button>
+              <div id="composer-persona-dropdown"></div>
+            </div>
           </div>
           <button class="btn btn-primary" onclick="sendMessage()" id="send-btn">&#21457;&#36865;</button>
         </div>
@@ -1954,63 +1984,92 @@
     }
 
     function populateComposerPersona() {
-      const personaSel = document.getElementById('composer-persona');
-      if (!personaSel) return;
+      const dropdown = document.getElementById('composer-persona-dropdown');
+      const triggerText = document.getElementById('composer-persona-text');
+      if (!dropdown || !triggerText) return;
 
       const current = allSessions.find(s => s.session_id === currentSessionId);
       const previousValue = currentSessionId
         ? ((current && current.persona) || '')
-        : (personaSel.value || composerPersonaDraft || '');
+        : (composerPersonaDraft || '');
 
-      personaSel.innerHTML = '<option value="">不使用</option>';
-      if (overview.personas.length) {
-        const group = document.createElement('optgroup');
-        group.label = 'Personas';
-        overview.personas.forEach(p => {
-          const opt = document.createElement('option');
-          opt.value = p.name;
-          opt.textContent = p.description ? `${p.name} — ${p.description}` : p.name;
-          opt.title = p.description || p.name;
-          group.appendChild(opt);
-        });
-        personaSel.appendChild(group);
-      }
+      // Determine display name for the current selection
+      const selectedPersona = overview.personas.find(p => p.name === previousValue);
+      triggerText.textContent = selectedPersona ? selectedPersona.name : '不使用';
+      composerPersonaDraft = previousValue;
 
-      personaSel.value = overview.personas.some(p => p.name === previousValue) ? previousValue : '';
-      composerPersonaDraft = personaSel.value;
+      // Build option list
+      dropdown.innerHTML = '';
+      // "不使用" option
+      const noneOpt = document.createElement('div');
+      noneOpt.className = 'persona-option' + (composerPersonaDraft === '' ? ' selected' : '');
+      noneOpt.innerHTML = '<span>不使用</span>';
+      noneOpt.onclick = (e) => { e.stopPropagation(); selectPersona(''); };
+      dropdown.appendChild(noneOpt);
 
-      personaSel.onchange = async () => {
-        const newVal = personaSel.value;
-        composerPersonaDraft = newVal;
-        if (currentSessionId) {
-          try {
-            const r = await api(`/sessions/${currentSessionId}`, 'PATCH', { persona: newVal });
-            toast(r.persona === '' ? '已清除 Persona' : `已切换 Persona: ${r.persona}`);
-            await refreshSessions();
-          } catch (e) { toast('切换 Persona 失败: ' + e.message, true); }
-        }
-      };
+      overview.personas.forEach(p => {
+        const opt = document.createElement('div');
+        opt.className = 'persona-option' + (p.name === composerPersonaDraft ? ' selected' : '');
+        opt.innerHTML = `<span>${escHtml(p.name)}</span><span class="opt-desc">${escHtml(p.description || '')}</span>`;
+        opt.title = p.description || p.name;
+        opt.onclick = (e) => { e.stopPropagation(); selectPersona(p.name); };
+        dropdown.appendChild(opt);
+      });
     }
 
     function syncComposerPersonaControl(persona = '', locked = false) {
-      const personaSel = document.getElementById('composer-persona');
-      if (!personaSel) return;
+      const triggerText = document.getElementById('composer-persona-text');
+      if (!triggerText) return;
 
       if (!locked) {
         if (overview.personas.some(p => p.name === composerPersonaDraft)) {
-          personaSel.value = composerPersonaDraft;
-        } else if (!overview.personas.some(p => p.name === personaSel.value)) {
-          personaSel.value = '';
+          triggerText.textContent = composerPersonaDraft;
+        } else {
+          triggerText.textContent = '不使用';
         }
       } else {
-        personaSel.value = overview.personas.some(p => p.name === persona) ? persona : '';
+        triggerText.textContent = overview.personas.some(p => p.name === persona) ? persona : '不使用';
       }
 
-      // Persona is now always switchable — never lock the dropdown
-      personaSel.disabled = false;
-      personaSel.title = currentSessionId
+      // Persona is now always switchable — never lock
+      triggerText.parentElement.title = currentSessionId
         ? 'Switch persona for this session'
         : 'Choose a persona for the next new session';
+    }
+
+    function togglePersonaDropdown(e) {
+      e.stopPropagation();
+      const dropdown = document.getElementById('composer-persona-dropdown');
+      const trigger = document.getElementById('composer-persona-trigger');
+      if (!dropdown || !trigger) return;
+      const isOpen = dropdown.classList.contains('open');
+      if (isOpen) {
+        closePersonaDropdown();
+      } else {
+        dropdown.classList.add('open');
+        trigger.classList.add('open');
+        setTimeout(() => document.addEventListener('click', closePersonaDropdown, { once: true }), 0);
+      }
+    }
+
+    function closePersonaDropdown() {
+      const dropdown = document.getElementById('composer-persona-dropdown');
+      const trigger = document.getElementById('composer-persona-trigger');
+      if (dropdown) dropdown.classList.remove('open');
+      if (trigger) trigger.classList.remove('open');
+    }
+
+    async function selectPersona(name) {
+      composerPersonaDraft = name;
+      closePersonaDropdown();
+      populateComposerPersona();
+      if (currentSessionId) {
+        try {
+          const r = await api(`/sessions/${currentSessionId}`, 'PATCH', { persona: name });
+          toast(name === '' ? '已清除 Persona' : `已切换 Persona: ${r.persona}`);
+          await refreshSessions();
+        } catch (e) { toast('切换 Persona 失败: ' + e.message, true); }
+      }
     }
 
     function openNewSession(prePersona = '') {
@@ -2054,7 +2113,7 @@
     }
 
     async function createDefaultSession() {
-      const persona = document.getElementById('composer-persona')?.value || '';
+      const persona = composerPersonaDraft || '';
       const body = {};
       if (persona) body.persona = persona;
       const r = await api('/sessions', 'POST', body);
