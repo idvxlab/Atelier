@@ -169,6 +169,28 @@ async def _build_session_engine(
     allowed_tools: list[str] | None,
     question_mode: str,
 ) -> tuple[AgentEngine, list]:
+    if provider_name not in cfg.providers:
+        # Paranoid guard: caller should have already validated/fallen back,
+        # but if we get here with an unknown provider, log it and use the
+        # default rather than 500-ing on every state poll.
+        import logging
+        fallback = cfg.default_provider
+        if fallback in cfg.providers:
+            logging.getLogger("harness.api").warning(
+                "_build_session_engine: provider %r not in config; "
+                "falling back to default %r (session=%s)",
+                provider_name, fallback, session_id,
+            )
+            provider_name = fallback
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Provider '{provider_name}' not in config and no "
+                    f"valid default to fall back to. "
+                    f"Available: {list(cfg.providers.keys())}"
+                ),
+            )
     if cfg.mcp_servers:
         engine, mcp_clients = await build_engine_with_mcp(
             session_id=session_id,
@@ -457,9 +479,31 @@ async def get_state(session_id: str) -> dict[str, Any]:
         # Auto-restore engine
         cfg = _require_config()
         store_meta = stored.metadata if isinstance(stored.metadata, dict) else {}
-        provider_name = store_meta.get("provider") or cfg.default_provider
+        stored_provider = store_meta.get("provider")
+        provider_name = stored_provider or cfg.default_provider
         if provider_name not in cfg.providers:
-            provider_name = cfg.default_provider
+            # Stored provider name is stale (renamed/removed in config.yaml).
+            # Fall back to default; only raise if the default itself is gone,
+            # which means the server is in an unrecoverable config state.
+            fallback = cfg.default_provider
+            if fallback not in cfg.providers:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Session '{session_id}' was created with provider "
+                        f"'{stored_provider}' which no longer exists in "
+                        f"config.yaml, AND default_provider "
+                        f"'{fallback}' is also missing. "
+                        f"Available: {list(cfg.providers.keys())}"
+                    ),
+                )
+            import logging
+            logging.getLogger("harness.api").warning(
+                "Session %s stored provider '%s' not in config; "
+                "falling back to default '%s'",
+                session_id, provider_name, fallback,
+            )
+            provider_name = fallback
         question_mode = store_meta.get("question_mode", "question") or "question"
         engine, mcp_clients = await _build_session_engine(
             session_id=session_id,
