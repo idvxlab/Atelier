@@ -376,11 +376,12 @@
       align-items: center;
       gap: 8px;
       height: 38px;
-      padding: 0 12px;
+      padding: 0 10px 0 12px;
       border: 1px solid var(--border);
       border-radius: 10px;
       background: #11161d;
       flex-shrink: 0;
+      position: relative;
     }
 
     #composer-persona-wrap label {
@@ -390,29 +391,30 @@
     }
 
     #composer-persona-trigger {
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 6px;
-      min-width: 130px;
-      height: 100%;
-      border: none;
-      outline: none;
-      background: transparent;
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 13.5px;
       cursor: pointer;
-      padding: 0;
+      user-select: none;
+      height: 100%;
+      min-width: 90px;
     }
-
-    #composer-persona-trigger .persona-chevron {
+    #composer-persona-trigger .trigger-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    #composer-persona-trigger .trigger-text.is-none {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    #composer-persona-trigger .trigger-chevron {
       font-size: 9px;
       color: var(--text-muted);
-      transition: transform .15s;
-      margin-left: auto;
+      transition: transform .18s;
     }
-
-    #composer-persona-trigger.open .persona-chevron {
+    #composer-persona-trigger.open .trigger-chevron {
       transform: rotate(180deg);
     }
 
@@ -421,66 +423,49 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 6px 0;
       min-width: 240px;
-      max-width: 320px;
-      z-index: 250;
-      box-shadow: 0 12px 32px rgba(0,0,0,.48);
+      max-height: 280px;
+      overflow-y: auto;
+      z-index: 400;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, .55);
       display: none;
-      overflow: hidden;
     }
-
     #persona-dropdown.open {
       display: block;
     }
-
-    .persona-option {
+    .persona-dropdown-item {
       display: flex;
       flex-direction: column;
-      padding: 8px 14px;
+      padding: 9px 14px;
       cursor: pointer;
-      transition: background .1s;
+      transition: background .08s;
       border-left: 2px solid transparent;
     }
-
-    .persona-option:hover {
+    .persona-dropdown-item:first-child {
+      border-radius: 9px 9px 0 0;
+    }
+    .persona-dropdown-item:last-child {
+      border-radius: 0 0 9px 9px;
+    }
+    .persona-dropdown-item:hover {
       background: var(--surface2);
     }
-
-    .persona-option.selected {
-      border-left-color: var(--accent);
+    .persona-dropdown-item.selected {
       background: var(--accent-dim);
+      border-left-color: var(--accent);
     }
-
-    .persona-option-name {
-      font-size: 13.5px;
+    .persona-dropdown-item .item-name {
+      font-size: 13px;
+      font-weight: 600;
       color: var(--text);
-      font-weight: 500;
     }
-
-    .persona-option.selected .persona-option-name {
-      color: var(--accent);
-    }
-
-    .persona-option-desc {
-      font-size: 11.5px;
+    .persona-dropdown-item .item-desc {
+      font-size: 11px;
       color: var(--text-muted);
-      margin-top: 2px;
+      margin-top: 1px;
       line-height: 1.4;
     }
-
-    .persona-option .persona-check {
-      display: none;
-      margin-left: auto;
-      font-size: 12px;
-      color: var(--accent);
-    }
-
-    .persona-option.selected .persona-check {
-      display: inline;
-    }
-
-    #persona-dropdown .persona-divider {
+    .persona-dropdown-divider {
       height: 1px;
       background: var(--border);
       margin: 4px 0;
@@ -1676,12 +1661,12 @@
             onkeydown="handleInputKey(event)" oninput="autoGrow(this)"></textarea>
           <div id="composer-persona-wrap">
             <label>Persona</label>
-            <button id="composer-persona-trigger" onclick="togglePersonaDropdown(event)" aria-haspopup="listbox">
-              <span class="persona-label-text">不使用</span>
-              <span class="persona-chevron">▼</span>
-            </button>
+            <div id="composer-persona-trigger" onclick="togglePersonaDropdown(event)">
+              <span class="trigger-text is-none">不使用</span>
+              <span class="trigger-chevron">▾</span>
+            </div>
+            <div id="persona-dropdown"></div>
           </div>
-          <div id="persona-dropdown"></div>
           <button class="btn btn-primary" onclick="sendMessage()" id="send-btn">&#21457;&#36865;</button>
         </div>
       </div>
@@ -1991,126 +1976,117 @@
 
     function populateComposerPersona() {
       const trigger = document.getElementById('composer-persona-trigger');
-      const label = trigger?.querySelector('.persona-label-text');
-      if (!trigger || !label) return;
+      const dropdown = document.getElementById('persona-dropdown');
+      if (!trigger || !dropdown) return;
 
       const current = allSessions.find(s => s.session_id === currentSessionId);
       const previousValue = currentSessionId
         ? ((current && current.persona) || '')
         : (composerPersonaDraft || '');
 
-      // Update trigger label
-      if (previousValue) {
-        const p = overview.personas.find(x => x.name === previousValue);
-        label.textContent = p ? p.name : previousValue;
-      } else {
-        label.textContent = '不使用';
-      }
-      composerPersonaDraft = previousValue;
+      // Build dropdown items
+      dropdown.innerHTML = '';
 
-      buildPersonaDropdown(previousValue);
-    }
-
-    function buildPersonaDropdown(selectedValue) {
-      const dd = document.getElementById('persona-dropdown');
-      if (!dd) return;
-      dd.innerHTML = '';
-
-      const noneOpt = document.createElement('div');
-      noneOpt.className = 'persona-option' + (selectedValue === '' ? ' selected' : '');
-      noneOpt.innerHTML = `
-        <div class="persona-option-name">
-          <span class="persona-check">✓</span> 不使用
-        </div>
-        <div class="persona-option-desc">不加载任何 Persona，使用引擎默认行为</div>
-      `;
-      noneOpt.onclick = () => selectPersona('', '不使用');
-      dd.appendChild(noneOpt);
+      // "None" option
+      const noneItem = document.createElement('div');
+      noneItem.className = 'persona-dropdown-item' + (previousValue === '' ? ' selected' : '');
+      noneItem.innerHTML = '<span class="item-name">不使用</span><span class="item-desc">不使用 Persona，使用引擎默认行为</span>';
+      noneItem.onclick = () => selectComposerPersona('');
+      dropdown.appendChild(noneItem);
 
       if (overview.personas.length) {
         const divider = document.createElement('div');
-        divider.className = 'persona-divider';
-        dd.appendChild(divider);
+        divider.className = 'persona-dropdown-divider';
+        dropdown.appendChild(divider);
+
+        overview.personas.forEach(p => {
+          const item = document.createElement('div');
+          item.className = 'persona-dropdown-item' + (p.name === previousValue ? ' selected' : '');
+          item.innerHTML = `<span class="item-name">${escHtml(p.name)}</span><span class="item-desc">${escHtml(p.description || '')}</span>`;
+          item.onclick = () => selectComposerPersona(p.name);
+          dropdown.appendChild(item);
+        });
       }
 
-      overview.personas.forEach(p => {
-        const opt = document.createElement('div');
-        opt.className = 'persona-option' + (p.name === selectedValue ? ' selected' : '');
-        opt.innerHTML = `
-          <div class="persona-option-name">
-            <span class="persona-check">✓</span> ${escHtml(p.name)}
-          </div>
-          ${p.description ? `<div class="persona-option-desc">${escHtml(p.description)}</div>` : ''}
-        `;
-        opt.onclick = () => selectPersona(p.name, p.name);
-        dd.appendChild(opt);
-      });
+      composerPersonaDraft = previousValue;
+      updatePersonaTrigger();
     }
 
-    async function selectPersona(value, labelText) {
-      composerPersonaDraft = value;
-      const trigger = document.getElementById('composer-persona-trigger');
-      const label = trigger?.querySelector('.persona-label-text');
-      if (label) label.textContent = labelText;
+    function updatePersonaTrigger() {
+      const triggerText = document.querySelector('#composer-persona-trigger .trigger-text');
+      if (!triggerText) return;
+      const val = composerPersonaDraft || '';
+      if (val && overview.personas.some(p => p.name === val)) {
+        triggerText.textContent = val;
+        triggerText.className = 'trigger-text';
+      } else {
+        triggerText.textContent = '不使用';
+        triggerText.className = 'trigger-text is-none';
+      }
+    }
 
+    async function selectComposerPersona(name) {
+      composerPersonaDraft = name || '';
+      updatePersonaTrigger();
       closePersonaDropdown();
-      buildPersonaDropdown(value);
-
+      // Update dropdown selection
+      document.querySelectorAll('.persona-dropdown-item').forEach(item => {
+        const itemName = item.querySelector('.item-name');
+        const isSelected = (name === '' && itemName.textContent === '不使用') || (name !== '' && itemName.textContent === name);
+        item.classList.toggle('selected', isSelected);
+      });
       if (currentSessionId) {
         try {
-          const r = await api(`/sessions/${currentSessionId}`, 'PATCH', { persona: value });
+          const r = await api(`/sessions/${currentSessionId}`, 'PATCH', { persona: name || '' });
+          toast(name === '' ? '已清除 Persona' : `已切换 Persona: ${r.persona}`);
           await refreshSessions();
-          toast(r.persona === '' ? '已清除 Persona' : `已切换 Persona: ${r.persona}`);
         } catch (e) { toast('切换 Persona 失败: ' + e.message, true); }
       }
     }
 
     function togglePersonaDropdown(e) {
       e.stopPropagation();
-      const dd = document.getElementById('persona-dropdown');
+      const dropdown = document.getElementById('persona-dropdown');
       const trigger = document.getElementById('composer-persona-trigger');
-      if (!dd || !trigger) return;
-      const isOpen = dd.classList.contains('open');
+      if (!dropdown || !trigger) return;
+      const isOpen = dropdown.classList.contains('open');
       if (isOpen) {
         closePersonaDropdown();
       } else {
+        // Position the dropdown below the trigger
         const rect = trigger.getBoundingClientRect();
-        dd.style.top = (rect.bottom + 6) + 'px';
-        dd.style.left = Math.min(rect.left, window.innerWidth - 340) + 'px';
-        buildPersonaDropdown(composerPersonaDraft);
-        dd.classList.add('open');
+        dropdown.style.top = (rect.bottom + 6) + 'px';
+        dropdown.style.left = Math.min(rect.left, window.innerWidth - 260) + 'px';
+        dropdown.classList.add('open');
         trigger.classList.add('open');
-        setTimeout(() => document.addEventListener('click', closePersonaDropdown, { once: true }), 0);
       }
     }
 
     function closePersonaDropdown() {
-      const dd = document.getElementById('persona-dropdown');
+      const dropdown = document.getElementById('persona-dropdown');
       const trigger = document.getElementById('composer-persona-trigger');
-      if (dd) dd.classList.remove('open');
+      if (dropdown) dropdown.classList.remove('open');
       if (trigger) trigger.classList.remove('open');
     }
 
-    function syncComposerPersonaControl(persona = '', locked = false) {
-      const trigger = document.getElementById('composer-persona-trigger');
-      const label = trigger?.querySelector('.persona-label-text');
-      if (!trigger || !label) return;
-
-      // Persona is always switchable — never lock
-      trigger.disabled = false;
-      trigger.title = currentSessionId
-        ? 'Switch persona for this session'
-        : 'Choose a persona for the next new session';
-
-      if (persona && overview.personas.some(p => p.name === persona)) {
-        label.textContent = persona;
-        composerPersonaDraft = persona;
-      } else if (!currentSessionId && composerPersonaDraft) {
-        label.textContent = composerPersonaDraft;
-      } else if (persona === '' && currentSessionId) {
-        label.textContent = '不使用';
-        composerPersonaDraft = '';
+    document.addEventListener('click', (e) => {
+      const wrap = document.getElementById('composer-persona-wrap');
+      if (wrap && !wrap.contains(e.target)) {
+        closePersonaDropdown();
       }
+    });
+
+    function syncComposerPersonaControl(persona = '', locked = false) {
+      if (!locked) {
+        if (overview.personas.some(p => p.name === composerPersonaDraft)) {
+          // keep current draft
+        } else if (!overview.personas.some(p => p.name === '')) {
+          composerPersonaDraft = '';
+        }
+      } else {
+        composerPersonaDraft = overview.personas.some(p => p.name === persona) ? persona : '';
+      }
+      updatePersonaTrigger();
     }
 
     function openNewSession(prePersona = '') {
