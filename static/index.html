@@ -463,20 +463,6 @@
       color: var(--accent);
     }
 
-    .persona-option .opt-desc {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-left: auto;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 120px;
-    }
-
-    .persona-option.selected .opt-desc {
-      color: var(--accent);
-      opacity: .7;
-    }
 
     /* question mode */
     #mode-toolbar {
@@ -2010,7 +1996,7 @@
       overview.personas.forEach(p => {
         const opt = document.createElement('div');
         opt.className = 'persona-option' + (p.name === composerPersonaDraft ? ' selected' : '');
-        opt.innerHTML = `<span>${escHtml(p.name)}</span><span class="opt-desc">${escHtml(p.description || '')}</span>`;
+        opt.innerHTML = `<span>${escHtml(p.name)}</span>`;
         opt.title = p.description || p.name;
         opt.onclick = (e) => { e.stopPropagation(); selectPersona(p.name); };
         dropdown.appendChild(opt);
