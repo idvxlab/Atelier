@@ -376,30 +376,58 @@
       align-items: center;
       gap: 8px;
       height: 38px;
-      padding: 0 12px;
+      padding: 0 6px 0 12px;
       border: 1px solid var(--border);
       border-radius: 10px;
       background: #11161d;
       flex-shrink: 0;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    #composer-persona-wrap:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(88, 166, 255, .15);
+    }
+
+    #composer-persona-wrap:hover {
+      border-color: #484f58;
     }
 
     #composer-persona-wrap label {
-      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
       color: var(--text-muted);
       white-space: nowrap;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    #composer-persona-wrap label::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: .7;
     }
 
     #composer-persona {
-      min-width: 156px;
+      min-width: 150px;
       height: 100%;
       border: none;
       outline: none;
       background: transparent;
-      color: var(--text);
+      color: var(--accent);
       font-family: var(--font);
-      font-size: 14px;
+      font-size: 13.5px;
+      font-weight: 600;
       cursor: pointer;
-      padding-right: 8px;
+      padding-right: 4px;
+      appearance: base;
     }
 
     #composer-persona:disabled {
@@ -411,6 +439,8 @@
     #composer-persona option {
       background: var(--surface);
       color: var(--text);
+      font-weight: 400;
+      padding: 8px 12px;
     }
 
     /* question mode */
