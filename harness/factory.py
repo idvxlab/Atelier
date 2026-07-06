@@ -328,7 +328,9 @@ def build_engine(
     prompt_cache = PromptCache()
 
     # Cache the immutable base fragment (system_prompt + skills + reasoning + recovery).
-    # This never changes for the lifetime of the engine.
+    # The persona's raw system_prompt is cached separately so it can be swapped
+    # at runtime via engine.set_persona() without rebuilding the engine.
+    prompt_cache.set_persona_system_prompt(system_prompt)
     _base_fragment = (
         _project_context
         + system_prompt

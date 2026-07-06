@@ -133,6 +133,7 @@ class UpdateSessionRequest(BaseModel):
     display_name: str | None = None
     pinned: bool | None = None
     archived: bool | None = None
+    persona: str | None = None
 
 
 class RewriteMessageRequest(BaseModel):
@@ -769,9 +770,28 @@ async def update_session(session_id: str, req: UpdateSessionRequest) -> dict[str
         kwargs["pinned"] = req.pinned
     if req.archived is not None:
         kwargs["archived"] = req.archived
+    if req.persona is not None:
+        engine = _engines.get(session_id)
+        if engine is None:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+        if req.persona == "":
+            # Clear persona — use empty system_prompt
+            await engine.set_persona("", "")
+            _engine_meta[session_id]["persona"] = ""
+        else:
+            try:
+                persona = load_persona(req.persona)
+            except ValueError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            sp = persona.get("system_prompt", "")
+            await engine.set_persona(req.persona, sp)
+            _engine_meta[session_id]["persona"] = req.persona
     if kwargs:
         await _session_store.update_metadata(session_id, **kwargs)
-    return {"status": "updated", "session_id": session_id}
+    result: dict[str, Any] = {"status": "updated", "session_id": session_id}
+    if req.persona is not None:
+        result["persona"] = req.persona
+    return result
 
 
 @app.delete("/sessions/{session_id}", status_code=204)

@@ -60,12 +60,14 @@ class PromptCache:
         "_system_prompt",
         "_tool_schemas",
         "_mode_blocks",
+        "_persona_system_prompt",
     )
 
     def __init__(self) -> None:
         self._system_prompt: str | None = None
         self._tool_schemas: list[Any] | None = None  # list[ToolSchema]
         self._mode_blocks: dict[str, str] = {}
+        self._persona_system_prompt: str | None = None
 
     # ── system_prompt ────────────────────────────────────────────────────
 
@@ -77,6 +79,17 @@ class PromptCache:
     def get_system_prompt(self) -> str | None:
         with _cache_lock:
             return self._system_prompt
+
+    # ── persona_system_prompt (swappable at runtime) ──────────────────────
+
+    def set_persona_system_prompt(self, text: str) -> None:
+        """Cache the persona's raw system_prompt so it can be swapped later."""
+        with _cache_lock:
+            self._persona_system_prompt = text
+
+    def get_persona_system_prompt(self) -> str | None:
+        with _cache_lock:
+            return self._persona_system_prompt
 
     # ── tool_schemas ─────────────────────────────────────────────────────
 

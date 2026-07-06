@@ -802,6 +802,62 @@ class AgentEngine:
     # Question mode + clarifications
     # ──────────────────────────────────────────────────────────────────
 
+    async def set_persona(self, name: str, system_prompt: str) -> str:
+        """Replace the persona system_prompt in the live conversation.
+
+        Returns the persona name on success.
+        """
+        old_text = self._prompt_cache.get_persona_system_prompt() or ""
+
+        if old_text == system_prompt:
+            return name
+
+        async with self._state_lock:
+            # Replace old persona prompt in the system message
+            for msg in self._messages:
+                if msg.role != "system":
+                    continue
+                text_block = next(
+                    (b for b in msg.content if isinstance(b, TextBlock)),
+                    None,
+                )
+                if text_block is None:
+                    break
+                text = text_block.text or ""
+                if old_text and old_text in text:
+                    text = text.replace(old_text, system_prompt, 1)
+                elif system_prompt:
+                    # No old persona to replace — prepend to the base fragment
+                    text = system_prompt + text
+                text_block.text = text
+                break
+
+        # Update caches
+        self._prompt_cache.set_persona_system_prompt(system_prompt)
+        old_base = self._prompt_cache.get_system_prompt() or ""
+        if old_base and old_text and old_text in old_base:
+            new_base = old_base.replace(old_text, system_prompt, 1)
+            self._prompt_cache.set_system_prompt(new_base)
+
+        # Persist
+        meta: dict = {}
+        try:
+            rec = await self._session_store.load(self._config.session_id)
+            if rec and isinstance(rec.metadata, dict):
+                meta = dict(rec.metadata)
+        except Exception:
+            pass
+        meta["persona"] = name
+        try:
+            await self._session_store.save(
+                self._config.session_id, self._messages, metadata=meta
+            )
+        except Exception:
+            pass
+
+        await self._notify_state_listeners()
+        return name
+
     async def set_question_mode(self, mode: str) -> str:
         """Update session question_mode ("question" | "noquestion"). Persist.
 
