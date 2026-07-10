@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from harness.engine.state_machine import EngineState
+from harness.agents import list_agent_profiles
 from harness.storage.backends.memory import (
     InMemoryMemoryStore,
     MemoryCheckpointStore,
@@ -154,3 +155,11 @@ async def test_sqlite_memory_store_persists(tmp_path):
     found = await reopened.search(query="SQLite", scope="project")
     assert [item.entry_id for item in found] == [entry.entry_id]
     assert found[0].tags == ["decision"]
+
+
+def test_agent_profiles_are_derived_from_personas():
+    agents = list_agent_profiles(include_hidden=False)
+    names = {agent["name"] for agent in agents}
+    assert "builder" in names
+    assert "planner" in names
+    assert all(not agent["hidden"] for agent in agents)

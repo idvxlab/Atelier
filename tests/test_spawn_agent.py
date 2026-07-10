@@ -174,6 +174,30 @@ class TestSpawnAgentTool:
         assert "Sub-agent" in result
 
     @pytest.mark.asyncio
+    async def test_can_spawn_registered_agent_profile(self, monkeypatch):
+        """spawn_agent can create a child from an AgentProfile/persona name."""
+        monkeypatch.setattr(
+            "harness.factory.build_engine",
+            _make_mock_build_engine("Planner result."),
+        )
+        store = MemorySessionStore()
+        registry = {}
+        tool = make_spawn_agent_tool(
+            harness_cfg=_FakeHarnessCfg(),
+            provider_cfg=_FakeProviderCfg(),
+            session_store=store,
+            spawn_depth=0,
+            engine_registry=registry,
+        )
+
+        result = await tool(task="Plan the work", agent="planner")
+        assert "Planner result." in result
+        sub_id = next(iter(registry))
+        record = await store.load(sub_id)
+        assert record is not None
+        assert record.metadata["persona"] == "planner"
+
+    @pytest.mark.asyncio
     async def test_depth_limit_returns_error_string(self):
         """At MAX_SPAWN_DEPTH, returns an error string instead of spawning."""
         tool = make_spawn_agent_tool(

@@ -38,6 +38,12 @@ SPAWN_AGENT_SCHEMA = ToolSchema(
     ),
     params=[
         ToolParam(
+            name="agent",
+            type="string",
+            description="Optional registered agent profile name, e.g. builder, planner, reviewer, debugger, or docs-writer.",
+            required=False,
+        ),
+        ToolParam(
             name="task",
             type="string",
             description="The task or goal for the sub-agent.",
@@ -74,7 +80,7 @@ SPAWN_AGENTS_SCHEMA = ToolSchema(
             type="array",
             description=(
                 "List of agent configurations. "
-                "Each item: {task: str, system_prompt?: str, tools?: list[str]}"
+                "Each item: {task: str, agent?: str, system_prompt?: str, tools?: list[str]}"
             ),
             required=True,
             items={"type": "object"},
@@ -151,11 +157,13 @@ def make_spawn_agent_tool(
 
     async def spawn_agent_tool(
         task: str,
+        agent: str = "",
         system_prompt: str = "",
         tools: list[str] | None = None,
     ) -> str:
         # Lazy import breaks the spawn_agent.py ↔ factory.py circular dependency
         from harness.factory import build_engine  # noqa: PLC0415
+        from harness.agents import load_agent_profile  # noqa: PLC0415
 
         if spawn_depth >= MAX_SPAWN_DEPTH:
             return (
@@ -166,16 +174,32 @@ def make_spawn_agent_tool(
         sub_id = f"sub_{uuid.uuid4().hex[:8]}"
         display_name = _make_display_name(task)
         try:
+            profile_name = (agent or "").strip()
+            child_provider_cfg = provider_cfg
+            child_system_prompt = system_prompt
+            child_tools = tools
+            if profile_name:
+                try:
+                    profile = load_agent_profile(profile_name)
+                except ValueError as exc:
+                    return f"[Sub-agent {sub_id} | {display_name}]\nError: {exc}"
+                if not child_system_prompt:
+                    child_system_prompt = profile.system_prompt
+                if child_tools is None:
+                    child_tools = profile.allowed_tools
+                if profile.provider and profile.provider in harness_cfg.providers:
+                    child_provider_cfg = harness_cfg.providers[profile.provider]
+
             sub_engine = build_engine(
                 session_id=sub_id,
-                provider_cfg=provider_cfg,
+                provider_cfg=child_provider_cfg,
                 harness_cfg=harness_cfg,
                 session_store=session_store,
-                system_prompt=system_prompt,
-                allowed_tools=tools,        # None → inherit global config
+                system_prompt=child_system_prompt,
+                allowed_tools=child_tools,        # None → inherit global config
                 spawn_depth=spawn_depth + 1,
                 engine_registry=engine_registry,
-                provider_name=provider_cfg.name,
+                provider_name=profile_name or child_provider_cfg.name,
                 memory_store=memory_store,
             )
             if engine_registry is not None:
@@ -189,6 +213,8 @@ def make_spawn_agent_tool(
                     meta = dict(existing.metadata)
                 meta["display_name"] = display_name
                 meta["spawn_depth"] = spawn_depth + 1
+                if profile_name:
+                    meta["persona"] = profile_name
                 if parent_session_id:
                     meta["parent_session_id"] = parent_session_id
                 await session_store.save(sub_id, [], metadata=meta)
@@ -231,6 +257,7 @@ def make_spawn_agents_tool(
 
     async def spawn_agents_tool(agents: list[dict]) -> str:
         from harness.factory import build_engine  # noqa: PLC0415
+        from harness.agents import load_agent_profile  # noqa: PLC0415
 
         if spawn_depth >= MAX_SPAWN_DEPTH:
             return (
@@ -244,16 +271,31 @@ def make_spawn_agents_tool(
             sub_id = f"sub_{uuid.uuid4().hex[:8]}"
             task = cfg.get("task", "")
             display_name = _make_display_name(task)
+            profile_name = str(cfg.get("agent", "") or "").strip()
+            child_provider_cfg = provider_cfg
+            child_system_prompt = cfg.get("system_prompt", "")
+            child_tools = cfg.get("tools")
+            if profile_name:
+                try:
+                    profile = load_agent_profile(profile_name)
+                except ValueError as exc:
+                    return f"[Sub-agent {sub_id} | {display_name}]\nError: {exc}"
+                if not child_system_prompt:
+                    child_system_prompt = profile.system_prompt
+                if child_tools is None:
+                    child_tools = profile.allowed_tools
+                if profile.provider and profile.provider in harness_cfg.providers:
+                    child_provider_cfg = harness_cfg.providers[profile.provider]
             sub_engine = build_engine(
                 session_id=sub_id,
-                provider_cfg=provider_cfg,
+                provider_cfg=child_provider_cfg,
                 harness_cfg=harness_cfg,
                 session_store=session_store,
-                system_prompt=cfg.get("system_prompt", ""),
-                allowed_tools=cfg.get("tools"),
+                system_prompt=child_system_prompt,
+                allowed_tools=child_tools,
                 spawn_depth=spawn_depth + 1,
                 engine_registry=engine_registry,
-                provider_name=provider_cfg.name,
+                provider_name=profile_name or child_provider_cfg.name,
                 memory_store=memory_store,
             )
             if engine_registry is not None:
@@ -267,6 +309,8 @@ def make_spawn_agents_tool(
                     meta = dict(existing.metadata)
                 meta["display_name"] = display_name
                 meta["spawn_depth"] = spawn_depth + 1
+                if profile_name:
+                    meta["persona"] = profile_name
                 if parent_session_id:
                     meta["parent_session_id"] = parent_session_id
                 await session_store.save(sub_id, [], metadata=meta)

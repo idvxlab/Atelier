@@ -36,6 +36,7 @@ from pydantic import BaseModel
 
 from harness.commands import CommandSystem
 from harness.commands.models import CommandContext, CommandResult, substitute_args
+from harness.agents import list_agent_profiles
 from harness.config import HarnessConfig
 from harness.engine.engine import AgentEngine
 from harness.factory import build_engine, build_engine_with_mcp
@@ -880,6 +881,11 @@ async def api_delete_skill(name: str):
 @app.get("/config/personas")
 async def api_list_personas() -> dict[str, Any]:
     return {"personas": list_personas()}
+
+
+@app.get("/config/agents")
+async def api_list_agents(include_hidden: bool = True) -> dict[str, Any]:
+    return {"agents": list_agent_profiles(include_hidden=include_hidden)}
 
 
 @app.get("/config/personas/{name}")
