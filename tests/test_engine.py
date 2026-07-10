@@ -19,6 +19,11 @@ from harness.tools.executor import ToolExecutor
 from harness.tools.registry import ToolRegistry
 from harness.tools.overflow import OverflowStore
 from harness.storage.backends.memory import MemorySessionStore
+from harness.tools.builtin.todo_tool import (
+    TODO_WRITE_SCHEMA,
+    make_todo_write_tool,
+    todo_write_tool,
+)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -148,6 +153,13 @@ def _build_engine(reply_text: str = "Done.", system_prompt: str = "") -> AgentEn
     )
 
 
+def _enable_todo_write(engine: AgentEngine) -> None:
+    engine._tool_registry.register(
+        TODO_WRITE_SCHEMA,
+        make_todo_write_tool(engine._session_store),
+    )
+
+
 def _seed_messages(engine: AgentEngine, items: list[tuple[str, str]]) -> list[str]:
     """
     Synchronously inject messages into the engine's _messages list while
@@ -166,6 +178,40 @@ def _seed_messages(engine: AgentEngine, items: list[tuple[str, str]]) -> list[st
         if role == "user":
             ids.append(msg.message_id)
     return ids
+
+
+@pytest.mark.asyncio
+async def test_plan_reminder_added_for_nontrivial_task_without_existing_plan():
+    engine = _build_engine()
+    _enable_todo_write(engine)
+
+    reminder = await engine._build_plan_reminder_message_if_needed(
+        "请继续实现这个功能并运行测试"
+    )
+
+    assert reminder is not None
+    assert reminder.role == "system"
+    text = reminder.content[0].text
+    assert "todo_write" in text
+    assert 'action="set"' in text
+
+
+@pytest.mark.asyncio
+async def test_plan_reminder_not_added_when_plan_exists():
+    engine = _build_engine()
+    _enable_todo_write(engine)
+    await todo_write_tool(
+        session_id=engine._config.session_id,
+        action="set",
+        todos=[{"content": "已有计划", "status": "in_progress"}],
+        session_store=engine._session_store,
+    )
+
+    reminder = await engine._build_plan_reminder_message_if_needed(
+        "请继续实现这个功能并运行测试"
+    )
+
+    assert reminder is None
 
 
 @pytest.mark.asyncio

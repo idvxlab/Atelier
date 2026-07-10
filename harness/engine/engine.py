@@ -81,6 +81,21 @@ class PendingSpawn:
         return asdict(self)
 
 
+_PLAN_REMINDER_TEXT = (
+    "System reminder: this looks like non-trivial work. If there is no visible "
+    "plan yet, first call think, then call todo_write(action=\"set\") with "
+    "2-6 concrete steps for the current session_id. Keep the plan updated with "
+    "todo_write(action=\"update\") as work progresses."
+)
+
+_PLAN_KEYWORDS = (
+    "bug", "fix", "debug", "merge", "implement", "refactor", "test",
+    "architecture", "document", "plan", "continue", "review", "build",
+    "修改", "修复", "调试", "合并", "实现", "继续", "检查", "文档",
+    "架构", "计划", "拆解", "测试", "提交", "优化", "新增",
+)
+
+
 @dataclass
 class PendingQuestion:
     """
@@ -361,6 +376,32 @@ class AgentEngine:
 
         return snap
 
+    def _looks_nontrivial_for_plan(self, text: str) -> bool:
+        stripped = (text or "").strip()
+        if len(stripped) >= 40:
+            return True
+        lowered = stripped.casefold()
+        return any(keyword in lowered for keyword in _PLAN_KEYWORDS)
+
+    async def _build_plan_reminder_message_if_needed(self, text: str) -> Message | None:
+        """Create a hidden system reminder so old sessions also learn to plan."""
+        if not self._looks_nontrivial_for_plan(text):
+            return None
+        if self._tool_registry.get("todo_write") is None:
+            return None
+        try:
+            from harness.tools.builtin.todo_tool import load_session_todos
+
+            existing = await load_session_todos(
+                self._config.session_id,
+                session_store=self._session_store,
+            )
+            if existing:
+                return None
+        except Exception:
+            pass
+        return Message(role="system", content=[TextBlock(text=_PLAN_REMINDER_TEXT)])
+
     async def send_message(self, text: str) -> dict[str, Any]:
         """
         Accept a user message.
@@ -409,6 +450,7 @@ class AgentEngine:
                 ],
             }
 
+        reminder_msg = await self._build_plan_reminder_message_if_needed(text)
         user_msg = Message(role="user", content=[TextBlock(text=text)])
 
         # Concurrency rule: transition inside lock, then release before async work
@@ -416,6 +458,8 @@ class AgentEngine:
             # Session reuse: COMPLETED -> WAITING_INPUT implicitly before starting again
             if self._sm.state == EngineState.COMPLETED:
                 self._sm.transition(EngineState.WAITING_INPUT)
+            if reminder_msg is not None:
+                self._messages.append(reminder_msg)
             self._messages.append(user_msg)
             self._sm.transition(EngineState.RUNNING)
             self._emitter.emit(
@@ -1421,11 +1465,14 @@ class AgentEngine:
 
     async def _process_queued_command(self, pc: "PendingCommand") -> None:
         """Run a queued user command: transition to RUNNING and fire the loop."""
+        reminder_msg = await self._build_plan_reminder_message_if_needed(pc.text)
         user_msg = Message(role="user", content=[TextBlock(text=pc.text)])
         async with self._state_lock:
             # COMPLETED -> WAITING_INPUT -> RUNNING
             if self._sm.state == EngineState.COMPLETED:
                 self._sm.transition(EngineState.WAITING_INPUT)
+            if reminder_msg is not None:
+                self._messages.append(reminder_msg)
             self._messages.append(user_msg)
             self._sm.transition(EngineState.RUNNING)
             self._emitter.emit(
