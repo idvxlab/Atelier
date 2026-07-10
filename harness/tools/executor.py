@@ -15,6 +15,7 @@ from harness.types.messages import ToolCallBlock, ToolResultBlock
 from harness.tools.registry import ToolRegistry
 from harness.tools.overflow import OverflowStore
 from harness.observability.events import EventEmitter
+from harness.hooks import HookEvent, HookManager
 
 # Hard output limits in characters
 LIMITS: dict[str, int] = {
@@ -56,10 +57,14 @@ class ToolExecutor:
         overflow: OverflowStore,
         emitter: EventEmitter,
         limits: dict[str, int] | None = None,
+        hooks: HookManager | None = None,
+        session_id: str = "",
     ) -> None:
         self._registry = registry
         self._overflow = overflow
         self._emitter = emitter
+        self._hooks = hooks
+        self._session_id = session_id
         # Allow config-driven limits to override defaults
         self._limits: dict[str, int] = limits if limits is not None else dict(LIMITS)
 
@@ -80,6 +85,30 @@ class ToolExecutor:
     async def _execute_one(
         self, call: ToolCallBlock, round_idx: int
     ) -> ToolResultBlock:
+        if self._hooks is not None:
+            hook_result = await self._hooks.emit(
+                HookEvent(
+                    name="before_tool_call",
+                    session_id=self._session_id,
+                    round_index=round_idx,
+                    payload={
+                        "tool": call.tool_name,
+                        "tool_call_id": call.tool_call_id,
+                        "input": dict(call.tool_input),
+                    },
+                )
+            )
+            if not hook_result.continue_:
+                return ToolResultBlock(
+                    tool_call_id=call.tool_call_id,
+                    content=(
+                        f"Blocked by hook before_tool_call: "
+                        f"{hook_result.reason or 'no reason provided'}"
+                    ),
+                    is_error=True,
+                    tool_name=call.tool_name,
+                )
+
         tool = self._registry.get(call.tool_name)
 
         if tool is None:
@@ -87,6 +116,20 @@ class ToolExecutor:
                 "tool_call", "execution-error",
                 detail={"tool": call.tool_name, "reason": "not_found", "round": round_idx},
             )
+            if self._hooks is not None:
+                await self._hooks.emit(
+                    HookEvent(
+                        name="after_tool_call",
+                        session_id=self._session_id,
+                        round_index=round_idx,
+                        payload={
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "is_error": True,
+                            "reason": "not_found",
+                        },
+                    )
+                )
             return ToolResultBlock(
                 tool_call_id=call.tool_call_id,
                 content=f"Error: tool '{call.tool_name}' not found",
@@ -119,6 +162,20 @@ class ToolExecutor:
                 "tool_call", "execution-error",
                 detail={"tool": call.tool_name, "error": detail, "round": round_idx},
             )
+            if self._hooks is not None:
+                await self._hooks.emit(
+                    HookEvent(
+                        name="after_tool_call",
+                        session_id=self._session_id,
+                        round_index=round_idx,
+                        payload={
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "is_error": True,
+                            "reason": detail,
+                        },
+                    )
+                )
             return ToolResultBlock(
                 tool_call_id=call.tool_call_id,
                 content=f"Error executing '{call.tool_name}': {detail}\n{tb_last}",
@@ -139,6 +196,20 @@ class ToolExecutor:
         # Overflow handling only for non-interrupt results (interrupt placeholders
         # are tiny handles, never truncated).
         if is_interrupt:
+            if self._hooks is not None:
+                await self._hooks.emit(
+                    HookEvent(
+                        name="after_tool_call",
+                        session_id=self._session_id,
+                        round_index=round_idx,
+                        payload={
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "is_interrupt": True,
+                            "is_error": False,
+                        },
+                    )
+                )
             return ToolResultBlock(
                 tool_call_id=call.tool_call_id,
                 content=content,
@@ -159,11 +230,43 @@ class ToolExecutor:
                     "round": round_idx,
                 },
             )
+            if self._hooks is not None:
+                await self._hooks.emit(
+                    HookEvent(
+                        name="after_tool_call",
+                        session_id=self._session_id,
+                        round_index=round_idx,
+                        payload={
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "is_error": False,
+                            "is_overflow": True,
+                            "output_length": len(content),
+                            "limit": limit,
+                        },
+                    )
+                )
             return ToolResultBlock(
                 tool_call_id=call.tool_call_id,
                 content=f"[Output exceeded {limit} char limit. Full output stored at ref:{ref_id}]",
                 is_overflow_ref=True,
                 tool_name=call.tool_name,
+            )
+
+        if self._hooks is not None:
+            await self._hooks.emit(
+                HookEvent(
+                    name="after_tool_call",
+                    session_id=self._session_id,
+                    round_index=round_idx,
+                    payload={
+                        "tool": call.tool_name,
+                        "tool_call_id": call.tool_call_id,
+                        "is_interrupt": False,
+                        "is_error": False,
+                        "output_length": len(content),
+                    },
+                )
             )
 
         return ToolResultBlock(

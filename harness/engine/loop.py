@@ -33,6 +33,7 @@ from harness.llm.base import LLMProvider, TokenCallback
 from harness.tools.registry import ToolRegistry
 from harness.tools.executor import ToolExecutor
 from harness.observability.events import EventEmitter
+from harness.hooks import HookEvent, HookManager
 
 OnMessageCallback = Callable[[Message], Awaitable[None]]
 
@@ -68,6 +69,8 @@ class ReactLoop:
         emitter: EventEmitter,
         max_rounds: int = 50,
         prompt_cache: PromptCache | None = None,
+        hooks: HookManager | None = None,
+        session_id: str = "",
     ) -> None:
         self._llm = llm
         self._registry = tool_registry
@@ -77,6 +80,8 @@ class ReactLoop:
         self._max_rounds = max_rounds
         self._detector = LoopDetector(window=5, threshold=2)
         self._prompt_cache: PromptCache = prompt_cache if prompt_cache is not None else PromptCache()
+        self._hooks = hooks
+        self._session_id = session_id
 
     async def run(
         self,
@@ -142,8 +147,37 @@ class ReactLoop:
                 "llm_call", "triggered-executed",
                 detail={"round": round_idx, "msg_count": len(messages)},
             )
+            if self._hooks is not None:
+                hook_result = await self._hooks.emit(
+                    HookEvent(
+                        name="before_llm_call",
+                        session_id=self._session_id,
+                        round_index=round_idx,
+                        payload={
+                            "message_count": len(messages),
+                            "tool_count": len(tools),
+                        },
+                    )
+                )
+                if not hook_result.continue_:
+                    raise RuntimeError(
+                        "Blocked by hook before_llm_call: "
+                        f"{hook_result.reason or 'no reason provided'}"
+                    )
             reply: Message = await self._chat_or_cancel(messages, tools, cancel_event, on_token)
             reply.round_index = round_idx
+            if self._hooks is not None:
+                await self._hooks.emit(
+                    HookEvent(
+                        name="after_llm_call",
+                        session_id=self._session_id,
+                        round_index=round_idx,
+                        payload={
+                            "has_tool_calls": reply.has_tool_calls(),
+                            "tool_count": len(reply.tool_calls()),
+                        },
+                    )
+                )
 
             # ── 5. No tool calls → done ────────────────────────────────────
             if not reply.has_tool_calls():

@@ -22,6 +22,7 @@ from harness.engine.compression import CompressionConfig, ContextCompressor
 from harness.engine.engine import AgentEngine, EngineConfig
 from harness.engine.loop import ReactLoop
 from harness.engine.prompt_cache import PromptCache
+from harness.hooks import HookManager
 from harness.llm.registry import build_provider
 from harness.observability.events import EventEmitter
 from harness.skills import list_skills, build_skill_system_addendum
@@ -368,11 +369,14 @@ def build_engine(
         full_system = _base_fragment + question_block
 
     overflow = OverflowStore()
+    hooks = HookManager()
     executor = ToolExecutor(
         registry=registry,
         overflow=overflow,
         emitter=emitter,
         limits=harness_cfg.tools.limits,
+        hooks=hooks,
+        session_id=session_id,
     )
 
     loop = ReactLoop(
@@ -383,6 +387,8 @@ def build_engine(
         emitter=emitter,
         max_rounds=harness_cfg.engine.max_rounds,
         prompt_cache=prompt_cache,
+        hooks=hooks,
+        session_id=session_id,
     )
 
     engine = AgentEngine(
