@@ -22,6 +22,7 @@ from typing import Any, Callable, Awaitable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from harness.types.messages import ToolCallBlock
+    from harness.storage.plan_store import PlanStore
 
 from harness.llm.base import TokenCallback
 
@@ -54,6 +55,7 @@ class EngineConfig:
     spawn_depth: int = 0
     question_mode: str = "noquestion"   # "question" | "noquestion"
     approval_mode: str = "ask"          # "ask" | "auto" | "full"
+    plan_store: "PlanStore | None" = None
                                        #   ask  — prompt user before each confirm_tools call
                                        #   auto — auto-approve confirm_tools calls (no panel)
                                        #   full — bypass confirm_tools entirely (no gating)
@@ -370,6 +372,7 @@ class AgentEngine:
             snap["todos"] = await load_session_todos(
                 self._config.session_id,
                 session_store=self._session_store,
+                plan_store=self._config.plan_store,
             )
         except Exception:
             snap["todos"] = []
@@ -395,6 +398,7 @@ class AgentEngine:
             existing = await load_session_todos(
                 self._config.session_id,
                 session_store=self._session_store,
+                plan_store=self._config.plan_store,
             )
             if existing:
                 return None

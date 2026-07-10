@@ -480,6 +480,39 @@ async def test_todo_write_persists_plan_state():
 
 
 @pytest.mark.asyncio
+async def test_todo_write_persists_to_plan_store():
+    from harness.storage.backends.memory import InMemoryPlanStore, MemorySessionStore
+
+    session_store = MemorySessionStore()
+    plan_store = InMemoryPlanStore()
+    await todo_write_tool(
+        session_id="plan-store-session",
+        action="set",
+        todos=[{"content": "store as plan item", "status": "in_progress"}],
+        session_store=session_store,
+        plan_store=plan_store,
+    )
+
+    plan = await plan_store.load_by_session("plan-store-session")
+    assert plan is not None
+    assert plan.status == "in_progress"
+    assert plan.items[0].content == "store as plan item"
+
+    await todo_write_tool(
+        session_id="plan-store-session",
+        action="update",
+        index=0,
+        status="completed",
+        session_store=session_store,
+        plan_store=plan_store,
+    )
+    plan = await plan_store.load_by_session("plan-store-session")
+    assert plan is not None
+    assert plan.status == "completed"
+    assert plan.items[0].status == "completed"
+
+
+@pytest.mark.asyncio
 async def test_memory_tool_add_search_delete():
     from harness.storage.backends.memory import InMemoryMemoryStore
     from harness.tools.builtin.memory_tool import make_memory_tool

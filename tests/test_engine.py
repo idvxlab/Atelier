@@ -24,6 +24,7 @@ from harness.tools.builtin.todo_tool import (
     make_todo_write_tool,
     todo_write_tool,
 )
+from harness.storage.backends.memory import InMemoryPlanStore
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -154,9 +155,11 @@ def _build_engine(reply_text: str = "Done.", system_prompt: str = "") -> AgentEn
 
 
 def _enable_todo_write(engine: AgentEngine) -> None:
+    if engine._config.plan_store is None:
+        engine._config.plan_store = InMemoryPlanStore()
     engine._tool_registry.register(
         TODO_WRITE_SCHEMA,
-        make_todo_write_tool(engine._session_store),
+        make_todo_write_tool(engine._session_store, engine._config.plan_store),
     )
 
 
@@ -205,6 +208,7 @@ async def test_plan_reminder_not_added_when_plan_exists():
         action="set",
         todos=[{"content": "已有计划", "status": "in_progress"}],
         session_store=engine._session_store,
+        plan_store=engine._config.plan_store,
     )
 
     reminder = await engine._build_plan_reminder_message_if_needed(

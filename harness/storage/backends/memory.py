@@ -5,6 +5,7 @@ from harness.types.messages import Message
 from harness.storage.session import SessionStore, SessionRecord
 from harness.storage.checkpoint import CheckpointStore, Checkpoint
 from harness.storage.memory_store import MemoryEntry, MemoryStore, utc_now
+from harness.storage.plan_store import PlanState, PlanStore
 
 class MemorySessionStore(SessionStore):
     def __init__(self) -> None:
@@ -135,3 +136,44 @@ class InMemoryMemoryStore(MemoryStore):
 
     async def delete(self, entry_id: str) -> bool:
         return self._entries.pop(entry_id, None) is not None
+
+
+class InMemoryPlanStore(PlanStore):
+    def __init__(self) -> None:
+        self._plans: dict[str, PlanState] = {}
+        self._by_session: dict[str, str] = {}
+
+    async def save_plan(self, plan: PlanState) -> None:
+        self._plans[plan.plan_id] = plan
+        self._by_session[plan.session_id] = plan.plan_id
+
+    async def load_by_session(self, session_id: str) -> PlanState | None:
+        plan_id = self._by_session.get(session_id)
+        if not plan_id:
+            return None
+        return self._plans.get(plan_id)
+
+    async def bind_item(
+        self,
+        plan_id: str,
+        item_id: str,
+        assigned_session_id: str = "",
+        result_message_id: str = "",
+    ) -> bool:
+        plan = self._plans.get(plan_id)
+        if plan is None:
+            return False
+        for item in plan.items:
+            if item.item_id == item_id:
+                if assigned_session_id:
+                    item.assigned_session_id = assigned_session_id
+                if result_message_id:
+                    item.result_message_id = result_message_id
+                plan.updated_at = utc_now()
+                return True
+        return False
+
+    async def delete_by_session(self, session_id: str) -> None:
+        plan_id = self._by_session.pop(session_id, None)
+        if plan_id:
+            self._plans.pop(plan_id, None)

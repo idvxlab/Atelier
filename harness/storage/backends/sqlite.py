@@ -53,6 +53,7 @@ from harness.engine.state_machine import EngineState
 from harness.storage.session import SessionStore, SessionRecord
 from harness.storage.checkpoint import CheckpointStore, Checkpoint
 from harness.storage.memory_store import MemoryEntry, MemoryStore
+from harness.storage.plan_store import PlanItem, PlanState, PlanStore
 
 
 # ---------------------------------------------------------------------------
@@ -517,3 +518,169 @@ class SQLiteMemoryStore(MemoryStore):
             )
             await conn.commit()
             return cursor.rowcount > 0
+
+
+class SQLitePlanStore(PlanStore):
+    """Persistent plan/task state backed by SQLite."""
+
+    def __init__(self, db_path: str) -> None:
+        self._db_path = db_path
+
+    async def _ensure_tables(self, conn: aiosqlite.Connection) -> None:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS plans (
+                plan_id     TEXT PRIMARY KEY,
+                session_id  TEXT NOT NULL UNIQUE,
+                title       TEXT NOT NULL DEFAULT '',
+                status      TEXT NOT NULL DEFAULT 'pending',
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL,
+                metadata    TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS plan_items (
+                item_id              TEXT PRIMARY KEY,
+                plan_id              TEXT NOT NULL,
+                position             INTEGER NOT NULL,
+                content              TEXT NOT NULL,
+                status               TEXT NOT NULL DEFAULT 'pending',
+                assigned_session_id  TEXT NOT NULL DEFAULT '',
+                result_message_id    TEXT NOT NULL DEFAULT '',
+                metadata             TEXT NOT NULL DEFAULT '{}',
+                FOREIGN KEY(plan_id) REFERENCES plans(plan_id) ON DELETE CASCADE
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_plan_items_plan_position
+            ON plan_items (plan_id, position)
+        """)
+        await conn.commit()
+
+    async def save_plan(self, plan: PlanState) -> None:
+        async with aiosqlite.connect(self._db_path) as conn:
+            await self._ensure_tables(conn)
+            await conn.execute("""
+                INSERT INTO plans
+                    (plan_id, session_id, title, status, created_at, updated_at, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(plan_id) DO UPDATE SET
+                    session_id = excluded.session_id,
+                    title      = excluded.title,
+                    status     = excluded.status,
+                    updated_at = excluded.updated_at,
+                    metadata   = excluded.metadata
+            """, (
+                plan.plan_id,
+                plan.session_id,
+                plan.title,
+                plan.status,
+                plan.created_at,
+                plan.updated_at,
+                json.dumps(plan.metadata, ensure_ascii=False),
+            ))
+            await conn.execute(
+                "DELETE FROM plan_items WHERE plan_id = ?",
+                (plan.plan_id,),
+            )
+            for position, item in enumerate(plan.items):
+                await conn.execute("""
+                    INSERT INTO plan_items
+                        (item_id, plan_id, position, content, status,
+                         assigned_session_id, result_message_id, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    item.item_id,
+                    plan.plan_id,
+                    position,
+                    item.content,
+                    item.status,
+                    item.assigned_session_id,
+                    item.result_message_id,
+                    json.dumps(item.metadata, ensure_ascii=False),
+                ))
+            await conn.commit()
+
+    async def load_by_session(self, session_id: str) -> PlanState | None:
+        async with aiosqlite.connect(self._db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            await self._ensure_tables(conn)
+            async with conn.execute(
+                "SELECT * FROM plans WHERE session_id = ?",
+                (session_id,),
+            ) as cursor:
+                plan_row = await cursor.fetchone()
+            if plan_row is None:
+                return None
+            async with conn.execute(
+                "SELECT * FROM plan_items WHERE plan_id = ? ORDER BY position",
+                (plan_row["plan_id"],),
+            ) as cursor:
+                item_rows = await cursor.fetchall()
+        return PlanState(
+            plan_id=plan_row["plan_id"],
+            session_id=plan_row["session_id"],
+            title=plan_row["title"],
+            status=plan_row["status"],
+            created_at=plan_row["created_at"],
+            updated_at=plan_row["updated_at"],
+            metadata=json.loads(plan_row["metadata"]),
+            items=[
+                PlanItem(
+                    item_id=row["item_id"],
+                    content=row["content"],
+                    status=row["status"],
+                    assigned_session_id=row["assigned_session_id"],
+                    result_message_id=row["result_message_id"],
+                    metadata=json.loads(row["metadata"]),
+                )
+                for row in item_rows
+            ],
+        )
+
+    async def bind_item(
+        self,
+        plan_id: str,
+        item_id: str,
+        assigned_session_id: str = "",
+        result_message_id: str = "",
+    ) -> bool:
+        updates: list[str] = []
+        params: list[Any] = []
+        if assigned_session_id:
+            updates.append("assigned_session_id = ?")
+            params.append(assigned_session_id)
+        if result_message_id:
+            updates.append("result_message_id = ?")
+            params.append(result_message_id)
+        if not updates:
+            return False
+        params.extend([plan_id, item_id])
+        async with aiosqlite.connect(self._db_path) as conn:
+            await self._ensure_tables(conn)
+            cursor = await conn.execute(
+                f"UPDATE plan_items SET {', '.join(updates)} WHERE plan_id = ? AND item_id = ?",
+                params,
+            )
+            await conn.execute(
+                "UPDATE plans SET updated_at = ? WHERE plan_id = ?",
+                (datetime.now(timezone.utc).isoformat(), plan_id),
+            )
+            await conn.commit()
+            return cursor.rowcount > 0
+
+    async def delete_by_session(self, session_id: str) -> None:
+        async with aiosqlite.connect(self._db_path) as conn:
+            await self._ensure_tables(conn)
+            async with conn.execute(
+                "SELECT plan_id FROM plans WHERE session_id = ?",
+                (session_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+            if row:
+                await conn.execute(
+                    "DELETE FROM plan_items WHERE plan_id = ?",
+                    (row[0],),
+                )
+            await conn.execute("DELETE FROM plans WHERE session_id = ?", (session_id,))
+            await conn.commit()

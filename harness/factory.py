@@ -28,7 +28,8 @@ from harness.observability.events import EventEmitter
 from harness.skills import list_skills, build_skill_system_addendum
 from harness.storage.session import SessionStore
 from harness.storage.memory_store import MemoryStore
-from harness.storage.backends.memory import InMemoryMemoryStore
+from harness.storage.plan_store import PlanStore
+from harness.storage.backends.memory import InMemoryMemoryStore, InMemoryPlanStore
 from harness.tools.builtin import (
     READ_FILE_SCHEMA, read_file_tool,
     SEARCH_SCHEMA, search_tool,
@@ -168,6 +169,7 @@ def build_engine(
     question_mode: str = "noquestion",
     approval_mode: str = "ask",
     memory_store: MemoryStore | None = None,
+    plan_store: PlanStore | None = None,
 ) -> AgentEngine:
     """
     Build a fully wired AgentEngine for a session.
@@ -190,6 +192,8 @@ def build_engine(
     emitter = EventEmitter(session_id)
     if memory_store is None:
         memory_store = InMemoryMemoryStore()
+    if plan_store is None:
+        plan_store = InMemoryPlanStore()
     llm = build_provider(provider_cfg)
 
     comp = harness_cfg.compression
@@ -315,7 +319,7 @@ def build_engine(
         if name in ALL_TOOLS:
             schema, handler = ALL_TOOLS[name]
             if name == "todo_write":
-                handler = make_todo_write_tool(session_store)
+                handler = make_todo_write_tool(session_store, plan_store)
             elif name == "memory":
                 handler = make_memory_tool(memory_store)
             registry.register(schema, handler)
@@ -345,6 +349,7 @@ def build_engine(
                 harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry,
                 parent_session_id=session_id,
                 memory_store=memory_store,
+                plan_store=plan_store,
             ),
         )
         registry.register(
@@ -353,6 +358,7 @@ def build_engine(
                 harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry,
                 parent_session_id=session_id,
                 memory_store=memory_store,
+                plan_store=plan_store,
             ),
         )
 
@@ -434,6 +440,7 @@ def build_engine(
             spawn_depth=spawn_depth,
             question_mode=question_mode,
             approval_mode=approval_mode,
+            plan_store=plan_store,
         ),
         loop=loop,
         session_store=session_store,
@@ -550,6 +557,7 @@ async def build_engine_with_mcp(
     question_mode: str = "noquestion",
     approval_mode: str = "ask",
     memory_store: MemoryStore | None = None,
+    plan_store: PlanStore | None = None,
 ) -> tuple[AgentEngine, list]:  # tuple[AgentEngine, list[MCPClient]]
     """Async variant of build_engine() that also initialises MCP Servers.
 
@@ -590,5 +598,6 @@ async def build_engine_with_mcp(
         question_mode=question_mode,
         approval_mode=approval_mode,
         memory_store=memory_store,
+        plan_store=plan_store,
     )
     return engine, mcp_clients

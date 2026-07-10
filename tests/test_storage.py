@@ -7,11 +7,13 @@ from harness.engine.state_machine import EngineState
 from harness.agents import list_agent_profiles
 from harness.storage.backends.memory import (
     InMemoryMemoryStore,
+    InMemoryPlanStore,
     MemoryCheckpointStore,
     MemorySessionStore,
 )
-from harness.storage.backends.sqlite import SQLiteMemoryStore
+from harness.storage.backends.sqlite import SQLiteMemoryStore, SQLitePlanStore
 from harness.storage.checkpoint import Checkpoint
+from harness.storage.plan_store import PlanItem, PlanState
 from harness.types.messages import Message, TextBlock
 
 
@@ -155,6 +157,49 @@ async def test_sqlite_memory_store_persists(tmp_path):
     found = await reopened.search(query="SQLite", scope="project")
     assert [item.entry_id for item in found] == [entry.entry_id]
     assert found[0].tags == ["decision"]
+
+
+@pytest.mark.asyncio
+async def test_in_memory_plan_store_save_load_bind():
+    store = InMemoryPlanStore()
+    plan = PlanState(
+        plan_id="plan-s1",
+        session_id="s1",
+        status="in_progress",
+        items=[PlanItem(item_id="item-1", content="Do work", status="pending")],
+    )
+    await store.save_plan(plan)
+
+    loaded = await store.load_by_session("s1")
+    assert loaded is not None
+    assert loaded.items[0].content == "Do work"
+
+    assert await store.bind_item("plan-s1", "item-1", assigned_session_id="sub-1")
+    loaded = await store.load_by_session("s1")
+    assert loaded is not None
+    assert loaded.items[0].assigned_session_id == "sub-1"
+
+
+@pytest.mark.asyncio
+async def test_sqlite_plan_store_persists(tmp_path):
+    db_path = tmp_path / "plans.db"
+    store = SQLitePlanStore(str(db_path))
+    await store.save_plan(
+        PlanState(
+            plan_id="plan-s2",
+            session_id="s2",
+            status="in_progress",
+            items=[
+                PlanItem(item_id="item-1", content="Persist me", status="in_progress")
+            ],
+        )
+    )
+
+    reopened = SQLitePlanStore(str(db_path))
+    loaded = await reopened.load_by_session("s2")
+    assert loaded is not None
+    assert loaded.plan_id == "plan-s2"
+    assert loaded.items[0].content == "Persist me"
 
 
 def test_agent_profiles_are_derived_from_personas():

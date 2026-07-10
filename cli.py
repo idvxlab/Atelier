@@ -30,7 +30,11 @@ from harness.skills import (
     load_persona, load_skill_content,
     list_skills, list_personas,
 )
-from harness.storage.backends.memory import InMemoryMemoryStore, MemorySessionStore
+from harness.storage.backends.memory import (
+    InMemoryMemoryStore,
+    InMemoryPlanStore,
+    MemorySessionStore,
+)
 from harness.types.messages import TextBlock, ToolCallBlock, ToolResultBlock
 
 # ── ANSI 颜色（Windows 终端支持） ─────────────────────────────────────
@@ -100,6 +104,7 @@ _STATE_COLOR = {
 }
 
 _CLI_MEMORY_STORE = InMemoryMemoryStore()
+_CLI_PLAN_STORE = InMemoryPlanStore()
 
 class _VerboseHandler(logging.Handler):
     """把 harness.events JSON 日志转成人类可读的行。"""
@@ -166,6 +171,7 @@ async def _build_engine(
             harness_cfg=cfg,
             session_store=MemorySessionStore(),
             memory_store=_CLI_MEMORY_STORE,
+            plan_store=_CLI_PLAN_STORE,
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
             provider_name=provider_name,
@@ -180,6 +186,7 @@ async def _build_engine(
             harness_cfg=cfg,
             session_store=MemorySessionStore(),
             memory_store=_CLI_MEMORY_STORE,
+            plan_store=_CLI_PLAN_STORE,
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
             question_mode=question_mode,

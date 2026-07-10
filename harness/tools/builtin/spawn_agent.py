@@ -24,6 +24,7 @@ from harness.types.tools import ToolSchema, ToolParam
 if TYPE_CHECKING:
     from harness.config import HarnessConfig, ProviderConfig
     from harness.storage.memory_store import MemoryStore
+    from harness.storage.plan_store import PlanStore
     from harness.storage.session import SessionStore
 
 MAX_SPAWN_DEPTH = 3
@@ -47,6 +48,12 @@ SPAWN_AGENT_SCHEMA = ToolSchema(
             name="task",
             type="string",
             description="The task or goal for the sub-agent.",
+        ),
+        ToolParam(
+            name="plan_item_id",
+            type="string",
+            description="Optional parent plan item id this sub-agent is assigned to.",
+            required=False,
         ),
         ToolParam(
             name="system_prompt",
@@ -80,7 +87,7 @@ SPAWN_AGENTS_SCHEMA = ToolSchema(
             type="array",
             description=(
                 "List of agent configurations. "
-                "Each item: {task: str, agent?: str, system_prompt?: str, tools?: list[str]}"
+                "Each item: {task: str, agent?: str, plan_item_id?: str, system_prompt?: str, tools?: list[str]}"
             ),
             required=True,
             items={"type": "object"},
@@ -152,12 +159,14 @@ def make_spawn_agent_tool(
     engine_registry: "dict | None" = None,
     parent_session_id: str = "",
     memory_store: "MemoryStore | None" = None,
+    plan_store: "PlanStore | None" = None,
 ):
     """Return a spawn_agent handler closed over the given runtime dependencies."""
 
     async def spawn_agent_tool(
         task: str,
         agent: str = "",
+        plan_item_id: str = "",
         system_prompt: str = "",
         tools: list[str] | None = None,
     ) -> str:
@@ -201,6 +210,7 @@ def make_spawn_agent_tool(
                 engine_registry=engine_registry,
                 provider_name=profile_name or child_provider_cfg.name,
                 memory_store=memory_store,
+                plan_store=plan_store,
             )
             if engine_registry is not None:
                 engine_registry[sub_id] = sub_engine
@@ -215,11 +225,24 @@ def make_spawn_agent_tool(
                 meta["spawn_depth"] = spawn_depth + 1
                 if profile_name:
                     meta["persona"] = profile_name
+                if plan_item_id:
+                    meta["plan_item_id"] = plan_item_id
                 if parent_session_id:
                     meta["parent_session_id"] = parent_session_id
                 await session_store.save(sub_id, [], metadata=meta)
             except Exception:
                 pass
+            if parent_session_id and plan_item_id and plan_store is not None:
+                try:
+                    parent_plan = await plan_store.load_by_session(parent_session_id)
+                    if parent_plan is not None:
+                        await plan_store.bind_item(
+                            parent_plan.plan_id,
+                            plan_item_id,
+                            assigned_session_id=sub_id,
+                        )
+                except Exception:
+                    pass
 
             parent = (
                 engine_registry.get(parent_session_id)
@@ -252,6 +275,7 @@ def make_spawn_agents_tool(
     engine_registry: "dict | None" = None,
     parent_session_id: str = "",
     memory_store: "MemoryStore | None" = None,
+    plan_store: "PlanStore | None" = None,
 ):
     """Return a spawn_agents handler closed over the given runtime dependencies."""
 
@@ -270,6 +294,7 @@ def make_spawn_agents_tool(
         async def run_one(cfg: dict) -> str:
             sub_id = f"sub_{uuid.uuid4().hex[:8]}"
             task = cfg.get("task", "")
+            plan_item_id = str(cfg.get("plan_item_id", "") or "").strip()
             display_name = _make_display_name(task)
             profile_name = str(cfg.get("agent", "") or "").strip()
             child_provider_cfg = provider_cfg
@@ -297,6 +322,7 @@ def make_spawn_agents_tool(
                 engine_registry=engine_registry,
                 provider_name=profile_name or child_provider_cfg.name,
                 memory_store=memory_store,
+                plan_store=plan_store,
             )
             if engine_registry is not None:
                 engine_registry[sub_id] = sub_engine
@@ -311,11 +337,24 @@ def make_spawn_agents_tool(
                 meta["spawn_depth"] = spawn_depth + 1
                 if profile_name:
                     meta["persona"] = profile_name
+                if plan_item_id:
+                    meta["plan_item_id"] = plan_item_id
                 if parent_session_id:
                     meta["parent_session_id"] = parent_session_id
                 await session_store.save(sub_id, [], metadata=meta)
             except Exception:
                 pass
+            if parent_session_id and plan_item_id and plan_store is not None:
+                try:
+                    parent_plan = await plan_store.load_by_session(parent_session_id)
+                    if parent_plan is not None:
+                        await plan_store.bind_item(
+                            parent_plan.plan_id,
+                            plan_item_id,
+                            assigned_session_id=sub_id,
+                        )
+                except Exception:
+                    pass
 
             parent = (
                 engine_registry.get(parent_session_id)

@@ -10,6 +10,8 @@ from harness.engine.compression import CompressionConfig, ContextCompressor
 from harness.engine.state_machine import EngineState
 from harness.observability.events import EventEmitter
 from harness.storage.backends.memory import MemorySessionStore
+from harness.storage.backends.memory import InMemoryPlanStore
+from harness.storage.plan_store import PlanItem, PlanState
 from harness.tools.executor import ToolExecutor
 from harness.tools.overflow import OverflowStore
 from harness.tools.registry import ToolRegistry
@@ -196,6 +198,43 @@ class TestSpawnAgentTool:
         record = await store.load(sub_id)
         assert record is not None
         assert record.metadata["persona"] == "planner"
+
+    @pytest.mark.asyncio
+    async def test_spawn_agent_binds_parent_plan_item(self, monkeypatch):
+        monkeypatch.setattr(
+            "harness.factory.build_engine",
+            _make_mock_build_engine("Bound result."),
+        )
+        store = MemorySessionStore()
+        plan_store = InMemoryPlanStore()
+        await plan_store.save_plan(
+            PlanState(
+                plan_id="plan-parent",
+                session_id="parent-session",
+                items=[PlanItem(item_id="item-1", content="Delegate this")],
+            )
+        )
+        registry = {}
+        tool = make_spawn_agent_tool(
+            harness_cfg=_FakeHarnessCfg(),
+            provider_cfg=_FakeProviderCfg(),
+            session_store=store,
+            spawn_depth=0,
+            engine_registry=registry,
+            parent_session_id="parent-session",
+            plan_store=plan_store,
+        )
+
+        result = await tool(task="Delegate this", plan_item_id="item-1")
+        assert "Bound result." in result
+        sub_id = next(iter(registry))
+        record = await store.load(sub_id)
+        assert record is not None
+        assert record.metadata["plan_item_id"] == "item-1"
+
+        parent_plan = await plan_store.load_by_session("parent-session")
+        assert parent_plan is not None
+        assert parent_plan.items[0].assigned_session_id == sub_id
 
     @pytest.mark.asyncio
     async def test_depth_limit_returns_error_string(self):
