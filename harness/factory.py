@@ -221,6 +221,25 @@ def build_engine(
         "→ [最终回复]\n"
     )
 
+    _PLANNING_INSTRUCTIONS = (
+        "\n\n## Planning with todo_write\n"
+        "For any non-trivial task, you MUST maintain a visible plan with "
+        "`todo_write`. Non-trivial means: multi-step work, code edits, debugging, "
+        "git operations, merging, architecture/documentation work, research, "
+        "or any task that may need verification.\n"
+        "Required flow:\n"
+        "1. Before doing the work, call `think`, then call "
+        "`todo_write(action=\"set\")` with 2-6 concrete steps for the current "
+        "session_id.\n"
+        "2. Keep exactly one item `in_progress` while working.\n"
+        "3. After finishing a step, call `todo_write(action=\"update\")` to mark "
+        "it `completed`, then move the next step to `in_progress`.\n"
+        "4. Do not create plans for one-shot factual answers, greetings, or very "
+        "small edits that can be completed in one action.\n"
+        "The frontend renders this plan for the user, so skipping `todo_write` "
+        "makes progress invisible.\n"
+    )
+
     # Append tool-failure recovery instructions so the agent retries intelligently
     _RECOVERY_INSTRUCTIONS = (
         "\n\n## Tool Failure Recovery\n"
@@ -258,6 +277,7 @@ def build_engine(
         + system_prompt
         + build_skill_system_addendum(skills)
         + _REASONING_INSTRUCTIONS
+        + _PLANNING_INSTRUCTIONS
         + _RECOVERY_INSTRUCTIONS
         + question_block
     )
@@ -350,6 +370,7 @@ def build_engine(
         + system_prompt
         + build_skill_system_addendum(skills)
         + _REASONING_INSTRUCTIONS
+        + _PLANNING_INSTRUCTIONS
         + _RECOVERY_INSTRUCTIONS
     )
     prompt_cache.set_system_prompt(_base_fragment)

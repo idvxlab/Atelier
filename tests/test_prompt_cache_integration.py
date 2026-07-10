@@ -76,6 +76,20 @@ def test_prompt_cache_reuse_same_config_same_instance():
     assert sp1a == sp1b
 
 
+def test_system_prompt_contains_visible_plan_rule():
+    eng = _build("question")
+
+    base = eng._prompt_cache.get_system_prompt()
+    assert base is not None
+    assert "Planning with todo_write" in base
+    assert "The frontend renders this plan" in base
+    assert "todo_write(action=\"set\")" in base
+
+    system_identity = eng._loop._compressor._cfg.system_identity
+    assert system_identity is not None
+    assert "Planning with todo_write" in system_identity
+
+
 def test_prompt_cache_reuse_question_vs_noquestion_different():
     """
     Engines with different modes must NOT share the same mode block cache entry,

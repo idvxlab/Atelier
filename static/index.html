@@ -1745,6 +1745,12 @@
         font-family: var(--mono);
         padding-top: 2px;
       }
+      .plan-empty {
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 6px 2px 2px;
+      }
       .queue-item-cancel {
         flex-shrink: 0;
         background: transparent;
@@ -1920,7 +1926,7 @@
             </div>
           </div>
 
-          <!-- Plan panel (shown when todo_write has a session plan) -->
+          <!-- Plan panel -->
           <div id="plan-panel" class="hidden">
             <div class="plan-header">
               <span>计划</span>
@@ -3107,11 +3113,14 @@
         const arr = Array.isArray(items) ? items : [];
         list.innerHTML = "";
         badge.textContent = String(arr.length);
+        panel.classList.remove("hidden");
         if (!arr.length) {
-          panel.classList.add("hidden");
+          const empty = document.createElement("div");
+          empty.className = "plan-empty";
+          empty.textContent = "当前会话还没有可见计划。复杂任务开始后，Agent 应先调用 todo_write 建立计划。";
+          list.appendChild(empty);
           return;
         }
-        panel.classList.remove("hidden");
         arr.forEach((item, index) => {
           const status = item && item.status ? String(item.status) : "pending";
           const content = item && item.content ? String(item.content) : "";

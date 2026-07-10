@@ -10,13 +10,16 @@ if TYPE_CHECKING:
 
 TODO_WRITE_SCHEMA = ToolSchema(
     name="todo_write",
-    description="Manage a session-level task todo list stored in memory.",
+    description=(
+        "Create, read, and update the visible session plan. Use this before "
+        "non-trivial multi-step work and update it as steps progress."
+    ),
     params=[
         ToolParam(name="session_id", type="string", description="Current session identifier"),
         ToolParam(
             name="action",
             type="string",
-            description="Action: set (initialize list), update (change status), or get (retrieve list)",
+            description="Action: set (initialize visible plan), update (change one step status), or get (retrieve plan)",
         ),
         ToolParam(
             name="todos",
