@@ -451,6 +451,34 @@ async def test_todo_write_get_empty():
     assert "No todo" in result
 
 
+@pytest.mark.asyncio
+async def test_todo_write_persists_plan_state():
+    from harness.storage.backends.memory import MemorySessionStore
+
+    store = MemorySessionStore()
+    await todo_write_tool(
+        session_id="persisted-plan",
+        action="set",
+        todos=[{"content": "persist me", "status": "in_progress"}],
+        session_store=store,
+    )
+
+    record = await store.load("persisted-plan")
+    assert record is not None
+    plan = record.metadata["plan_state"]
+    assert plan["session_id"] == "persisted-plan"
+    assert plan["status"] == "in_progress"
+    assert plan["items"][0]["content"] == "persist me"
+
+    result = await todo_write_tool(
+        session_id="persisted-plan",
+        action="get",
+        session_store=store,
+    )
+    assert "persist me" in result
+    assert "[in_progress]" in result
+
+
 # ──────────────────────────────────────────────────────────────────────
 # web_fetch (mock-free: just smoke-test it doesn't crash)
 # ──────────────────────────────────────────────────────────────────────

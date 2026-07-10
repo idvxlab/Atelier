@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
 from harness.types.tools import ToolSchema, ToolParam
+
+if TYPE_CHECKING:
+    from harness.storage.session import SessionStore
 
 TODO_WRITE_SCHEMA = ToolSchema(
     name="todo_write",
@@ -51,11 +57,81 @@ TODO_WRITE_SCHEMA = ToolSchema(
 
 # In-memory session-level todo store: session_id -> list of dicts
 _TODO_STORE: dict[str, list[dict]] = {}
+PLAN_META_KEY = "plan_state"
 
 
 def get_session_todos(session_id: str) -> list[dict]:
     """Return a copy of the session todo list for snapshot/UI rendering."""
     return [dict(item) for item in _TODO_STORE.get(session_id, [])]
+
+
+def _normalise_todos(todos: list[dict]) -> list[dict]:
+    items: list[dict] = []
+    for item in todos:
+        content = str(item.get("content", "")).strip()
+        status = str(item.get("status", "pending")).strip()
+        if status not in ("pending", "in_progress", "completed"):
+            status = "pending"
+        items.append({"content": content, "status": status})
+    return items
+
+
+def _plan_status(items: list[dict]) -> str:
+    if not items:
+        return "pending"
+    if all(item.get("status") == "completed" for item in items):
+        return "completed"
+    if any(item.get("status") == "in_progress" for item in items):
+        return "in_progress"
+    return "pending"
+
+
+def build_plan_state(session_id: str, todos: list[dict]) -> dict:
+    items = _normalise_todos(todos)
+    return {
+        "plan_id": f"plan_{session_id}",
+        "session_id": session_id,
+        "status": _plan_status(items),
+        "items": items,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def load_session_todos(
+    session_id: str,
+    session_store: "SessionStore | None" = None,
+) -> list[dict]:
+    """Return persisted todos when available, falling back to in-memory state."""
+    if session_store is not None:
+        try:
+            record = await session_store.load(session_id)
+            plan = (record.metadata or {}).get(PLAN_META_KEY) if record else None
+            if isinstance(plan, dict) and isinstance(plan.get("items"), list):
+                items = _normalise_todos(plan["items"])
+                _TODO_STORE[session_id] = items
+                return [dict(item) for item in items]
+        except Exception:
+            pass
+    return get_session_todos(session_id)
+
+
+async def persist_session_todos(
+    session_id: str,
+    todos: list[dict],
+    session_store: "SessionStore | None" = None,
+) -> None:
+    items = _normalise_todos(todos)
+    _TODO_STORE[session_id] = items
+    if session_store is None:
+        return
+    try:
+        record = await session_store.load(session_id)
+        metadata = dict(record.metadata) if record and isinstance(record.metadata, dict) else {}
+        messages = record.messages if record else []
+        metadata[PLAN_META_KEY] = build_plan_state(session_id, items)
+        await session_store.save(session_id, messages, metadata=metadata)
+    except Exception:
+        pass
 
 
 async def todo_write_tool(
@@ -64,17 +140,18 @@ async def todo_write_tool(
     todos: list[dict] | None = None,
     index: int | None = None,
     status: str | None = None,
+    session_store: "SessionStore | None" = None,
 ) -> str:
     global _TODO_STORE
 
     if action == "set":
         if todos is None:
             return "Error: todos is required when action=set"
-        _TODO_STORE[session_id] = list(todos)
+        await persist_session_todos(session_id, todos, session_store=session_store)
         return f"Todo list set with {len(todos)} item(s)."
 
     if action == "get":
-        items = _TODO_STORE.get(session_id, [])
+        items = await load_session_todos(session_id, session_store=session_store)
         if not items:
             return "No todo items."
         lines = []
@@ -85,7 +162,7 @@ async def todo_write_tool(
     if action == "update":
         if index is None:
             return "Error: index is required when action=update"
-        items = _TODO_STORE.get(session_id, [])
+        items = await load_session_todos(session_id, session_store=session_store)
         if not items:
             return f"Error: no todo items found for session {session_id}"
         if index < 0 or index >= len(items):
@@ -93,6 +170,27 @@ async def todo_write_tool(
         if status not in ("pending", "in_progress", "completed"):
             return f"Error: status must be one of pending, in_progress, completed; got '{status}'"
         items[index]["status"] = status
+        await persist_session_todos(session_id, items, session_store=session_store)
         return f"Updated item [{index}] → {status}."
 
     return f"Error: unknown action '{action}'. Use set, update, or get."
+
+
+def make_todo_write_tool(session_store: "SessionStore"):
+    async def persistent_todo_write_tool(
+        session_id: str,
+        action: str,
+        todos: list[dict] | None = None,
+        index: int | None = None,
+        status: str | None = None,
+    ) -> str:
+        return await todo_write_tool(
+            session_id=session_id,
+            action=action,
+            todos=todos,
+            index=index,
+            status=status,
+            session_store=session_store,
+        )
+
+    return persistent_todo_write_tool

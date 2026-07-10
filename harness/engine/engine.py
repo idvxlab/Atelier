@@ -351,8 +351,11 @@ class AgentEngine:
                 qr.to_dict() for qr in self._pending_question_requests.values()
             ]
         try:
-            from harness.tools.builtin.todo_tool import get_session_todos
-            snap["todos"] = get_session_todos(self._config.session_id)
+            from harness.tools.builtin.todo_tool import load_session_todos
+            snap["todos"] = await load_session_todos(
+                self._config.session_id,
+                session_store=self._session_store,
+            )
         except Exception:
             snap["todos"] = []
 

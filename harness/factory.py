@@ -40,7 +40,7 @@ from harness.tools.builtin import (
     WEB_FETCH_SCHEMA, web_fetch_tool,
     WEB_SEARCH_SCHEMA, web_search_tool,
     THINK_SCHEMA, think_tool,
-    TODO_WRITE_SCHEMA, todo_write_tool,
+    TODO_WRITE_SCHEMA, todo_write_tool, make_todo_write_tool,
 )
 from harness.tools.executor import ToolExecutor
 from harness.tools.overflow import OverflowStore
@@ -287,6 +287,8 @@ def build_engine(
     for name in tools_to_load:
         if name in ALL_TOOLS:
             schema, handler = ALL_TOOLS[name]
+            if name == "todo_write":
+                handler = make_todo_write_tool(session_store)
             registry.register(schema, handler)
             logger.info("[build_engine] registered tool: %s", name)
         elif name == "ask_user":
