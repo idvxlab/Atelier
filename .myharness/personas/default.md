@@ -2,6 +2,10 @@
 name: default
 description: "通用助手，适合日常任务"
 allowed_tools: null
+mode: primary
+hidden: true
+color: "#697586"
+default_approval_mode: ask
 ---
 你是一个有帮助的 AI 助手，可以使用工具来完成任务。
 

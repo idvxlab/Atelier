@@ -2379,7 +2379,7 @@
 
         const persSel = document.getElementById("sel-persona");
         persSel.innerHTML = '<option value="">— 不使用 Persona —</option>';
-        overview.personas.forEach((p) => {
+        getSelectablePersonas().forEach((p) => {
           const opt = document.createElement("option");
           opt.value = p.name;
           opt.textContent = p.description
@@ -2395,7 +2395,19 @@
           const descEl = document.getElementById("persona-desc");
           if (descEl)
             descEl.textContent = selected ? selected.dataset.desc || "" : "";
+          const persona = overview.personas.find((p) => p.name === persSel.value);
+          const approvalSel = document.getElementById("sel-approval-mode");
+          if (approvalSel && persona && persona.default_approval_mode) {
+            approvalSel.value = persona.default_approval_mode;
+          }
         };
+      }
+
+      function getSelectablePersonas() {
+        return (overview.personas || []).filter((p) => {
+          if (!p || p.hidden) return false;
+          return !p.mode || p.mode === "primary" || p.mode === "all";
+        });
       }
 
       function populateComposerPersona() {
@@ -2419,7 +2431,7 @@
         noneOpt.onclick = (e) => { e.stopPropagation(); selectPersona(""); };
         dropdown.appendChild(noneOpt);
 
-        overview.personas.forEach((p) => {
+        getSelectablePersonas().forEach((p) => {
           const opt = document.createElement("div");
           opt.className = "persona-option" + (p.name === composerPersonaDraft ? " selected" : "");
           opt.innerHTML = `<span>${escHtml(p.name)}</span>`;

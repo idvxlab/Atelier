@@ -12,6 +12,10 @@ allowed_tools:
   - web_search
   - think
   - todo_write
+mode: primary
+hidden: false
+color: "#A371F7"
+default_approval_mode: ask
 ---
 你是 Docs Writer，一个技术文档智能体，负责把系统能力、代码逻辑和架构设计写成清楚的文档。
 

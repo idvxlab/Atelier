@@ -2,6 +2,10 @@
 name: researcher
 description: "学术研究助手，擅长文献分析和知识整理"
 allowed_tools: null
+mode: primary
+hidden: true
+color: "#38A3EE"
+default_approval_mode: ask
 ---
 你是一个学术研究助手，擅长文献分析和知识整理。
 

@@ -39,7 +39,9 @@ def _get_skill_scan_dirs() -> list[tuple[Path, str]]:
 def parse_persona_md(path: Path) -> dict[str, Any]:
     """Parse YAML frontmatter + Markdown body from a persona file.
 
-    Returns dict with: name, description, system_prompt, allowed_tools, provider.
+    Returns dict with persona/agent profile fields:
+    name, description, system_prompt, allowed_tools, provider, mode, hidden,
+    color, default_approval_mode.
     Legacy files (no frontmatter) are treated as pure system-prompt text.
     """
     text = path.read_text(encoding="utf-8")
@@ -53,6 +55,15 @@ def parse_persona_md(path: Path) -> dict[str, Any]:
     meta.setdefault("description", "")
     meta.setdefault("allowed_tools", None)
     meta.setdefault("provider", "")
+    meta.setdefault("mode", "all")
+    meta.setdefault("hidden", False)
+    meta.setdefault("color", "")
+    meta.setdefault("default_approval_mode", "")
+    if meta["mode"] not in ("primary", "subagent", "all"):
+        meta["mode"] = "all"
+    if meta["default_approval_mode"] not in ("", "ask", "auto", "full"):
+        meta["default_approval_mode"] = ""
+    meta["hidden"] = bool(meta["hidden"])
     return meta
 
 
@@ -69,8 +80,8 @@ def load_persona(name: str) -> dict[str, Any]:
     return parse_persona_md(md)
 
 
-def list_personas() -> list[dict[str, str]]:
-    """Return sorted list of {name, description} dicts (excludes README)."""
+def list_personas() -> list[dict[str, Any]]:
+    """Return sorted persona/agent profile summaries (excludes README)."""
     if not PERSONAS_DIR.exists():
         return []
     results = []
@@ -80,11 +91,24 @@ def list_personas() -> list[dict[str, str]]:
         try:
             meta = parse_persona_md(p)
             results.append({
-                "name":        str(meta.get("name") or p.stem),
+                "name": str(meta.get("name") or p.stem),
                 "description": str(meta.get("description", "")),
+                "mode": str(meta.get("mode", "all")),
+                "hidden": bool(meta.get("hidden", False)),
+                "color": str(meta.get("color", "")),
+                "provider": str(meta.get("provider", "")),
+                "default_approval_mode": str(meta.get("default_approval_mode", "")),
             })
         except Exception:
-            results.append({"name": p.stem, "description": ""})
+            results.append({
+                "name": p.stem,
+                "description": "",
+                "mode": "all",
+                "hidden": False,
+                "color": "",
+                "provider": "",
+                "default_approval_mode": "",
+            })
     return results
 
 

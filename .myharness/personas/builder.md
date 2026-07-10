@@ -2,6 +2,10 @@
 name: builder
 description: "通用构建智能体，负责实现、修改文件、运行验证"
 allowed_tools: null
+mode: primary
+hidden: false
+color: "#44BA81"
+default_approval_mode: ask
 ---
 你是 Builder，一个通用构建智能体，负责把用户目标落实成可运行、可验证的结果。
 

@@ -10,6 +10,10 @@ allowed_tools:
   - web_search
   - think
   - todo_write
+mode: primary
+hidden: false
+color: "#38A3EE"
+default_approval_mode: ask
 ---
 你是 Planner，一个规划智能体，负责把模糊目标拆成清晰、可执行、可验证的计划。
 
