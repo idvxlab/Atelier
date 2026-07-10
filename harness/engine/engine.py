@@ -350,6 +350,11 @@ class AgentEngine:
             snap["pending_question_requests"] = [
                 qr.to_dict() for qr in self._pending_question_requests.values()
             ]
+        try:
+            from harness.tools.builtin.todo_tool import get_session_todos
+            snap["todos"] = get_session_todos(self._config.session_id)
+        except Exception:
+            snap["todos"] = []
 
         return snap
 
@@ -526,6 +531,7 @@ class AgentEngine:
                 await rest_module._engines[sub_id].cancel()
             except Exception:
                 pass
+        await self._notify_state_listeners()
         return True
 
     async def remove_completed_spawn(self, sub_id: str) -> None:
@@ -534,6 +540,7 @@ class AgentEngine:
             self._pending_spawns = [
                 ps for ps in self._pending_spawns if ps.sub_id != sub_id
             ]
+        await self._notify_state_listeners()
 
     async def register_pending_spawn(
         self, task: str, sub_id: str, display_name: str
@@ -549,7 +556,19 @@ class AgentEngine:
                 submitted_at=__import__("time").time(),
             )
             self._pending_spawns.append(ps)
-            return ps.index
+            index = ps.index
+        await self._emit_event({
+            "type": "subagent.created",
+            "data": {
+                "parent_session_id": self._config.session_id,
+                "session_id": sub_id,
+                "display_name": display_name,
+                "task": task,
+                "index": index,
+            },
+        })
+        await self._notify_state_listeners()
+        return index
 
     async def deny(self) -> None:
         """Deny a pending tool action — loop raises CancelledError → WAITING_INPUT."""

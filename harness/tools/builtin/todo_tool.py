@@ -53,6 +53,11 @@ TODO_WRITE_SCHEMA = ToolSchema(
 _TODO_STORE: dict[str, list[dict]] = {}
 
 
+def get_session_todos(session_id: str) -> list[dict]:
+    """Return a copy of the session todo list for snapshot/UI rendering."""
+    return [dict(item) for item in _TODO_STORE.get(session_id, [])]
+
+
 async def todo_write_tool(
     session_id: str,
     action: str,
