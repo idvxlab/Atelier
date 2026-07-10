@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from harness.types.messages import Message
 from harness.storage.session import SessionStore, SessionRecord
 from harness.storage.checkpoint import CheckpointStore, Checkpoint
+from harness.storage.memory_store import MemoryEntry, MemoryStore, utc_now
 
 class MemorySessionStore(SessionStore):
     def __init__(self) -> None:
@@ -79,3 +80,58 @@ class MemoryCheckpointStore(CheckpointStore):
             lst = self._by_session.get(cp.session_id, [])
             if checkpoint_id in lst:
                 lst.remove(checkpoint_id)
+
+
+class InMemoryMemoryStore(MemoryStore):
+    def __init__(self) -> None:
+        self._entries: dict[str, MemoryEntry] = {}
+
+    async def add(
+        self,
+        content: str,
+        scope: str = "global",
+        tags: list[str] | None = None,
+        created_by_session: str = "",
+        metadata: dict | None = None,
+    ) -> MemoryEntry:
+        now = utc_now()
+        entry = MemoryEntry(
+            entry_id=f"mem_{uuid.uuid4().hex[:12]}",
+            content=content,
+            scope=scope or "global",
+            tags=list(tags or []),
+            created_by_session=created_by_session,
+            created_at=now,
+            updated_at=now,
+            metadata=dict(metadata or {}),
+        )
+        self._entries[entry.entry_id] = entry
+        return entry
+
+    async def get(self, entry_id: str) -> MemoryEntry | None:
+        return self._entries.get(entry_id)
+
+    async def search(
+        self,
+        query: str = "",
+        scope: str = "",
+        tags: list[str] | None = None,
+        limit: int = 20,
+    ) -> list[MemoryEntry]:
+        q = query.casefold().strip()
+        wanted_tags = {t.casefold() for t in (tags or []) if t}
+        results: list[MemoryEntry] = []
+        for entry in self._entries.values():
+            if scope and entry.scope != scope:
+                continue
+            if wanted_tags and not wanted_tags.issubset({t.casefold() for t in entry.tags}):
+                continue
+            haystack = " ".join([entry.content, entry.scope, " ".join(entry.tags)]).casefold()
+            if q and q not in haystack:
+                continue
+            results.append(entry)
+        results.sort(key=lambda e: e.updated_at, reverse=True)
+        return results[: max(1, min(limit, 100))]
+
+    async def delete(self, entry_id: str) -> bool:
+        return self._entries.pop(entry_id, None) is not None

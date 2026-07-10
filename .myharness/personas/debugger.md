@@ -11,6 +11,7 @@ allowed_tools:
   - web_fetch
   - web_search
   - think
+  - memory
   - todo_write
 mode: primary
 hidden: false

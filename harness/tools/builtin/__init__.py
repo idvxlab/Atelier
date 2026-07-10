@@ -10,6 +10,7 @@ from harness.tools.builtin.edit_file import edit_file_tool, EDIT_FILE_SCHEMA
 from harness.tools.builtin.web_fetch import web_fetch_tool, WEB_FETCH_SCHEMA
 from harness.tools.builtin.web_search import web_search_tool, WEB_SEARCH_SCHEMA
 from harness.tools.builtin.think_tool import think_tool, THINK_SCHEMA
+from harness.tools.builtin.memory_tool import MEMORY_SCHEMA, make_memory_tool
 from harness.tools.builtin.todo_tool import (
     todo_write_tool,
     make_todo_write_tool,
@@ -33,6 +34,7 @@ __all__ = [
     "web_fetch_tool", "WEB_FETCH_SCHEMA",
     "web_search_tool", "WEB_SEARCH_SCHEMA",
     "think_tool", "THINK_SCHEMA",
+    "MEMORY_SCHEMA", "make_memory_tool",
     "todo_write_tool", "make_todo_write_tool", "TODO_WRITE_SCHEMA",
     "SPAWN_AGENT_SCHEMA", "make_spawn_agent_tool",
     "SPAWN_AGENTS_SCHEMA", "make_spawn_agents_tool",

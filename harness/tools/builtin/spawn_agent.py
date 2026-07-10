@@ -23,6 +23,7 @@ from harness.types.tools import ToolSchema, ToolParam
 
 if TYPE_CHECKING:
     from harness.config import HarnessConfig, ProviderConfig
+    from harness.storage.memory_store import MemoryStore
     from harness.storage.session import SessionStore
 
 MAX_SPAWN_DEPTH = 3
@@ -144,6 +145,7 @@ def make_spawn_agent_tool(
     spawn_depth: int = 0,
     engine_registry: "dict | None" = None,
     parent_session_id: str = "",
+    memory_store: "MemoryStore | None" = None,
 ):
     """Return a spawn_agent handler closed over the given runtime dependencies."""
 
@@ -174,6 +176,7 @@ def make_spawn_agent_tool(
                 spawn_depth=spawn_depth + 1,
                 engine_registry=engine_registry,
                 provider_name=provider_cfg.name,
+                memory_store=memory_store,
             )
             if engine_registry is not None:
                 engine_registry[sub_id] = sub_engine
@@ -222,6 +225,7 @@ def make_spawn_agents_tool(
     spawn_depth: int = 0,
     engine_registry: "dict | None" = None,
     parent_session_id: str = "",
+    memory_store: "MemoryStore | None" = None,
 ):
     """Return a spawn_agents handler closed over the given runtime dependencies."""
 
@@ -250,6 +254,7 @@ def make_spawn_agents_tool(
                 spawn_depth=spawn_depth + 1,
                 engine_registry=engine_registry,
                 provider_name=provider_cfg.name,
+                memory_store=memory_store,
             )
             if engine_registry is not None:
                 engine_registry[sub_id] = sub_engine

@@ -45,8 +45,8 @@ from harness.skills import (
     read_file_safe, write_file_safe,
     SKILLS_DIR, PERSONAS_DIR,
 )
-from harness.storage.backends.memory import MemorySessionStore
-from harness.storage.backends.sqlite import SQLiteSessionStore
+from harness.storage.backends.memory import MemorySessionStore, InMemoryMemoryStore
+from harness.storage.backends.sqlite import SQLiteSessionStore, SQLiteMemoryStore
 from harness.types.messages import Message, TextBlock
 
 app = FastAPI(title="MyHarnessPy", version="0.1.0")
@@ -59,6 +59,7 @@ _engine_mcp_clients: dict[str, list] = {}
 # Shared config — loaded once at startup
 _config: HarnessConfig | None = None
 _session_store = MemorySessionStore()
+_memory_store = InMemoryMemoryStore()
 _cmd_system: CommandSystem | None = None
 
 
@@ -66,7 +67,7 @@ _cmd_system: CommandSystem | None = None
 
 @app.on_event("startup")
 async def _startup() -> None:
-    global _config, _session_store, _cmd_system
+    global _config, _session_store, _memory_store, _cmd_system
     try:
         _config = HarnessConfig.from_yaml("config.yaml")
     except FileNotFoundError:
@@ -74,6 +75,9 @@ async def _startup() -> None:
 
     if _config.storage.backend == "sqlite":
         _session_store = SQLiteSessionStore(_config.storage.path)
+        _memory_store = SQLiteMemoryStore(_config.storage.path)
+    else:
+        _memory_store = InMemoryMemoryStore()
 
     _cmd_system = CommandSystem()
     _cmd_system.initialize()
@@ -204,6 +208,7 @@ async def _build_session_engine(
             provider_cfg=cfg.providers[provider_name],
             harness_cfg=cfg,
             session_store=_session_store,
+            memory_store=_memory_store,
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
             engine_registry=_engines,
@@ -219,6 +224,7 @@ async def _build_session_engine(
             provider_cfg=cfg.providers[provider_name],
             harness_cfg=cfg,
             session_store=_session_store,
+            memory_store=_memory_store,
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
             engine_registry=_engines,

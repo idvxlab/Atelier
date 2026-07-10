@@ -4,7 +4,12 @@ from __future__ import annotations
 import pytest
 
 from harness.engine.state_machine import EngineState
-from harness.storage.backends.memory import MemorySessionStore, MemoryCheckpointStore
+from harness.storage.backends.memory import (
+    InMemoryMemoryStore,
+    MemoryCheckpointStore,
+    MemorySessionStore,
+)
+from harness.storage.backends.sqlite import SQLiteMemoryStore
 from harness.storage.checkpoint import Checkpoint
 from harness.types.messages import Message, TextBlock
 
@@ -113,3 +118,39 @@ async def test_checkpoint_delete():
     cid = await store.save(cp)
     await store.delete(cid)
     assert await store.load(cid) is None
+
+
+# Long-term MemoryStore
+
+@pytest.mark.asyncio
+async def test_in_memory_memory_store_add_search_delete():
+    store = InMemoryMemoryStore()
+    entry = await store.add(
+        "User prefers concise Chinese summaries.",
+        tags=["preference"],
+        created_by_session="s1",
+    )
+
+    found = await store.search(query="concise", tags=["preference"])
+    assert found[0].entry_id == entry.entry_id
+    assert found[0].created_by_session == "s1"
+
+    assert await store.delete(entry.entry_id) is True
+    assert await store.get(entry.entry_id) is None
+
+
+@pytest.mark.asyncio
+async def test_sqlite_memory_store_persists(tmp_path):
+    db_path = tmp_path / "memory.db"
+    store = SQLiteMemoryStore(str(db_path))
+    entry = await store.add(
+        "Project decision: use SQLite for durable memory.",
+        scope="project",
+        tags=["decision"],
+        created_by_session="s2",
+    )
+
+    reopened = SQLiteMemoryStore(str(db_path))
+    found = await reopened.search(query="SQLite", scope="project")
+    assert [item.entry_id for item in found] == [entry.entry_id]
+    assert found[0].tags == ["decision"]

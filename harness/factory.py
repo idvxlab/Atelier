@@ -27,6 +27,8 @@ from harness.llm.registry import build_provider
 from harness.observability.events import EventEmitter
 from harness.skills import list_skills, build_skill_system_addendum
 from harness.storage.session import SessionStore
+from harness.storage.memory_store import MemoryStore
+from harness.storage.backends.memory import InMemoryMemoryStore
 from harness.tools.builtin import (
     READ_FILE_SCHEMA, read_file_tool,
     SEARCH_SCHEMA, search_tool,
@@ -40,6 +42,7 @@ from harness.tools.builtin import (
     WEB_FETCH_SCHEMA, web_fetch_tool,
     WEB_SEARCH_SCHEMA, web_search_tool,
     THINK_SCHEMA, think_tool,
+    MEMORY_SCHEMA, make_memory_tool,
     TODO_WRITE_SCHEMA, todo_write_tool, make_todo_write_tool,
 )
 from harness.tools.executor import ToolExecutor
@@ -146,6 +149,7 @@ ALL_TOOLS: dict[str, tuple] = {
     "web_fetch":   (WEB_FETCH_SCHEMA,   web_fetch_tool),
     "web_search":  (WEB_SEARCH_SCHEMA,  web_search_tool),
     "think":       (THINK_SCHEMA,       think_tool),
+    "memory":      (MEMORY_SCHEMA,      None),
     "todo_write":  (TODO_WRITE_SCHEMA,  todo_write_tool),
 }
 
@@ -163,6 +167,7 @@ def build_engine(
     provider_name: str = "",
     question_mode: str = "noquestion",
     approval_mode: str = "ask",
+    memory_store: MemoryStore | None = None,
 ) -> AgentEngine:
     """
     Build a fully wired AgentEngine for a session.
@@ -183,6 +188,8 @@ def build_engine(
                        (default) means proceed with reasonable defaults.
     """
     emitter = EventEmitter(session_id)
+    if memory_store is None:
+        memory_store = InMemoryMemoryStore()
     llm = build_provider(provider_cfg)
 
     comp = harness_cfg.compression
@@ -289,6 +296,8 @@ def build_engine(
             schema, handler = ALL_TOOLS[name]
             if name == "todo_write":
                 handler = make_todo_write_tool(session_store)
+            elif name == "memory":
+                handler = make_memory_tool(memory_store)
             registry.register(schema, handler)
             logger.info("[build_engine] registered tool: %s", name)
         elif name == "ask_user":
@@ -315,6 +324,7 @@ def build_engine(
             make_spawn_agent_tool(
                 harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry,
                 parent_session_id=session_id,
+                memory_store=memory_store,
             ),
         )
         registry.register(
@@ -322,6 +332,7 @@ def build_engine(
             make_spawn_agents_tool(
                 harness_cfg, provider_cfg, session_store, spawn_depth, engine_registry,
                 parent_session_id=session_id,
+                memory_store=memory_store,
             ),
         )
 
@@ -517,6 +528,7 @@ async def build_engine_with_mcp(
     provider_name: str = "",
     question_mode: str = "noquestion",
     approval_mode: str = "ask",
+    memory_store: MemoryStore | None = None,
 ) -> tuple[AgentEngine, list]:  # tuple[AgentEngine, list[MCPClient]]
     """Async variant of build_engine() that also initialises MCP Servers.
 
@@ -556,5 +568,6 @@ async def build_engine_with_mcp(
         provider_name=provider_name,
         question_mode=question_mode,
         approval_mode=approval_mode,
+        memory_store=memory_store,
     )
     return engine, mcp_clients

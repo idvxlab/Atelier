@@ -52,6 +52,7 @@ from harness.types.messages import (
 from harness.engine.state_machine import EngineState
 from harness.storage.session import SessionStore, SessionRecord
 from harness.storage.checkpoint import CheckpointStore, Checkpoint
+from harness.storage.memory_store import MemoryEntry, MemoryStore
 
 
 # ---------------------------------------------------------------------------
@@ -385,3 +386,134 @@ class SQLiteCheckpointStore(CheckpointStore):
                 "DELETE FROM checkpoints WHERE checkpoint_id = ?", (checkpoint_id,)
             )
             await conn.commit()
+
+
+class SQLiteMemoryStore(MemoryStore):
+    """Persistent long-term memory store backed by the same SQLite database."""
+
+    def __init__(self, db_path: str) -> None:
+        self._db_path = db_path
+
+    async def _ensure_tables(self, conn: aiosqlite.Connection) -> None:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS memories (
+                entry_id            TEXT PRIMARY KEY,
+                scope               TEXT NOT NULL DEFAULT 'global',
+                content             TEXT NOT NULL,
+                tags                TEXT NOT NULL DEFAULT '[]',
+                created_by_session  TEXT NOT NULL DEFAULT '',
+                created_at          TEXT NOT NULL,
+                updated_at          TEXT NOT NULL,
+                metadata            TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memories_scope_updated
+            ON memories (scope, updated_at)
+        """)
+        await conn.commit()
+
+    def _row_to_entry(self, row: aiosqlite.Row) -> MemoryEntry:
+        return MemoryEntry(
+            entry_id=row["entry_id"],
+            scope=row["scope"],
+            content=row["content"],
+            tags=json.loads(row["tags"]),
+            created_by_session=row["created_by_session"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            metadata=json.loads(row["metadata"]),
+        )
+
+    async def add(
+        self,
+        content: str,
+        scope: str = "global",
+        tags: list[str] | None = None,
+        created_by_session: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> MemoryEntry:
+        now = datetime.now(timezone.utc).isoformat()
+        entry = MemoryEntry(
+            entry_id=f"mem_{uuid.uuid4().hex[:12]}",
+            content=content,
+            scope=scope or "global",
+            tags=list(tags or []),
+            created_by_session=created_by_session,
+            created_at=now,
+            updated_at=now,
+            metadata=dict(metadata or {}),
+        )
+        async with aiosqlite.connect(self._db_path) as conn:
+            await self._ensure_tables(conn)
+            await conn.execute("""
+                INSERT INTO memories
+                    (entry_id, scope, content, tags, created_by_session, created_at, updated_at, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                entry.entry_id,
+                entry.scope,
+                entry.content,
+                json.dumps(entry.tags, ensure_ascii=False),
+                entry.created_by_session,
+                entry.created_at,
+                entry.updated_at,
+                json.dumps(entry.metadata, ensure_ascii=False),
+            ))
+            await conn.commit()
+        return entry
+
+    async def get(self, entry_id: str) -> MemoryEntry | None:
+        async with aiosqlite.connect(self._db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            await self._ensure_tables(conn)
+            async with conn.execute(
+                "SELECT * FROM memories WHERE entry_id = ?", (entry_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+            return self._row_to_entry(row) if row else None
+
+    async def search(
+        self,
+        query: str = "",
+        scope: str = "",
+        tags: list[str] | None = None,
+        limit: int = 20,
+    ) -> list[MemoryEntry]:
+        limit = max(1, min(int(limit or 20), 100))
+        clauses: list[str] = []
+        params: list[Any] = []
+        if scope:
+            clauses.append("scope = ?")
+            params.append(scope)
+        if query:
+            clauses.append("(content LIKE ? OR tags LIKE ? OR scope LIKE ?)")
+            like = f"%{query}%"
+            params.extend([like, like, like])
+        sql = "SELECT * FROM memories"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY updated_at DESC LIMIT ?"
+        params.append(limit)
+        async with aiosqlite.connect(self._db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            await self._ensure_tables(conn)
+            async with conn.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+        entries = [self._row_to_entry(row) for row in rows]
+        wanted_tags = {t.casefold() for t in (tags or []) if t}
+        if wanted_tags:
+            entries = [
+                entry for entry in entries
+                if wanted_tags.issubset({t.casefold() for t in entry.tags})
+            ]
+        return entries
+
+    async def delete(self, entry_id: str) -> bool:
+        async with aiosqlite.connect(self._db_path) as conn:
+            await self._ensure_tables(conn)
+            cursor = await conn.execute(
+                "DELETE FROM memories WHERE entry_id = ?", (entry_id,)
+            )
+            await conn.commit()
+            return cursor.rowcount > 0

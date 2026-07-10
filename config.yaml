@@ -132,6 +132,7 @@ tools:
     - web_fetch
     - web_search
     - think
+    - memory
     - todo_write
 
   confirm_tools:
@@ -144,6 +145,7 @@ tools:
     shell: 15000
     web_fetch: 8000
     web_search: 8000
+    memory: 8000
     todo_write: 5000
 
 mcp_servers:

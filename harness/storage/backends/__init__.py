@@ -1,7 +1,7 @@
-from harness.storage.backends.memory import MemorySessionStore, MemoryCheckpointStore
-from harness.storage.backends.sqlite import SQLiteSessionStore, SQLiteCheckpointStore
+from harness.storage.backends.memory import MemorySessionStore, MemoryCheckpointStore, InMemoryMemoryStore
+from harness.storage.backends.sqlite import SQLiteSessionStore, SQLiteCheckpointStore, SQLiteMemoryStore
 
 __all__ = [
-    "MemorySessionStore", "MemoryCheckpointStore",
-    "SQLiteSessionStore", "SQLiteCheckpointStore",
+    "MemorySessionStore", "MemoryCheckpointStore", "InMemoryMemoryStore",
+    "SQLiteSessionStore", "SQLiteCheckpointStore", "SQLiteMemoryStore",
 ]

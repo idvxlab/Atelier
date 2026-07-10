@@ -149,7 +149,7 @@ def _make_mock_build_engine(reply_text: str):
     """Return a build_engine replacement that always uses _MockLLM."""
     def _build(session_id, provider_cfg, harness_cfg, session_store,
                 system_prompt="", allowed_tools=None, registry=None,
-                spawn_depth=0, engine_registry=None):
+                spawn_depth=0, engine_registry=None, **kwargs):
         return _build_engine(reply_text=reply_text, session_id=session_id)
     return _build
 
@@ -211,7 +211,7 @@ class TestSpawnAgentsTool:
         """All sub-agent results appear in the combined output."""
         call_count = 0
 
-        async def _fake_run_to_completion(self_engine, task):
+        async def _fake_run_to_completion(self_engine, task, **kwargs):
             nonlocal call_count
             call_count += 1
             return f"result_for_{task}"

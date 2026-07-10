@@ -479,6 +479,31 @@ async def test_todo_write_persists_plan_state():
     assert "[in_progress]" in result
 
 
+@pytest.mark.asyncio
+async def test_memory_tool_add_search_delete():
+    from harness.storage.backends.memory import InMemoryMemoryStore
+    from harness.tools.builtin.memory_tool import make_memory_tool
+
+    tool = make_memory_tool(InMemoryMemoryStore())
+    added = await tool(
+        action="add",
+        content="Remember that tests should avoid external network calls.",
+        tags=["testing"],
+        session_id="s-memory",
+    )
+    assert "mem_" in added
+    assert "s-memory" in added
+
+    found = await tool(action="search", query="external network", tags=["testing"])
+    assert "tests should avoid" in found
+
+    import json
+
+    entry_id = json.loads(added)["entry_id"]
+    deleted = await tool(action="delete", entry_id=entry_id)
+    assert deleted == "Deleted."
+
+
 # ──────────────────────────────────────────────────────────────────────
 # web_fetch (mock-free: just smoke-test it doesn't crash)
 # ──────────────────────────────────────────────────────────────────────
