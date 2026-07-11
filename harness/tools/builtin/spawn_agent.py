@@ -185,6 +185,7 @@ def make_spawn_agent_tool(
     engine_registry: "dict | None" = None,
     parent_session_id: str = "",
     parent_agent_id: str = "",
+    parent_approval_mode: str = "ask",
     memory_store: "MemoryStore | None" = None,
     plan_store: "PlanStore | None" = None,
 ):
@@ -217,6 +218,7 @@ def make_spawn_agent_tool(
             child_provider_cfg = provider_cfg
             child_system_prompt = system_prompt
             child_tools = tools
+            child_approval_mode = parent_approval_mode
             if profile_name:
                 try:
                     profile = load_agent_profile(profile_name)
@@ -228,6 +230,8 @@ def make_spawn_agent_tool(
                     child_tools = profile.allowed_tools
                 if profile.provider and profile.provider in harness_cfg.providers:
                     child_provider_cfg = harness_cfg.providers[profile.provider]
+                if profile.default_approval_mode:
+                    child_approval_mode = profile.default_approval_mode
 
             sub_engine = build_engine(
                 session_id=sub_id,
@@ -240,6 +244,7 @@ def make_spawn_agent_tool(
                 engine_registry=engine_registry,
                 provider_name=profile_name or child_provider_cfg.name,
                 agent_id=profile_name,
+                approval_mode=child_approval_mode,
                 memory_store=memory_store,
                 plan_store=plan_store,
             )
@@ -306,6 +311,7 @@ def make_spawn_agents_tool(
     engine_registry: "dict | None" = None,
     parent_session_id: str = "",
     parent_agent_id: str = "",
+    parent_approval_mode: str = "ask",
     memory_store: "MemoryStore | None" = None,
     plan_store: "PlanStore | None" = None,
 ):
@@ -337,6 +343,7 @@ def make_spawn_agents_tool(
             child_provider_cfg = provider_cfg
             child_system_prompt = cfg.get("system_prompt", "")
             child_tools = cfg.get("tools")
+            child_approval_mode = parent_approval_mode
             if profile_name:
                 try:
                     profile = load_agent_profile(profile_name)
@@ -348,6 +355,8 @@ def make_spawn_agents_tool(
                     child_tools = profile.allowed_tools
                 if profile.provider and profile.provider in harness_cfg.providers:
                     child_provider_cfg = harness_cfg.providers[profile.provider]
+                if profile.default_approval_mode:
+                    child_approval_mode = profile.default_approval_mode
             sub_engine = build_engine(
                 session_id=sub_id,
                 provider_cfg=child_provider_cfg,
@@ -359,6 +368,7 @@ def make_spawn_agents_tool(
                 engine_registry=engine_registry,
                 provider_name=profile_name or child_provider_cfg.name,
                 agent_id=profile_name,
+                approval_mode=child_approval_mode,
                 memory_store=memory_store,
                 plan_store=plan_store,
             )

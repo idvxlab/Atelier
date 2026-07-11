@@ -139,7 +139,7 @@ class CreateSessionRequest(BaseModel):
     persona: str = ""           # load from personas/{name}.md (preferred)
     system_prompt: str = ""     # fallback if no persona
     allowed_tools: list[str] | None = None
-    approval_mode: str = "ask"  # "ask" | "auto" | "full" — picked at session start
+    approval_mode: str = ""     # "ask" | "auto" | "full" — picked at session start
 
 
 class SendMessageRequest(BaseModel):
@@ -399,7 +399,20 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
     session_id = req.session_id or str(uuid.uuid4())
     # If restoring an existing session, load its previous question_mode
     question_mode = "question"
-    approval_mode = req.approval_mode if req.approval_mode in ("ask", "auto", "full") else "ask"
+    persona_default_approval = ""
+    if req.persona:
+        try:
+            persona_meta = load_persona(req.persona)
+            persona_default_approval = str(persona_meta.get("default_approval_mode", ""))
+        except Exception:
+            persona_default_approval = ""
+    approval_mode = (
+        req.approval_mode
+        if req.approval_mode in ("ask", "auto", "full")
+        else persona_default_approval
+        if persona_default_approval in ("ask", "auto", "full")
+        else "ask"
+    )
     try:
         rec = await _session_store.load(session_id)
         if rec and isinstance(rec.metadata, dict):

@@ -256,6 +256,39 @@ class TestSpawnAgentTool:
         assert "planner" in result
 
     @pytest.mark.asyncio
+    async def test_child_profile_default_approval_mode_is_applied(self, monkeypatch):
+        captured: dict = {}
+
+        def capture_build_engine(**kwargs):
+            captured.update(kwargs)
+            return _build_engine(reply_text="ok", session_id=kwargs["session_id"])
+
+        def fake_load_profile(agent_id: str) -> AgentProfile:
+            if agent_id == "planner":
+                return AgentProfile(
+                    agent_id="planner",
+                    name="planner",
+                    default_approval_mode="auto",
+                )
+            return AgentProfile(agent_id=agent_id, name=agent_id)
+
+        monkeypatch.setattr("harness.factory.build_engine", capture_build_engine)
+        monkeypatch.setattr("harness.agents.load_agent_profile", fake_load_profile)
+        tool = make_spawn_agent_tool(
+            harness_cfg=_FakeHarnessCfg(),
+            provider_cfg=_FakeProviderCfg(),
+            session_store=MemorySessionStore(),
+            spawn_depth=0,
+            parent_approval_mode="ask",
+        )
+
+        result = await tool(task="Plan the work", agent="planner")
+
+        assert "ok" in result
+        assert captured["agent_id"] == "planner"
+        assert captured["approval_mode"] == "auto"
+
+    @pytest.mark.asyncio
     async def test_spawn_agent_binds_parent_plan_item(self, monkeypatch):
         monkeypatch.setattr(
             "harness.factory.build_engine",
