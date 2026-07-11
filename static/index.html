@@ -1735,6 +1735,9 @@
       .plan-item-status[data-status="in_progress"] {
         color: var(--accent);
       }
+      .plan-item-status[data-status="running"] {
+        color: var(--accent);
+      }
       .plan-item-status[data-status="completed"] {
         color: #56d364;
       }
@@ -1750,6 +1753,57 @@
         font-size: 12px;
         line-height: 1.5;
         padding: 6px 2px 2px;
+      }
+      #memory-manager {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+        flex: 1;
+      }
+      #memory-manager.hidden {
+        display: none;
+      }
+      .memory-add-row {
+        display: flex;
+        gap: 8px;
+      }
+      #memory-input {
+        flex: 1;
+        min-width: 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--text);
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      #memory-list {
+        min-height: 0;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      .memory-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 10px;
+        border-top: 1px solid var(--border);
+      }
+      .memory-item:first-child {
+        border-top: 0;
+      }
+      .memory-content {
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .memory-meta {
+        margin-top: 4px;
+        color: var(--text-muted);
+        font-size: 11px;
       }
       .queue-item-cancel {
         flex-shrink: 0;
@@ -2021,6 +2075,22 @@
             >
               ← 选择文件编辑
             </div>
+            <div id="memory-manager" class="hidden">
+              <div class="memory-add-row">
+                <input
+                  id="memory-input"
+                  type="text"
+                  placeholder="新增长期记忆..."
+                />
+                <button class="btn btn-primary btn-sm" onclick="addMemoryFromPanel()">
+                  新增
+                </button>
+                <button class="btn btn-sm" onclick="refreshMemoryList()">
+                  刷新
+                </button>
+              </div>
+              <div id="memory-list"></div>
+            </div>
             <textarea
               id="config-editor"
               placeholder="选择左侧文件…"
@@ -2149,7 +2219,7 @@
         providers: [],
         default_provider: "",
       };
-      let currentConfigFile = null; // { type: 'skill'|'persona'|'yaml', name: string }
+      let currentConfigFile = null; // { type: 'skill'|'persona'|'yaml'|'memory', name: string }
       let allSessions = [];
       let ws = null; // active WebSocket
       let streamEl = null; // current streaming bubble DOM node
@@ -3123,7 +3193,12 @@
         }
         arr.forEach((item, index) => {
           const status = item && item.status ? String(item.status) : "pending";
-          const content = item && item.content ? String(item.content) : "";
+          const content =
+            item && item.title
+              ? String(item.title)
+              : item && item.content
+                ? String(item.content)
+                : "";
           const row = document.createElement("div");
           row.className = "plan-item";
 
@@ -3133,8 +3208,10 @@
           statusEl.textContent =
             status === "completed"
               ? "完成"
-              : status === "in_progress"
+              : status === "in_progress" || status === "running"
                 ? "进行中"
+                : status === "queued"
+                  ? "排队"
                 : "待办";
           row.appendChild(statusEl);
 
@@ -3145,7 +3222,10 @@
 
           const indexEl = document.createElement("span");
           indexEl.className = "plan-item-index";
-          indexEl.textContent = "#" + (index + 1);
+          indexEl.textContent =
+            item && typeof item.index === "number"
+              ? "#" + (item.index + 1)
+              : "#" + (index + 1);
           row.appendChild(indexEl);
 
           list.appendChild(row);
@@ -3810,7 +3890,10 @@
           dotsEl.remove();
         }
         renderPendingClarifications(snap);
-        renderPlan(snap.todos || []);
+        const planTasks = Array.isArray(snap.tasks)
+          ? snap.tasks.filter((task) => task && task.source === "plan_item")
+          : [];
+        renderPlan(planTasks.length ? planTasks : snap.todos || []);
         renderPendingCommands(snap.pending_commands || []);
 
         // Scroll to bottom
@@ -4623,6 +4706,12 @@
         );
         yamlRow.querySelector(".del-btn").remove();
         tree.appendChild(yamlRow);
+
+        // Memory
+        tree.appendChild(div("tree-folder", "🧠 memory"));
+        const memoryRow = treeFileRow("长期记忆", () => loadMemoryPanel());
+        memoryRow.querySelector(".del-btn").remove();
+        tree.appendChild(memoryRow);
       }
 
       function treeFileRow(name, onclick) {
@@ -4684,6 +4773,9 @@
         document.getElementById("config-filename").style.color =
           "var(--accent)";
         document.getElementById("config-editor").disabled = false;
+        document.getElementById("config-editor").classList.remove("hidden");
+        document.getElementById("config-actions").classList.remove("hidden");
+        document.getElementById("memory-manager").classList.add("hidden");
         document.getElementById("config-save-btn").disabled = false;
         document.getElementById("config-del-btn").disabled = type === "yaml";
         document.getElementById("config-status").textContent = "";
@@ -4700,8 +4792,98 @@
         }
       }
 
+      async function loadMemoryPanel() {
+        document.querySelectorAll(".tree-file").forEach((el) => {
+          const txt = el.querySelector("span")?.textContent;
+          el.classList.toggle("active", txt === "📄 长期记忆");
+        });
+        currentConfigFile = { type: "memory", name: "memory" };
+        document.getElementById("config-filename").textContent = "memory";
+        document.getElementById("config-filename").style.color =
+          "var(--accent)";
+        document.getElementById("config-editor").classList.add("hidden");
+        document.getElementById("config-actions").classList.add("hidden");
+        document.getElementById("memory-manager").classList.remove("hidden");
+        await refreshMemoryList();
+      }
+
+      async function refreshMemoryList() {
+        const list = document.getElementById("memory-list");
+        if (!list) return;
+        list.innerHTML = "";
+        try {
+          const r = await api("/memory?limit=100");
+          const memories = r.memories || [];
+          if (!memories.length) {
+            const empty = div("plan-empty", "还没有长期记忆。");
+            list.appendChild(empty);
+            return;
+          }
+          memories.forEach((memory) => {
+            const row = document.createElement("div");
+            row.className = "memory-item";
+
+            const body = document.createElement("div");
+            const content = document.createElement("div");
+            content.className = "memory-content";
+            content.textContent = memory.content || "";
+            body.appendChild(content);
+
+            const meta = document.createElement("div");
+            meta.className = "memory-meta";
+            const tags = Array.isArray(memory.tags) && memory.tags.length
+              ? ` · ${memory.tags.join(", ")}`
+              : "";
+            meta.textContent = `${memory.entry_id || ""} · ${memory.scope || "global"}${tags}`;
+            body.appendChild(meta);
+            row.appendChild(body);
+
+            const del = document.createElement("button");
+            del.className = "btn btn-sm btn-danger";
+            del.textContent = "删除";
+            del.onclick = () => deleteMemoryFromPanel(memory.entry_id);
+            row.appendChild(del);
+            list.appendChild(row);
+          });
+        } catch (e) {
+          toast("加载记忆失败: " + e.message, true);
+        }
+      }
+
+      async function addMemoryFromPanel() {
+        const input = document.getElementById("memory-input");
+        const content = (input?.value || "").trim();
+        if (!content) return;
+        try {
+          await api("/memory", "POST", {
+            content,
+            scope: "global",
+            tags: [],
+            session_id: currentSessionId || "",
+          });
+          input.value = "";
+          toast("长期记忆已新增");
+          await refreshMemoryList();
+        } catch (e) {
+          toast("新增记忆失败: " + e.message, true);
+        }
+      }
+
+      async function deleteMemoryFromPanel(entryId) {
+        if (!entryId) return;
+        if (!(await showConfirm("删除记忆", `确认删除「${entryId}」？`))) return;
+        try {
+          await api(`/memory/${entryId}`, "DELETE");
+          toast("长期记忆已删除");
+          await refreshMemoryList();
+        } catch (e) {
+          toast("删除记忆失败: " + e.message, true);
+        }
+      }
+
       async function saveConfigFile() {
         if (!currentConfigFile) return;
+        if (currentConfigFile.type === "memory") return;
         const { type, name } = currentConfigFile;
         const content = document.getElementById("config-editor").value;
         try {
@@ -4751,7 +4933,11 @@
       }
 
       async function deleteConfigFile() {
-        if (!currentConfigFile || currentConfigFile.type === "yaml") return;
+        if (
+          !currentConfigFile ||
+          currentConfigFile.type === "yaml" ||
+          currentConfigFile.type === "memory"
+        ) return;
         confirmDeleteConfig(currentConfigFile.type, currentConfigFile.name);
       }
 
