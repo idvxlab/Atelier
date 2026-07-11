@@ -319,7 +319,11 @@ def build_engine(
         if name in ALL_TOOLS:
             schema, handler = ALL_TOOLS[name]
             if name == "todo_write":
-                handler = make_todo_write_tool(session_store, plan_store)
+                handler = make_todo_write_tool(
+                    session_store,
+                    plan_store,
+                    bound_session_id=session_id,
+                )
             elif name == "memory":
                 handler = make_memory_tool(memory_store)
             registry.register(schema, handler)

@@ -159,7 +159,11 @@ def _enable_todo_write(engine: AgentEngine) -> None:
         engine._config.plan_store = InMemoryPlanStore()
     engine._tool_registry.register(
         TODO_WRITE_SCHEMA,
-        make_todo_write_tool(engine._session_store, engine._config.plan_store),
+        make_todo_write_tool(
+            engine._session_store,
+            engine._config.plan_store,
+            bound_session_id=engine._config.session_id,
+        ),
     )
 
 

@@ -247,6 +247,7 @@ async def todo_write_tool(
 def make_todo_write_tool(
     session_store: "SessionStore",
     plan_store: PlanStore | None = None,
+    bound_session_id: str | None = None,
 ):
     async def persistent_todo_write_tool(
         session_id: str,
@@ -255,8 +256,9 @@ def make_todo_write_tool(
         index: int | None = None,
         status: str | None = None,
     ) -> str:
+        target_session_id = bound_session_id or session_id
         return await todo_write_tool(
-            session_id=session_id,
+            session_id=target_session_id,
             action=action,
             todos=todos,
             index=index,

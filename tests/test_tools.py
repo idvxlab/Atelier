@@ -18,7 +18,7 @@ from harness.tools.builtin.edit_file import edit_file_tool
 from harness.tools.builtin.web_fetch import web_fetch_tool
 from harness.tools.builtin.web_search import web_search_tool
 from harness.tools.builtin.think_tool import think_tool
-from harness.tools.builtin.todo_tool import todo_write_tool
+from harness.tools.builtin.todo_tool import make_todo_write_tool, todo_write_tool
 from harness.llm.base import LLMConfig
 from harness.llm.openai_provider import OpenAIProvider
 from harness.types.messages import ToolCallBlock
@@ -510,6 +510,33 @@ async def test_todo_write_persists_to_plan_store():
     assert plan is not None
     assert plan.status == "completed"
     assert plan.items[0].status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_bound_todo_write_uses_current_session_id():
+    from harness.storage.backends.memory import InMemoryPlanStore, MemorySessionStore
+
+    session_store = MemorySessionStore()
+    plan_store = InMemoryPlanStore()
+    tool = make_todo_write_tool(
+        session_store,
+        plan_store,
+        bound_session_id="current-session",
+    )
+
+    await tool(
+        session_id="tongji_a",
+        action="set",
+        todos=[{"content": "keep plan on the active session", "status": "pending"}],
+    )
+
+    current_plan = await plan_store.load_by_session("current-session")
+    wrong_plan = await plan_store.load_by_session("tongji_a")
+    wrong_record = await session_store.load("tongji_a")
+    assert current_plan is not None
+    assert current_plan.items[0].content == "keep plan on the active session"
+    assert wrong_plan is None
+    assert wrong_record is None
 
 
 @pytest.mark.asyncio
