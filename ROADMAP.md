@@ -1,5 +1,23 @@
 # MyHarnessPy 开发计划
 
+## 2026-07-11 当前进度
+
+已完成第一版：
+
+- `PlanState / PlanStore`：计划从临时 todo 升级为可持久化结构。
+- `TaskRecord / TaskStatus`：`/state.tasks` 统一汇总 plan item、queued command、subagent。
+- `MemoryStore`：支持工具读写、SQLite 持久化、运行前自动召回临时注入。
+- Memory 管理 API：`GET /memory`、`POST /memory`、`DELETE /memory/{entry_id}`。
+- `AgentProfile` 权限：支持 `can_spawn` 和 `spawn_allowlist`，spawn 前检查父 agent 权限。
+
+下一步优先级：
+
+1. 给前端增加 Memory 管理面板。
+2. 让 Plan/Task UI 直接消费 `/state.tasks`，统一显示计划、队列和子 agent。
+3. 把 `TaskRecord` 从快照视图升级为可选持久 `TaskStore`。
+4. 继续设计 `TeamMember`，决定它和 `AgentProfile` 是合并还是分层。
+5. Memory 召回升级为更稳的关键词/向量混合搜索，并补来源、置信度、过期策略。
+
 三个人来推进这个项目。我负责核心引擎，你们两个人分别做下面的工具模块，这周全部完成。
 
 ---

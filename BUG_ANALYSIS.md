@@ -4,6 +4,24 @@
 
 本文档用于记录当前发现的问题、可能原因和后续修复方向。这里先做分析和归档，不直接实施改动。
 
+## 2026-07-11 更新状态
+
+本轮已经完成第一版：
+
+- `PlanState / PlanItem`：`todo_write` 已经写入独立 `PlanStore`，并同步保留 session metadata fallback；`/sessions/{id}/state` 会返回 `todos`。
+- `TaskRecord / TaskStatus`：新增统一任务视图，把 plan item、运行中输入队列、pending sub-agent 汇总为 snapshot 的 `tasks` 字段。
+- `MemoryStore / MemoryEntry`：已有内存与 SQLite 后端，`memory` 工具可以增删查；运行前会按最近用户输入自动召回相关 memory，并以临时 system context 注入，不持久化进 messages。
+- `AgentProfile`：persona frontmatter 已扩展为 agent profile，支持 `mode`、`hidden`、`provider`、`allowed_tools`、`default_approval_mode`、`can_spawn`、`spawn_allowlist`。
+- 多 Agent 计划绑定：`spawn_agent` / `spawn_agents` 支持 `plan_item_id`，可把子 session 绑定到父计划项。
+- 会话内审批模式：`approval_mode` 支持 `ask / auto / full`，可在会话内切换并持久化。
+
+仍待完善：
+
+- 前端 Memory 管理面板只完成后端接口基础：`GET /memory`、`POST /memory`、`DELETE /memory/{id}`，还需要 UI。
+- `TaskRecord` 目前是统一快照视图，还不是独立持久化任务表；后续可以升级为跨 session 的任务图。
+- Memory 自动召回目前是简单文本搜索，不是 embedding/vector search；后续需要更好的召回、过期、置信度和来源追踪。
+- `TeamMember` 还没有作为独立持久对象实现，目前由 `AgentProfile` 承担第一版角色配置。
+
 ## 1. 子智能体产生后前端不立即显示
 
 ### 现象

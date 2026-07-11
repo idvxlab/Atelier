@@ -381,6 +381,17 @@ PromptCache保存“可复用的上下文构造结果”，例如 base prompt、
 
 当前系统已经有会话级持久化和压缩摘要，跨会话长期 MemoryStore。能记住某个 session 的历史，把多个 session 的长期偏好、事实、项目知识沉淀成独立记忆库。
 
+第一版 MemoryStore 已经包含：
+
+- `MemoryEntry`：记录长期记忆内容、scope、tags、来源 session、创建/更新时间。
+- `MemoryStore`：提供 `add / get / search / delete` 抽象。
+- `InMemoryMemoryStore` 与 `SQLiteMemoryStore`：分别用于测试/临时运行和正式持久化。
+- `memory` 工具：模型可以主动写入、查询、列出和删除长期记忆。
+- 自动召回：每次运行前，`AgentEngine` 会用最近用户输入搜索 MemoryStore，命中后生成一条临时 system context 注入本轮模型输入。运行结束后这条临时消息会从 `messages` 中移除，不会污染会话历史。
+- 管理接口：后端提供 `GET /memory`、`POST /memory`、`DELETE /memory/{entry_id}`，前端后续可以在此基础上增加 Memory 管理面板。
+
+当前边界是：召回仍是简单文本匹配，不是 embedding/vector search；Memory 也还没有置信度、过期时间、来源消息追踪和人工审核流程。因此它已经是独立长期记忆层的第一版，但还不是完整知识库系统。
+
 ## 9. 安全层：confirm_tools、approval_mode、tool limits、persona allowed_tools
 
 安全层负责控制 Agent 能不能执行危险动作，以及危险动作是否需要用户审批。
@@ -565,8 +576,29 @@ WebSocket 把这些事件实时推给前端，让 UI 能显示 token 流、状�
 
 这个功能适合调试 Agent 行为，也适合课堂汇报时展示“同一个任务，修改条件后如何重新执行”。
 
+### 13.7 统一任务视图 TaskRecord / TaskStatus
 
-### 13.7 Shell 的 Python fallback
+系统新增了轻量 `TaskRecord / TaskStatus`，用于把几个原本分散的运行时概念统一展示：
+
+- `plan_item`：来自 `todo_write` / `PlanStore` 的计划步骤。
+- `queued_command`：运行中继续输入后进入 pending queue 的用户命令。
+- `subagent`：正在运行的 pending sub-agent。
+
+它们会被汇总到 `/sessions/{id}/state` 的 `tasks` 字段。这样前端后续可以只消费一个任务列表，就能展示“当前计划、排队输入、子智能体执行”三类状态。
+
+当前 `TaskRecord` 是快照层，不是独立持久化任务表。也就是说，它先解决“统一展示和汇报”的问题；后续如果要做跨 session 工作图、任务历史和完成率统计，可以再升级成持久 `TaskStore`。
+
+### 13.8 Shell 的 Python fallback
 
 shell 工具中有 Python fallback 逻辑，用于在某些环境下找到可用 Python 解释器。这和当前项目里 Anaconda Python 的使用有关，可以降低 Windows 环境下命令执行失败的概率。
 
+### 13.9 AgentProfile spawn 权限
+
+Persona 已经升级为第一版 `AgentProfile`，除了 system prompt、provider、allowed_tools 之外，还可以配置：
+
+- `can_spawn`：当前 agent 是否允许创建子 agent。
+- `spawn_allowlist`：如果允许创建子 agent，只能创建哪些指定 agent。
+
+`spawn_agent` 和 `spawn_agents` 在真正创建子会话前会读取父 agent profile 并检查权限。没有配置这些字段的旧 persona 默认保持兼容，也就是允许 spawn；只有显式关闭或设置 allowlist 时才收紧。
+
+这个能力让“主智能体”和“子智能体”的边界更清楚。例如 planner 可以允许 spawn reviewer，但 docs-writer 可以禁止 spawn，避免普通写作任务无限拆分。

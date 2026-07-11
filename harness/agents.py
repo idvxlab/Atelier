@@ -18,6 +18,8 @@ class AgentProfile:
     allowed_tools: list[str] | None = None
     default_approval_mode: str = ""
     color: str = ""
+    can_spawn: bool = True
+    spawn_allowlist: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -30,6 +32,8 @@ class AgentProfile:
             "allowed_tools": self.allowed_tools,
             "default_approval_mode": self.default_approval_mode,
             "color": self.color,
+            "can_spawn": self.can_spawn,
+            "spawn_allowlist": self.spawn_allowlist,
         }
 
 
@@ -37,6 +41,9 @@ def _profile_from_meta(agent_id: str, meta: dict[str, Any]) -> AgentProfile:
     allowed = meta.get("allowed_tools")
     if allowed is not None:
         allowed = list(allowed)
+    spawn_allowlist = meta.get("spawn_allowlist")
+    if spawn_allowlist is not None:
+        spawn_allowlist = [str(item) for item in spawn_allowlist]
     return AgentProfile(
         agent_id=agent_id,
         name=str(meta.get("name") or agent_id),
@@ -48,6 +55,8 @@ def _profile_from_meta(agent_id: str, meta: dict[str, Any]) -> AgentProfile:
         allowed_tools=allowed,
         default_approval_mode=str(meta.get("default_approval_mode", "")),
         color=str(meta.get("color", "")),
+        can_spawn=bool(meta.get("can_spawn", True)),
+        spawn_allowlist=spawn_allowlist,
     )
 
 

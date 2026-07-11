@@ -156,6 +156,7 @@ async def _build_engine(
     system_prompt: str,
     session_id: str,
     allowed_tools: list[str] | None = None,
+    persona_name: str = "",
     question_mode: str = "noquestion",
 ) -> tuple[AgentEngine, list]:
     """
@@ -175,6 +176,7 @@ async def _build_engine(
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
             provider_name=provider_name,
+            agent_id=persona_name,
             question_mode=question_mode,
         )
         return engine, mcp_clients
@@ -189,6 +191,7 @@ async def _build_engine(
             plan_store=_CLI_PLAN_STORE,
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
+            agent_id=persona_name,
             question_mode=question_mode,
         ),
         [],
@@ -470,7 +473,8 @@ async def run_cli(provider_name: str, system_prompt: str,
     session_id = str(uuid.uuid4())[:8]
     engine, mcp_clients = await _build_engine(
         cfg, provider_name, system_prompt, session_id,
-        allowed_tools=allowed_tools, question_mode=question_mode,
+        allowed_tools=allowed_tools, persona_name=persona_name,
+        question_mode=question_mode,
     )
     prev_count = 0
 
@@ -521,7 +525,8 @@ async def run_cli(provider_name: str, system_prompt: str,
                     session_id = str(uuid.uuid4())[:8]
                     engine, mcp_clients = await _build_engine(
                         cfg, provider_name, system_prompt, session_id,
-                        allowed_tools=allowed_tools, question_mode=question_mode,
+                        allowed_tools=allowed_tools, persona_name=persona_name,
+                        question_mode=question_mode,
                     )
                     _cmd_ctx.engine = engine
                     _cmd_ctx.session_id = session_id

@@ -41,7 +41,7 @@ def parse_persona_md(path: Path) -> dict[str, Any]:
 
     Returns dict with persona/agent profile fields:
     name, description, system_prompt, allowed_tools, provider, mode, hidden,
-    color, default_approval_mode.
+    color, default_approval_mode, can_spawn, spawn_allowlist.
     Legacy files (no frontmatter) are treated as pure system-prompt text.
     """
     text = path.read_text(encoding="utf-8")
@@ -59,11 +59,16 @@ def parse_persona_md(path: Path) -> dict[str, Any]:
     meta.setdefault("hidden", False)
     meta.setdefault("color", "")
     meta.setdefault("default_approval_mode", "")
+    meta.setdefault("can_spawn", True)
+    meta.setdefault("spawn_allowlist", None)
     if meta["mode"] not in ("primary", "subagent", "all"):
         meta["mode"] = "all"
     if meta["default_approval_mode"] not in ("", "ask", "auto", "full"):
         meta["default_approval_mode"] = ""
     meta["hidden"] = bool(meta["hidden"])
+    meta["can_spawn"] = bool(meta["can_spawn"])
+    if meta["spawn_allowlist"] is not None:
+        meta["spawn_allowlist"] = [str(item) for item in meta["spawn_allowlist"]]
     return meta
 
 
@@ -98,6 +103,8 @@ def list_personas() -> list[dict[str, Any]]:
                 "color": str(meta.get("color", "")),
                 "provider": str(meta.get("provider", "")),
                 "default_approval_mode": str(meta.get("default_approval_mode", "")),
+                "can_spawn": bool(meta.get("can_spawn", True)),
+                "spawn_allowlist": meta.get("spawn_allowlist"),
             })
         except Exception:
             results.append({
@@ -108,6 +115,8 @@ def list_personas() -> list[dict[str, Any]]:
                 "color": "",
                 "provider": "",
                 "default_approval_mode": "",
+                "can_spawn": True,
+                "spawn_allowlist": None,
             })
     return results
 

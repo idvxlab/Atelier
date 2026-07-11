@@ -24,7 +24,7 @@ from harness.tools.builtin.todo_tool import (
     make_todo_write_tool,
     todo_write_tool,
 )
-from harness.storage.backends.memory import InMemoryPlanStore
+from harness.storage.backends.memory import InMemoryMemoryStore, InMemoryPlanStore
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -220,6 +220,68 @@ async def test_plan_reminder_not_added_when_plan_exists():
     )
 
     assert reminder is None
+
+
+@pytest.mark.asyncio
+async def test_snapshot_includes_unified_plan_tasks():
+    engine = _build_engine()
+    _enable_todo_write(engine)
+    await todo_write_tool(
+        session_id=engine._config.session_id,
+        action="set",
+        todos=[{"content": "Build visible planning UI", "status": "in_progress"}],
+        session_store=engine._session_store,
+        plan_store=engine._config.plan_store,
+    )
+
+    snapshot = await engine.get_snapshot()
+
+    assert snapshot["todos"][0]["content"] == "Build visible planning UI"
+    assert snapshot["tasks"][0]["source"] == "plan_item"
+    assert snapshot["tasks"][0]["status"] == "running"
+    assert snapshot["tasks"][0]["title"] == "Build visible planning UI"
+
+
+@pytest.mark.asyncio
+async def test_memory_context_is_injected_temporarily():
+    memory_store = InMemoryMemoryStore()
+    await memory_store.add(
+        content="Tongji admissions planning should prioritize undergraduate applicants.",
+        tags=["tongji"],
+    )
+    engine = _build_engine("Done.")
+    engine._config.memory_store = memory_store
+    engine._messages.append(
+        Message(
+            role="user",
+            content=[TextBlock(text="Tongji admissions planning")],
+        )
+    )
+
+    context_msg = await engine._build_memory_context_message_if_needed()
+
+    assert context_msg is not None
+    assert "Tongji admissions planning" in context_msg.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_memory_context_is_not_persisted_in_session_messages():
+    memory_store = InMemoryMemoryStore()
+    await memory_store.add(content="Project architecture report should be concise.")
+    engine = _build_engine("Done.")
+    engine._config.memory_store = memory_store
+
+    await engine.send_message("Project architecture report")
+    await asyncio.sleep(0.1)
+    snapshot = await engine.get_snapshot()
+
+    system_texts = [
+        block.get("text", "")
+        for message in snapshot["last_messages"]
+        if message["role"] == "system"
+        for block in message["content"]
+    ]
+    assert not any("Relevant long-term memories" in text for text in system_texts)
 
 
 @pytest.mark.asyncio

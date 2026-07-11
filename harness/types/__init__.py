@@ -11,6 +11,7 @@ from harness.types.messages import (
 )
 from harness.types.tools import ToolParam, ToolSchema, ToolResult, ToolHandler
 from harness.types.events import ObservabilityEvent, EventState
+from harness.types.tasks import TaskRecord, TaskStatus
 
 __all__ = [
     "Message",
@@ -28,4 +29,6 @@ __all__ = [
     "ToolHandler",
     "ObservabilityEvent",
     "EventState",
+    "TaskRecord",
+    "TaskStatus",
 ]

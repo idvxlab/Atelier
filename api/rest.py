@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import uuid
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +165,13 @@ class SetApprovalModeRequest(BaseModel):
     approval_mode: str   # "ask" | "auto" | "full"
 
 
+class MemoryAddRequest(BaseModel):
+    content: str
+    scope: str = "global"
+    tags: list[str] | None = None
+    session_id: str = ""
+
+
 class ClarificationAnswerRequest(BaseModel):
     """Legacy single-question reply shape."""
     request_id: str
@@ -189,6 +197,7 @@ async def _build_session_engine(
     cfg: HarnessConfig,
     system_prompt: str,
     allowed_tools: list[str] | None,
+    persona_name: str,
     question_mode: str,
     approval_mode: str = "ask",
 ) -> tuple[AgentEngine, list]:
@@ -226,6 +235,7 @@ async def _build_session_engine(
             allowed_tools=allowed_tools,
             engine_registry=_engines,
             provider_name=provider_name,
+            agent_id=persona_name,
             question_mode=question_mode,
             approval_mode=approval_mode,
         )
@@ -243,6 +253,7 @@ async def _build_session_engine(
             allowed_tools=allowed_tools,
             engine_registry=_engines,
             provider_name=provider_name,
+            agent_id=persona_name,
             question_mode=question_mode,
             approval_mode=approval_mode,
         ),
@@ -408,6 +419,7 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
         cfg=cfg,
         system_prompt=system_prompt,
         allowed_tools=allowed_tools,
+        persona_name=req.persona,
         question_mode=question_mode,
         approval_mode=approval_mode,
     )
@@ -425,7 +437,7 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
     }
     # Ensure the session appears in the persistent store immediately
     try:
-        await _session_store.save(session_id, [])
+        await _session_store.save(session_id, [], metadata=dict(_engine_meta[session_id]))
     except Exception:
         pass
     return {
@@ -553,6 +565,7 @@ async def get_state(session_id: str) -> dict[str, Any]:
             cfg=cfg,
             system_prompt="",
             allowed_tools=None,
+            persona_name=str(store_meta.get("persona", "")),
             question_mode=question_mode,
             approval_mode=approval_mode,
         )
@@ -582,6 +595,42 @@ async def get_state(session_id: str) -> dict[str, Any]:
         pass
     snapshot["meta"] = meta
     return snapshot
+
+
+@app.get("/memory")
+async def list_memory(
+    query: str = "",
+    scope: str = "",
+    limit: int = 50,
+) -> dict[str, Any]:
+    entries = await _memory_store.search(
+        query=query,
+        scope=scope,
+        limit=max(1, min(limit, 100)),
+    )
+    return {"memories": [asdict(entry) for entry in entries]}
+
+
+@app.post("/memory", status_code=201)
+async def add_memory(req: MemoryAddRequest) -> dict[str, Any]:
+    content = (req.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content must be non-empty")
+    entry = await _memory_store.add(
+        content=content,
+        scope=(req.scope or "global").strip() or "global",
+        tags=req.tags or [],
+        created_by_session=req.session_id,
+    )
+    return {"memory": asdict(entry)}
+
+
+@app.delete("/memory/{entry_id}", status_code=204)
+async def delete_memory(entry_id: str):
+    deleted = await _memory_store.delete(entry_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Memory '{entry_id}' not found")
+    return Response(status_code=204)
 
 
 @app.post("/sessions/{session_id}/cancel")

@@ -151,6 +151,32 @@ def _inject_display_name(
     # The actual metadata write happens after build_engine, see below
 
 
+def _check_spawn_permission(parent_agent_id: str, target_agent: str) -> str:
+    if not parent_agent_id:
+        return ""
+    try:
+        from harness.agents import load_agent_profile  # noqa: PLC0415
+
+        profile = load_agent_profile(parent_agent_id)
+    except Exception:
+        return ""
+    if not profile.can_spawn:
+        return f"Error: agent '{parent_agent_id}' is not allowed to spawn sub-agents."
+    allowlist = profile.spawn_allowlist
+    if allowlist is not None:
+        if not target_agent:
+            return (
+                f"Error: agent '{parent_agent_id}' must choose one of its "
+                f"allowed child agents: {allowlist}."
+            )
+        if target_agent not in allowlist:
+            return (
+                f"Error: agent '{parent_agent_id}' cannot spawn agent "
+                f"'{target_agent}'. Allowed: {allowlist}."
+            )
+    return ""
+
+
 def make_spawn_agent_tool(
     harness_cfg: "HarnessConfig",
     provider_cfg: "ProviderConfig",
@@ -158,6 +184,7 @@ def make_spawn_agent_tool(
     spawn_depth: int = 0,
     engine_registry: "dict | None" = None,
     parent_session_id: str = "",
+    parent_agent_id: str = "",
     memory_store: "MemoryStore | None" = None,
     plan_store: "PlanStore | None" = None,
 ):
@@ -179,6 +206,9 @@ def make_spawn_agent_tool(
                 f"Error: maximum agent spawn depth ({MAX_SPAWN_DEPTH}) reached. "
                 "Cannot create further sub-agents."
             )
+        permission_error = _check_spawn_permission(parent_agent_id, (agent or "").strip())
+        if permission_error:
+            return permission_error
 
         sub_id = f"sub_{uuid.uuid4().hex[:8]}"
         display_name = _make_display_name(task)
@@ -209,6 +239,7 @@ def make_spawn_agent_tool(
                 spawn_depth=spawn_depth + 1,
                 engine_registry=engine_registry,
                 provider_name=profile_name or child_provider_cfg.name,
+                agent_id=profile_name,
                 memory_store=memory_store,
                 plan_store=plan_store,
             )
@@ -274,6 +305,7 @@ def make_spawn_agents_tool(
     spawn_depth: int = 0,
     engine_registry: "dict | None" = None,
     parent_session_id: str = "",
+    parent_agent_id: str = "",
     memory_store: "MemoryStore | None" = None,
     plan_store: "PlanStore | None" = None,
 ):
@@ -290,6 +322,11 @@ def make_spawn_agents_tool(
             )
         if not agents:
             return "Error: agents list is empty."
+        for cfg in agents:
+            target_agent = str(cfg.get("agent", "") or "").strip()
+            permission_error = _check_spawn_permission(parent_agent_id, target_agent)
+            if permission_error:
+                return permission_error
 
         async def run_one(cfg: dict) -> str:
             sub_id = f"sub_{uuid.uuid4().hex[:8]}"
@@ -321,6 +358,7 @@ def make_spawn_agents_tool(
                 spawn_depth=spawn_depth + 1,
                 engine_registry=engine_registry,
                 provider_name=profile_name or child_provider_cfg.name,
+                agent_id=profile_name,
                 memory_store=memory_store,
                 plan_store=plan_store,
             )

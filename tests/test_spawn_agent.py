@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import pytest
 
+from harness.agents import AgentProfile
 from harness.engine.engine import AgentEngine, EngineConfig
 from harness.engine.loop import ReactLoop
 from harness.engine.compression import CompressionConfig, ContextCompressor
@@ -198,6 +199,61 @@ class TestSpawnAgentTool:
         record = await store.load(sub_id)
         assert record is not None
         assert record.metadata["persona"] == "planner"
+
+    @pytest.mark.asyncio
+    async def test_parent_agent_can_disable_spawning(self, monkeypatch):
+        monkeypatch.setattr(
+            "harness.factory.build_engine",
+            _make_mock_build_engine("Should not run."),
+        )
+
+        def fake_load_profile(agent_id: str) -> AgentProfile:
+            if agent_id == "locked":
+                return AgentProfile(agent_id="locked", name="locked", can_spawn=False)
+            return AgentProfile(agent_id=agent_id, name=agent_id)
+
+        monkeypatch.setattr("harness.agents.load_agent_profile", fake_load_profile)
+        tool = make_spawn_agent_tool(
+            harness_cfg=_FakeHarnessCfg(),
+            provider_cfg=_FakeProviderCfg(),
+            session_store=MemorySessionStore(),
+            spawn_depth=0,
+            parent_agent_id="locked",
+        )
+
+        result = await tool(task="Try to spawn", agent="planner")
+
+        assert "not allowed to spawn" in result
+
+    @pytest.mark.asyncio
+    async def test_parent_agent_spawn_allowlist_is_enforced(self, monkeypatch):
+        monkeypatch.setattr(
+            "harness.factory.build_engine",
+            _make_mock_build_engine("Should not run."),
+        )
+
+        def fake_load_profile(agent_id: str) -> AgentProfile:
+            if agent_id == "manager":
+                return AgentProfile(
+                    agent_id="manager",
+                    name="manager",
+                    spawn_allowlist=["planner"],
+                )
+            return AgentProfile(agent_id=agent_id, name=agent_id)
+
+        monkeypatch.setattr("harness.agents.load_agent_profile", fake_load_profile)
+        tool = make_spawn_agent_tool(
+            harness_cfg=_FakeHarnessCfg(),
+            provider_cfg=_FakeProviderCfg(),
+            session_store=MemorySessionStore(),
+            spawn_depth=0,
+            parent_agent_id="manager",
+        )
+
+        result = await tool(task="Try to spawn", agent="builder")
+
+        assert "cannot spawn agent 'builder'" in result
+        assert "planner" in result
 
     @pytest.mark.asyncio
     async def test_spawn_agent_binds_parent_plan_item(self, monkeypatch):

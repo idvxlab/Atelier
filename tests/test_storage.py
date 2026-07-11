@@ -208,3 +208,4 @@ def test_agent_profiles_are_derived_from_personas():
     assert "builder" in names
     assert "planner" in names
     assert all(not agent["hidden"] for agent in agents)
+    assert all("can_spawn" in agent for agent in agents)
