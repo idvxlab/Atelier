@@ -17,7 +17,9 @@ Concurrency model:
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from dataclasses import dataclass, field, asdict
+from datetime import datetime, timezone
 from typing import Any, Callable, Awaitable, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -202,6 +204,8 @@ class AgentEngine:
 
         # Rewrite/version tracking for history rollback detection
         self._session_version: int = 0
+        self._runtime_events: deque[dict[str, Any]] = deque(maxlen=80)
+        self._runtime_event_seq: int = 0
 
         # Question mode ("question" | "noquestion") — default noquestion
         self._question_mode: str = getattr(
@@ -343,22 +347,27 @@ class AgentEngine:
 
     async def get_snapshot(self) -> dict[str, Any]:
         """
-        Frontend polling endpoint — returns state + last 20 messages atomically.
+        Frontend polling endpoint — returns visible messages atomically.
         Backend is the single source of truth; never cache this on the frontend.
         """
         async with self._state_lock:
+            visible_messages = [
+                m for m in self._messages
+                if not self._is_internal_ui_hidden_message(m)
+            ]
             snap: dict[str, Any] = {
                 "session_id": self._config.session_id,
                 "state": self._sm.state.name,
                 "is_running": self._sm.state == EngineState.RUNNING,
                 "last_error": self._last_error,
                 "last_messages": [
-                    serialize_message(m) for m in self._messages[-20:]
+                    serialize_message(m) for m in visible_messages
                 ],
                 "session_version": self._session_version,
                 "question_mode": self._question_mode,
                 "approval_mode": self._approval_mode,
                 "agent_id": self._config.agent_id,
+                "runtime_events": list(self._runtime_events),
             }
             if self._pending_tool_calls is not None:
                 snap["pending_approval"] = self._pending_tool_calls
@@ -392,6 +401,14 @@ class AgentEngine:
         ]
 
         return snap
+
+    def _is_internal_ui_hidden_message(self, msg: Message) -> bool:
+        """Return True for model-side nudges that should not render as chat."""
+        text = msg.text_content().strip()
+        return (
+            text.startswith("<reminder>Update the visible plan with todo_write")
+            or text.startswith("<internal>")
+        )
 
     def _looks_nontrivial_for_plan(self, text: str) -> bool:
         stripped = (text or "").strip()
@@ -1418,6 +1435,19 @@ class AgentEngine:
 
     async def _emit_event(self, event: EngineEvent) -> None:
         """Notify all event listeners. Safe — exceptions are swallowed."""
+        if event.get("type") == "runtime.event":
+            data = event.get("data")
+            if isinstance(data, dict):
+                self._runtime_event_seq += 1
+                event = {
+                    **event,
+                    "data": {
+                        **data,
+                        "seq": self._runtime_event_seq,
+                        "at": datetime.now(timezone.utc).isoformat(),
+                    },
+                }
+                self._runtime_events.append(dict(event["data"]))
         for listener in list(self._event_listeners):
             try:
                 await listener(event)
@@ -1558,6 +1588,7 @@ class AgentEngine:
                 on_token=self._on_token,
                 on_pre_execute=gate,
                 drain_callback=self._drain_and_dequeue,
+                on_event=self._emit_event,
             )
             async with self._state_lock:
                 self._sm.transition(EngineState.COMPLETED)

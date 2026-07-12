@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>多 Agent - MyHarness 开发者文档</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <nav class="nav">
+          <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a class="active" href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <article class="doc">
+          <p class="eyebrow">Subagents</p>
+          <h1>多 Agent</h1>
+          <p class="lead">多 Agent 机制让主智能体把探索性、并行性或隔离性任务分派给子智能体。每个子智能体本质上是一个独立 session，但通过 parent_session_id 和 pending_spawns 挂回父会话。</p>
+
+          <h2>1. 创建流程</h2>
+          <ol>
+            <li>模型调用 <code>spawn_agent</code> 或 <code>spawn_agents</code>。</li>
+            <li>工具检查当前 persona 是否 <code>can_spawn</code>。</li>
+            <li>如果设置了 <code>spawn_allowlist</code>，继续校验目标 persona 是否允许。</li>
+            <li>系统创建子 session，写入 <code>parent_session_id</code>、origin、task 等 metadata。</li>
+            <li>父 Engine 增加 pending spawn，前端通过 snapshot / WebSocket 更新任务视图。</li>
+          </ol>
+
+          <h2>2. 为什么子智能体是 session</h2>
+          <p>子智能体用 session 表示有两个好处：第一，它有自己的 messages、tools、provider 和审批状态；第二，它可以被前端直接打开查看，不需要把所有探索过程塞回父会话。</p>
+
+          <h2>3. 树形会话关系</h2>
+          <p>前端左侧会话树应按 <code>parent_session_id</code> 构造，而不是按创建时间平铺。这个结构必须支持多层嵌套，因为子智能体将来仍可能继续创建自己的子智能体。</p>
+          <div class="callout info">
+            <strong>实现提示</strong>
+            构建树时不要假设只有两层。先建立 id 到 node 的 map，再把每个 session 挂到它的 parent 下，找不到 parent 的作为根节点。
+          </div>
+
+          <h2>4. pending_spawns 的作用</h2>
+          <p><code>pending_spawns</code> 表示“父会话知道自己派出了哪些任务，但这些任务还没有被父会话消化”。它让主会话可以展示等待中的子任务，也为后续自动汇总结果留接口。</p>
+
+          <h2>5. 最大深度与权限</h2>
+          <p>当前 <code>spawn_agent.py</code> 中有最大深度限制，避免无限递归创建子会话。Persona 级权限进一步控制哪些角色可以 spawn、能 spawn 谁。</p>
+
+          <h2>6. 常见问题</h2>
+          <table>
+            <thead><tr><th>现象</th><th>可能原因</th></tr></thead>
+            <tbody>
+              <tr><td>创建子智能体后前端不显示</td><td>WebSocket 没有推 session list 更新，刷新后 REST 重新拉取才出现。</td></tr>
+              <tr><td>子智能体看起来像普通新会话</td><td>前端没有按 parent_session_id 构树，或没有展示父子关系。</td></tr>
+              <tr><td>模型无法创建子智能体</td><td>当前 persona 没有 can_spawn，或目标 persona 不在 allowlist。</td></tr>
+            </tbody>
+          </table>
+
+          <div class="next-prev">
+            <a href="memory.html"><span>上一页</span>Memory</a>
+            <a href="mcp.html"><span>下一页</span>MCP 集成</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>
+

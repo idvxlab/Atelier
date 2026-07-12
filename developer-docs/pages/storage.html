@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>状态与存储 - MyHarness 开发者文档</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <nav class="nav">
+          <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a class="active" href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a><a href="coverage.html">章节对照</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <article class="doc">
+          <p class="eyebrow">State & Persistence</p>
+          <h1>状态与存储</h1>
+          <p class="lead">存储层负责让会话、计划、记忆和压缩前原文在重启后仍能恢复。MyHarness 当前以 SQLite 为主，同时保留内存后端用于测试。</p>
+
+          <h2>1. 存储对象</h2>
+          <table>
+            <thead><tr><th>对象</th><th>文件</th><th>作用</th></tr></thead>
+            <tbody>
+              <tr><td>SessionStore</td><td><code>harness/storage/session.py</code></td><td>保存会话 messages 和 metadata。</td></tr>
+              <tr><td>CheckpointStore</td><td><code>harness/storage/checkpoint.py</code></td><td>保存运行中某轮状态快照。</td></tr>
+              <tr><td>MemoryStore</td><td><code>harness/storage/memory_store.py</code></td><td>保存跨会话长期记忆。</td></tr>
+              <tr><td>PlanStore</td><td><code>harness/storage/plan_store.py</code></td><td>保存会话计划和计划项。</td></tr>
+              <tr><td>Transcript</td><td><code>.myharness/transcripts/&lt;session_id&gt;</code></td><td>保存 auto compact 前的完整原始消息。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>2. SQLite 表</h2>
+          <p>SQLite 后端位于 <code>harness/storage/backends/sqlite.py</code>。默认数据库路径来自 <code>config.yaml</code> 的 <code>storage.path</code>。</p>
+          <table>
+            <thead><tr><th>表</th><th>保存内容</th></tr></thead>
+            <tbody>
+              <tr><td><code>sessions</code></td><td>session id、messages JSON、metadata、display_name、pin/archive 等状态。</td></tr>
+              <tr><td><code>checkpoints</code></td><td>checkpoint id、session id、round index、EngineState、messages。</td></tr>
+              <tr><td><code>memories</code></td><td>长期记忆 content、scope、tags、source session、metadata。</td></tr>
+              <tr><td><code>plans</code></td><td>plan id、session id、title、status。</td></tr>
+              <tr><td><code>plan_items</code></td><td>计划项内容、状态、绑定的子 session、结果 message id。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>3. 上下文压缩与 transcript</h2>
+          <p><code>ContextCompressor</code> 有两层：micro 会清理较旧工具结果正文，auto 会调用 summarizer，把旧消息压缩成摘要，并重注入身份和任务目标。</p>
+          <p>触发 auto compact 前，系统会先把完整 messages 写入 JSONL transcript。默认路径是 <code>.myharness/transcripts/&lt;session_id&gt;/round_*.jsonl</code>。这解决了一个关键问题：摘要如果漏信息，仍然能回查压缩前原文。</p>
+
+          <h2>4. session metadata</h2>
+          <p>metadata 是把多个机制串起来的轻量状态层。常见字段包括：</p>
+          <ul>
+            <li><code>provider</code>、<code>persona</code>、<code>question_mode</code>、<code>approval_mode</code></li>
+            <li><code>title</code>、<code>display_name</code></li>
+            <li><code>parent_session_id</code>、<code>spawn_depth</code></li>
+            <li><code>plan_item_id</code></li>
+          </ul>
+
+          <h2>5. 恢复流程</h2>
+          <ol>
+            <li>前端请求 <code>/sessions/{id}/state</code>。</li>
+            <li>如果 engine 不在内存，REST 层从 SessionStore 加载 session。</li>
+            <li>根据 metadata 选择 provider、persona、question mode 和 approval mode。</li>
+            <li>调用 <code>_build_session_engine()</code> 重新创建 Engine。</li>
+            <li><code>engine.restore_from_store()</code> 把 messages 放回 Engine。</li>
+            <li>返回 snapshot 给前端渲染。</li>
+          </ol>
+
+          <div class="callout info">
+            <strong>开发提示</strong>
+            新增持久化对象时要同时考虑内存后端、SQLite 后端、REST snapshot 和前端展示。transcript 当前是文件归档，不走 SQLite。
+          </div>
+
+          <div class="next-prev">
+            <a href="security.html"><span>上一页</span>权限与审计</a>
+            <a href="agents.html"><span>下一页</span>Persona 与 Agent</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>

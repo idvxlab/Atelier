@@ -1654,6 +1654,7 @@
 
       /* ── Queued messages panel (shown while engine is RUNNING) ────── */
       #plan-panel,
+      #runtime-panel,
       #queue-panel {
         margin: 8px 16px 0;
         padding: 10px 12px;
@@ -1669,11 +1670,17 @@
       #plan-panel {
         border-left-color: #56d364;
       }
+      #runtime-panel {
+        border-left-color: #f2cc60;
+        max-height: 180px;
+      }
       #plan-panel.hidden,
+      #runtime-panel.hidden,
       #queue-panel.hidden {
         display: none;
       }
       .plan-header,
+      .runtime-header,
       .queue-header {
         display: flex;
         align-items: center;
@@ -1684,6 +1691,7 @@
         margin-bottom: 8px;
       }
       .plan-header .plan-badge,
+      .runtime-header .runtime-badge,
       .queue-header .queue-badge {
         background: var(--accent);
         color: #fff;
@@ -1695,7 +1703,11 @@
       .plan-header .plan-badge {
         background: #238636;
       }
+      .runtime-header .runtime-badge {
+        background: #9e6a03;
+      }
       .plan-header .plan-hint,
+      .runtime-header .runtime-hint,
       .queue-header .queue-hint {
         margin-left: auto;
         color: var(--text-muted);
@@ -1703,6 +1715,7 @@
         font-weight: 400;
       }
       .plan-item,
+      .runtime-item,
       .queue-item {
         display: flex;
         align-items: flex-start;
@@ -1712,10 +1725,12 @@
         font-size: 13px;
       }
       .plan-item:first-of-type,
+      .runtime-item:first-of-type,
       .queue-item:first-of-type {
         border-top: none;
       }
       .plan-item-text,
+      .runtime-item-text,
       .queue-item-text {
         flex: 1;
         min-width: 0;
@@ -1725,12 +1740,21 @@
         line-height: 1.5;
       }
       .plan-item-status,
+      .runtime-item-time,
       .queue-item-index {
         flex-shrink: 0;
         color: var(--text-muted);
         font-size: 11px;
         font-family: var(--mono);
         padding-top: 2px;
+      }
+      .runtime-item-phase {
+        flex-shrink: 0;
+        color: #f2cc60;
+        font-size: 11px;
+        font-family: var(--mono);
+        padding-top: 2px;
+        min-width: 88px;
       }
       .plan-item-status[data-status="in_progress"] {
         color: var(--accent);
@@ -1944,7 +1968,7 @@
               <button
                 id="delete-btn"
                 class="btn btn-sm hidden"
-                onclick="deleteSession()"
+                onclick="closeSession()"
               >
                 关闭会话
               </button>
@@ -1956,9 +1980,9 @@
           <!-- Messages or empty state -->
           <div id="messages-wrap">
             <div id="empty-state">
-              <p>直接在下方输入即可开始普通会话，或使用 Persona 创建会话</p>
+              <p>直接在下方输入即可开始，默认使用 Builder 智能体</p>
               <button class="btn btn-primary" onclick="openNewSession()">
-                使用 Persona 创建会话
+                选择智能体创建会话
               </button>
             </div>
             <div id="messages" class="hidden"></div>
@@ -1985,9 +2009,17 @@
             <div class="plan-header">
               <span>计划</span>
               <span class="plan-badge" id="plan-badge">0</span>
-              <span class="plan-hint">由 todo_write 维护</span>
             </div>
             <div id="plan-list"></div>
+          </div>
+
+          <div id="runtime-panel" class="hidden">
+            <div class="runtime-header">
+              <span>&#25191;&#34892;&#36807;&#31243;</span>
+              <span class="runtime-badge" id="runtime-badge">0</span>
+              <span class="runtime-hint">&#23454;&#26102;&#26356;&#26032;</span>
+            </div>
+            <div id="runtime-list"></div>
           </div>
 
           <!-- Queued messages panel (shown while engine is RUNNING with queued inputs) -->
@@ -2040,10 +2072,10 @@
               oninput="autoGrow(this)"
             ></textarea>
             <div id="composer-persona-wrap">
-              <label>Persona</label>
+              <label>智能体</label>
               <div id="composer-persona">
-                <button id="composer-persona-trigger" onclick="togglePersonaDropdown(event)" aria-label="Select persona">
-                  <span id="composer-persona-text">不使用</span>
+                <button id="composer-persona-trigger" onclick="togglePersonaDropdown(event)" aria-label="选择智能体">
+                  <span id="composer-persona-text">builder</span>
                   <span class="chevron">▾</span>
                 </button>
                 <div id="composer-persona-dropdown"></div>
@@ -2139,9 +2171,8 @@
           <select id="sel-provider"></select>
         </div>
         <div class="form-group">
-          <label>Persona（Agent 的身份与权限）</label>
+          <label>智能体（身份与权限）</label>
           <select id="sel-persona">
-            <option value="">— 不使用 Persona —</option>
           </select>
           <div
             id="persona-desc"
@@ -2228,12 +2259,14 @@
       let streamIsThinking = false;
       let pendingUserEchoes = [];
       let activeThinkingGroup = null;
+      let runtimeEvents = [];
       let allCommands = []; // command list from GET /commands
       let filteredCommands = []; // search-filtered subset
       let currentQuestionMode = "question";
       let selectedCmdIndex = -1; // index in filteredCommands
       let menuSessionId = null; // which session's menu is open
-      let composerPersonaDraft = '';
+      let composerPersonaDraft = 'builder';
+      const LAST_SESSION_KEY = "myharness:last-session-id";
       // Poll deduplication: at most one doPoll in-flight + one queued
       let doPollInFlight = false;
       let doPollQueued = false;
@@ -2242,7 +2275,26 @@
       async function boot() {
         await loadOverview();
         await refreshSessions();
+        await restoreLastSession();
         fetchCommands();
+      }
+
+      async function restoreLastSession() {
+        const visible = allSessions.filter((s) => !s.archived);
+        if (!visible.length) return;
+
+        const savedId = localStorage.getItem(LAST_SESSION_KEY) || "";
+        let target =
+          visible.find((s) => s.session_id === savedId) ||
+          visible.find((s) =>
+            ["RUNNING", "WAITING_INTERRUPT", "WAITING_CONFIRMATION"].includes(
+              s.state,
+            ),
+          ) ||
+          null;
+
+        if (!target) return;
+        await switchSession(target.session_id);
       }
 
       async function loadOverview() {
@@ -2454,18 +2506,23 @@
         });
 
         const persSel = document.getElementById("sel-persona");
-        persSel.innerHTML = '<option value="">— 不使用 Persona —</option>';
-        getSelectablePersonas().forEach((p) => {
+        const selectablePersonas = getSelectablePersonas();
+        const modalDefaultPersona = selectablePersonas.some((p) => p.name === composerPersonaDraft)
+          ? composerPersonaDraft
+          : "builder";
+        persSel.innerHTML = "";
+        selectablePersonas.forEach((p) => {
           const opt = document.createElement("option");
           opt.value = p.name;
           opt.textContent = p.description
-            ? `${p.name} — ${p.description}`
+            ? p.name + " - " + p.description
             : p.name;
           opt.dataset.desc = p.description || "";
+          if (p.name === modalDefaultPersona) opt.selected = true;
           persSel.appendChild(opt);
         });
 
-        // Show persona description on change
+        // Show agent description on change
         persSel.onchange = () => {
           const selected = persSel.options[persSel.selectedIndex];
           const descEl = document.getElementById("persona-desc");
@@ -2477,6 +2534,7 @@
             approvalSel.value = persona.default_approval_mode;
           }
         };
+        persSel.dispatchEvent(new Event("change"));
       }
 
       function getSelectablePersonas() {
@@ -2491,26 +2549,22 @@
         const triggerText = document.getElementById("composer-persona-text");
         if (!dropdown || !triggerText) return;
 
+        const selectablePersonas = getSelectablePersonas();
+        const names = selectablePersonas.map((p) => p.name);
         const current = allSessions.find((s) => s.session_id === currentSessionId);
         const previousValue = currentSessionId
-          ? ((current && current.persona) || "")
-          : (composerPersonaDraft || "");
+          ? ((current && current.persona) || composerPersonaDraft || "builder")
+          : (composerPersonaDraft || "builder");
+        const activePersona = names.includes(previousValue) ? previousValue : "builder";
 
-        const selectedPersona = overview.personas.find((p) => p.name === previousValue);
-        triggerText.textContent = selectedPersona ? selectedPersona.name : "不使用";
-        composerPersonaDraft = previousValue;
+        triggerText.textContent = activePersona;
+        composerPersonaDraft = activePersona;
 
         dropdown.innerHTML = "";
-        const noneOpt = document.createElement("div");
-        noneOpt.className = "persona-option" + (composerPersonaDraft === "" ? " selected" : "");
-        noneOpt.innerHTML = "<span>不使用</span>";
-        noneOpt.onclick = (e) => { e.stopPropagation(); selectPersona(""); };
-        dropdown.appendChild(noneOpt);
-
-        getSelectablePersonas().forEach((p) => {
+        selectablePersonas.forEach((p) => {
           const opt = document.createElement("div");
-          opt.className = "persona-option" + (p.name === composerPersonaDraft ? " selected" : "");
-          opt.innerHTML = `<span>${escHtml(p.name)}</span>`;
+          opt.className = "persona-option" + (p.name === activePersona ? " selected" : "");
+          opt.innerHTML = "<span>" + escHtml(p.name) + "</span>";
           opt.title = p.description || p.name;
           opt.onclick = (e) => { e.stopPropagation(); selectPersona(p.name); };
           dropdown.appendChild(opt);
@@ -2520,16 +2574,18 @@
       function syncComposerPersonaControl(persona = "") {
         const triggerText = document.getElementById("composer-persona-text");
         if (!triggerText) return;
-        if (currentSessionId) {
-          triggerText.textContent = overview.personas.some((p) => p.name === persona) ? persona : "不使用";
-        } else {
-          triggerText.textContent = overview.personas.some((p) => p.name === composerPersonaDraft) ? composerPersonaDraft : "不使用";
-        }
+        const names = getSelectablePersonas().map((p) => p.name);
+        const fallback = names.includes("builder") ? "builder" : (names[0] || "builder");
+        const activePersona = currentSessionId
+          ? (names.includes(persona) ? persona : fallback)
+          : (names.includes(composerPersonaDraft) ? composerPersonaDraft : fallback);
+        triggerText.textContent = activePersona;
+        composerPersonaDraft = activePersona;
         const trigger = document.getElementById("composer-persona-trigger");
         if (trigger) {
           trigger.title = currentSessionId
-            ? "Switch persona for this session"
-            : "Choose a persona for the next new session";
+            ? "\u5207\u6362\u5f53\u524d\u4f1a\u8bdd\u7684\u667a\u80fd\u4f53"
+            : "\u9009\u62e9\u65b0\u4f1a\u8bdd\u4f7f\u7528\u7684\u667a\u80fd\u4f53";
         }
       }
 
@@ -2556,31 +2612,36 @@
       }
 
       async function selectPersona(name) {
-        composerPersonaDraft = name;
+        const names = getSelectablePersonas().map((p) => p.name);
+        const nextPersona = names.includes(name) ? name : (names.includes("builder") ? "builder" : (names[0] || "builder"));
+        composerPersonaDraft = nextPersona;
         closePersonaDropdown();
         populateComposerPersona();
         if (currentSessionId) {
           try {
-            const r = await api(`/sessions/${currentSessionId}`, "PATCH", { persona: name });
-            toast(name === "" ? "已清除 Persona" : `已切换 Persona: ${r.persona}`);
+            const r = await api("/sessions/" + currentSessionId, "PATCH", { persona: nextPersona });
+            toast("\u5df2\u5207\u6362\u667a\u80fd\u4f53: " + (r.persona || nextPersona));
             await refreshSessions();
           } catch (e) {
-            toast("切换 Persona 失败: " + e.message, true);
+            toast("\u5207\u6362\u667a\u80fd\u4f53\u5931\u8d25: " + e.message, true);
           }
         }
       }
       function openNewSession(prePersona = "") {
         document.getElementById("modal-overlay").classList.remove("hidden");
-        if (prePersona) {
-          document.getElementById("sel-persona").value = prePersona;
-          document
-            .getElementById("sel-persona")
-            .dispatchEvent(new Event("change"));
+        const select = document.getElementById("sel-persona");
+        const names = getSelectablePersonas().map((p) => p.name);
+        const desired = prePersona || composerPersonaDraft || "builder";
+        const nextPersona = names.includes(desired) ? desired : (names.includes("builder") ? "builder" : (names[0] || ""));
+        if (select && nextPersona) {
+          select.value = nextPersona;
+          select.dispatchEvent(new Event("change"));
         }
       }
       function closeModal() {
         document.getElementById("modal-overlay").classList.add("hidden");
-        document.getElementById("sel-persona").value = "";
+        const select = document.getElementById("sel-persona");
+        if (select) select.value = composerPersonaDraft || "builder";
         const descEl = document.getElementById("persona-desc");
         if (descEl) descEl.textContent = "";
       }
@@ -2613,23 +2674,28 @@
       }
 
       async function createDefaultSession() {
-        const body = {};
-        if (composerPersonaDraft) body.persona = composerPersonaDraft;
+        const names = getSelectablePersonas().map((p) => p.name);
+        const persona = names.includes(composerPersonaDraft)
+          ? composerPersonaDraft
+          : (names.includes("builder") ? "builder" : (names[0] || "builder"));
+        const body = { persona };
         const r = await api("/sessions", "POST", body);
         await refreshSessions();
         await switchSession(r.session_id);
         return r.session_id;
       }
 
-      // ── Session management ────────────────────────────────────────────────
+      // Session management
       async function switchSession(id) {
         stopPolling();
         disconnectWS();
         currentSessionId = id;
+        localStorage.setItem(LAST_SESSION_KEY, id);
         lastMsgCount = 0;
         lastSnapshotVersion = -1;
         pendingUserEchoes = [];
         activeThinkingGroup = null;
+        clearRuntimeEvents();
         doPollInFlight = false;
         doPollQueued = false;
         renderSessionsList();
@@ -2655,29 +2721,28 @@
         document.getElementById("delete-btn").classList.remove("hidden");
       }
 
-      async function deleteSession() {
+      function closeSession() {
         if (!currentSessionId) return;
-        if (!(await showConfirm("关闭会话", "确定要关闭当前会话吗？"))) return;
-        try {
-          await api(`/sessions/${currentSessionId}`, "DELETE");
-          stopPolling();
-          disconnectWS();
-          currentSessionId = null;
-          lastMsgCount = 0;
-          lastSnapshotVersion = -1;
-          activeThinkingGroup = null;
-          document.getElementById("messages").classList.add("hidden");
-          document.getElementById("empty-state").classList.remove("hidden");
-          document.getElementById("session-title").textContent = "未选择会话";
-          document.getElementById("session-meta").classList.add("hidden");
-          document.getElementById("delete-btn").classList.add("hidden");
-          document.getElementById("cancel-btn").classList.add("hidden");
-          document.getElementById("approval-mode-pill")?.classList.add("hidden");
-          await refreshSessions();
-          toast("会话已关闭");
-        } catch (e) {
-          toast("关闭失败: " + e.message, true);
-        }
+        stopPolling();
+        disconnectWS();
+        localStorage.removeItem(LAST_SESSION_KEY);
+        currentSessionId = null;
+        lastMsgCount = 0;
+        lastSnapshotVersion = -1;
+        pendingUserEchoes = [];
+        activeThinkingGroup = null;
+        clearRuntimeEvents();
+        document.getElementById("messages").innerHTML = "";
+        document.getElementById("messages").classList.add("hidden");
+        document.getElementById("empty-state").classList.remove("hidden");
+        document.getElementById("session-title").textContent = "未选择会话";
+        document.getElementById("session-meta").classList.add("hidden");
+        document.getElementById("delete-btn").classList.add("hidden");
+        document.getElementById("cancel-btn").classList.add("hidden");
+        document.getElementById("approval-mode-pill")?.classList.add("hidden");
+        document.getElementById("confirm-panel")?.classList.add("hidden");
+        document.querySelectorAll(".clarify-card").forEach((el) => el.remove());
+        renderSessionsList();
       }
 
       async function confirmAction() {
@@ -3175,6 +3240,107 @@
         }
       }
 
+      function appendRuntimeEvent(evt) {
+        if (!evt || !evt.phase) return;
+        runtimeEvents.push({
+          ...evt,
+          at: evt.at
+            ? new Date(evt.at).toLocaleTimeString()
+            : new Date().toLocaleTimeString(),
+        });
+        if (runtimeEvents.length > 40) runtimeEvents = runtimeEvents.slice(-40);
+        renderRuntimeEvents();
+      }
+
+      function clearRuntimeEvents() {
+        runtimeEvents = [];
+        renderRuntimeEvents();
+      }
+
+      function setRuntimeEvents(events) {
+        runtimeEvents = Array.isArray(events)
+          ? events.slice(-40).map((evt) => ({
+              ...evt,
+              at: evt.at
+                ? new Date(evt.at).toLocaleTimeString()
+                : new Date().toLocaleTimeString(),
+            }))
+          : [];
+        renderRuntimeEvents();
+      }
+
+      function runtimePhaseLabel(phase) {
+        const labels = {
+          round_started: "\u8f6e\u6b21\u5f00\u59cb",
+          llm_started: "\u6a21\u578b\u63a8\u7406",
+          llm_finished: "\u6a21\u578b\u8fd4\u56de",
+          tool_started: "\u5de5\u5177\u5f00\u59cb",
+          tool_finished: "\u5de5\u5177\u5b8c\u6210",
+          tool_error: "\u5de5\u5177\u51fa\u9519",
+          continuation_required: "\u7ee7\u7eed\u63a8\u7406",
+          empty_reply_retry: "\u7a7a\u56de\u590d\u91cd\u8bd5",
+          loop_limit_exceeded: "\u8fbe\u5230\u4e0a\u9650",
+        };
+        return labels[phase] || String(phase);
+      }
+
+      function runtimeEventText(evt) {
+        const round = Number.isInteger(evt.round) ? `R${evt.round + 1} ` : "";
+        if (evt.phase === "round_started") return `${round}\u5f00\u59cb\u65b0\u4e00\u8f6e\u6267\u884c`;
+        if (evt.phase === "llm_started") {
+          return `${round}\u6b63\u5728\u8bf7\u6c42\u6a21\u578b\uff0c\u6d88\u606f ${evt.message_count || 0} \u6761\uff0c\u5de5\u5177 ${evt.tool_count || 0} \u4e2a`;
+        }
+        if (evt.phase === "llm_finished") {
+          return evt.has_tool_calls
+            ? `${round}\u6a21\u578b\u8981\u8c03\u7528 ${evt.tool_count || 0} \u4e2a\u5de5\u5177`
+            : `${round}\u6a21\u578b\u5df2\u7ed9\u51fa\u6700\u7ec8\u56de\u590d`;
+        }
+        if (evt.phase === "tool_started") {
+          return `${round}\u6b63\u5728\u6267\u884c ${evt.tool || "tool"}${shortInput(evt.input) ? ": " + shortInput(evt.input) : ""}`;
+        }
+        if (evt.phase === "tool_finished") {
+          return `${round}${evt.tool || "tool"} \u5df2\u5b8c\u6210\uff0c\u8f93\u51fa ${evt.output_length || 0} \u5b57\u7b26`;
+        }
+        if (evt.phase === "tool_error") {
+          return `${round}${evt.tool || "tool"} \u6267\u884c\u5931\u8d25: ${evt.error || ""}`;
+        }
+        if (evt.phase === "continuation_required") {
+          const next = Number.isInteger(evt.next_round) ? `R${evt.next_round + 1}` : "\u4e0b\u4e00\u8f6e";
+          return `${round}\u5de5\u5177\u7ed3\u679c\u5df2\u5199\u5165\uff0c\u51c6\u5907\u8fdb\u5165 ${next} \u7ee7\u7eed\u63a8\u7406`;
+        }
+        if (evt.phase === "empty_reply_retry") {
+          return `${round}\u6a21\u578b\u8fd4\u56de\u4e86\u7a7a\u5185\u5bb9\uff0c\u6b63\u5728\u81ea\u52a8\u63d0\u9192\u5b83\u7ee7\u7eed\uff08\u7b2c ${evt.retry || 1} \u6b21\uff09`;
+        }
+        if (evt.phase === "loop_limit_exceeded") {
+          return `\u5df2\u8fbe\u5230\u672c\u8f6e\u6700\u5927\u6267\u884c\u6b65\u6570 ${evt.max_rounds || ""}\uff0c\u5df2\u6682\u505c\u4ee5\u907f\u514d\u65e0\u9650\u5faa\u73af`;
+        }
+        return JSON.stringify(evt);
+      }
+
+      function renderRuntimeEvents() {
+        const panel = document.getElementById("runtime-panel");
+        const list = document.getElementById("runtime-list");
+        const badge = document.getElementById("runtime-badge");
+        if (!panel || !list || !badge) return;
+        list.innerHTML = "";
+        badge.textContent = String(runtimeEvents.length);
+        if (!runtimeEvents.length) {
+          panel.classList.add("hidden");
+          return;
+        }
+        panel.classList.remove("hidden");
+        runtimeEvents.slice(-12).forEach((evt) => {
+          const row = document.createElement("div");
+          row.className = "runtime-item";
+          row.innerHTML =
+            `<span class="runtime-item-time">${escHtml(evt.at || "")}</span>` +
+            `<span class="runtime-item-phase">${escHtml(runtimePhaseLabel(evt.phase))}</span>` +
+            `<span class="runtime-item-text">${escHtml(runtimeEventText(evt))}</span>`;
+          list.appendChild(row);
+        });
+        panel.scrollTop = panel.scrollHeight;
+      }
+
       function renderPlan(items) {
         const panel = document.getElementById("plan-panel");
         const list = document.getElementById("plan-list");
@@ -3187,7 +3353,7 @@
         if (!arr.length) {
           const empty = document.createElement("div");
           empty.className = "plan-empty";
-          empty.textContent = "当前会话还没有可见计划。复杂任务开始后，Agent 应先调用 todo_write 建立计划。";
+          empty.textContent = "\u5f53\u524d\u4f1a\u8bdd\u8fd8\u6ca1\u6709\u53ef\u89c1\u8ba1\u5212\u3002\u590d\u6742\u4efb\u52a1\u5f00\u59cb\u540e\uff0c\u667a\u80fd\u4f53\u4f1a\u5728\u8fd9\u91cc\u663e\u793a\u6267\u884c\u6b65\u9aa4\u3002";
           list.appendChild(empty);
           return;
         }
@@ -3562,6 +3728,8 @@
         } else if (frame.type === "subagent.created") {
           refreshSessions();
           triggerPoll();
+        } else if (frame.type === "runtime.event") {
+          appendRuntimeEvent(frame.data || {});
         } else if (frame.type === "message_queued") {
           // Backend confirms a message was appended to _pending_commands.
           // Update the queued panel immediately; the next state/snapshot tick
@@ -3762,7 +3930,7 @@
         const parts = [];
         if (meta.skill) parts.push(`Skill: <strong>${meta.skill}</strong>`);
         if (meta.persona)
-          parts.push(`Persona: <strong>${meta.persona}</strong>`);
+          parts.push(`\u667a\u80fd\u4f53: <strong>${meta.persona}</strong>`);
         if (meta.provider) parts.push(meta.provider);
         if (parts.length) {
           metaEl.innerHTML = parts.join(" &nbsp;·&nbsp; ");
@@ -3895,6 +4063,7 @@
           : [];
         renderPlan(planTasks.length ? planTasks : snap.todos || []);
         renderPendingCommands(snap.pending_commands || []);
+        setRuntimeEvents(snap.runtime_events || []);
 
         // Scroll to bottom
         container.scrollTop = container.scrollHeight;
@@ -4681,7 +4850,7 @@
         } catch (e) {}
         tree.appendChild(addNewRow("skill"));
 
-        // Personas
+        // Agent configs
         tree.appendChild(div("tree-folder", "📁 personas/"));
         try {
           const r = await api("/config/personas");

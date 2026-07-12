@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>工具系统 · MyHarnessPy</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">MH</div><div><strong>MyHarnessPy</strong><span>开发者文档</span></div></div>
+        <nav>
+          <div class="nav-section"><div class="nav-title">开始</div><a class="nav-link" href="../index.html">总览</a><a class="nav-link" href="quickstart.html">运行与目录</a><a class="nav-link" href="config.html">配置系统</a></div>
+          <div class="nav-section"><div class="nav-title">核心机制</div><a class="nav-link" href="engine.html">Engine 与 ReAct</a><a class="nav-link active" href="tools.html">工具系统</a><a class="nav-link" href="security.html">权限与审批</a><a class="nav-link" href="storage.html">状态与存储</a></div>
+          <div class="nav-section"><div class="nav-title">智能体能力</div><a class="nav-link" href="agents.html">Persona 与 Agent</a><a class="nav-link" href="skills.html">Skill</a><a class="nav-link" href="plan-task.html">Plan 与 Task</a><a class="nav-link" href="memory.html">Memory</a><a class="nav-link" href="multi-agent.html">多 Agent</a></div>
+          <div class="nav-section"><div class="nav-title">扩展</div><a class="nav-link" href="mcp.html">MCP</a><a class="nav-link" href="frontend.html">Web 前端</a><a class="nav-link" href="extending.html">如何扩展</a></div>
+        </nav>
+      </aside>
+      <main class="content">
+        <article class="doc">
+          <div class="eyebrow">Tools</div>
+          <h1>工具系统</h1>
+          <p class="lead">工具系统负责把模型的 tool call 路由成真实动作，然后把结果包装回 tool_result。</p>
+
+          <h2>三层结构</h2>
+          <table>
+            <thead><tr><th>层</th><th>文件</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>类型</td><td><code>harness/types/tools.py</code></td><td>定义 ToolSchema、ToolParam、ToolResult。</td></tr>
+              <tr><td>注册</td><td><code>harness/tools/registry.py</code></td><td>维护工具名到 schema/handler 的映射。</td></tr>
+              <tr><td>执行</td><td><code>harness/tools/executor.py</code></td><td>并发执行工具、捕获错误、截断输出、处理 interrupt。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>内置工具</h2>
+          <table>
+            <thead><tr><th>类别</th><th>工具</th></tr></thead>
+            <tbody>
+              <tr><td>文件</td><td><code>read_file</code>, <code>write_file</code>, <code>edit_file</code></td></tr>
+              <tr><td>搜索</td><td><code>search</code>, <code>glob</code>, <code>grep</code></td></tr>
+              <tr><td>终端</td><td><code>shell</code>, <code>powershell</code></td></tr>
+              <tr><td>Web</td><td><code>web_fetch</code>, <code>web_search</code></td></tr>
+              <tr><td>推理与计划</td><td><code>think</code>, <code>todo_write</code></td></tr>
+              <tr><td>后台任务</td><td><code>background_task</code></td></tr>
+              <tr><td>长期记忆</td><td><code>memory</code></td></tr>
+              <tr><td>协作</td><td><code>ask_user</code></td></tr>
+              <tr><td>扩展</td><td><code>use_skill</code>, <code>spawn_agent</code>, <code>spawn_agents</code></td></tr>
+            </tbody>
+          </table>
+
+          <h2>工具注册来源</h2>
+          <p>核心注册表在 <code>harness/factory.py</code> 的 <code>ALL_TOOLS</code>。构建 Engine 时会按以下规则加载：</p>
+          <ol>
+            <li>读取 <code>config.tools.enabled</code>。</li>
+            <li>如果 persona 有 <code>allowed_tools</code>，取它和全局 enabled 的交集。</li>
+            <li>对 <code>todo_write</code>、<code>memory</code> 这类需要运行时 store 的工具，用工厂函数闭包绑定当前 session。</li>
+            <li><code>background_task</code> 用于长命令的 start/status/list/cancel，适合测试、安装和构建。</li>
+            <li>如果存在 skills，额外注册 <code>use_skill</code>。</li>
+            <li>如果当前 spawn 深度未超限，注册 <code>spawn_agent</code> 和 <code>spawn_agents</code>。</li>
+            <li>如果启用了 MCP，MCP 工具也会注册进同一个 ToolRegistry。</li>
+          </ol>
+
+          <h2>ToolExecutor 做了什么</h2>
+          <ul>
+            <li>并发执行同一轮里的多个 tool call。</li>
+            <li>如果工具不存在，返回 error tool_result。</li>
+            <li>如果 handler 抛异常，捕获并包装为错误内容。</li>
+            <li>如果 handler 接受 <code>_tool_call_id</code>，自动传入 tool call id，ask_user 用它定位后续 rewrite。</li>
+            <li>如果结果过长，写入 OverflowStore 并返回引用。</li>
+            <li>如果结果是 interruptible，保留 <code>is_interrupt=True</code>。</li>
+            <li>触发 before/after tool hook。</li>
+          </ul>
+
+          <h2>新增工具流程</h2>
+          <ol>
+            <li>新建 <code>harness/tools/builtin/my_tool.py</code>。</li>
+            <li>定义 <code>MY_TOOL_SCHEMA</code>。</li>
+            <li>实现 <code>async def my_tool(...)</code>。</li>
+            <li>在 <code>harness/tools/builtin/__init__.py</code> 导出。</li>
+            <li>在 <code>harness/factory.py</code> 的 <code>ALL_TOOLS</code> 注册。</li>
+            <li>在 <code>config.yaml tools.enabled</code> 启用。</li>
+            <li>需要审批时加入 <code>tools.confirm_tools</code>。</li>
+            <li>补 <code>tests/test_tools.py</code>。</li>
+          </ol>
+
+          <pre><code>MY_TOOL_SCHEMA = ToolSchema(
+    name="my_tool",
+    description="Do one clear thing.",
+    params=[
+        ToolParam(name="path", type="string", description="Target path"),
+    ],
+)
+
+async def my_tool(path: str) -> str:
+    try:
+        return "ok"
+    except Exception as exc:
+        return f"Error: {exc}"</code></pre>
+
+          <div class="callout info">
+            <strong>设计原则</strong>
+            工具 handler 尽量返回字符串。错误也返回 <code>Error: ...</code>，这样模型能根据错误继续恢复，而不是让主循环崩掉。
+          </div>
+
+          <div class="next-prev">
+            <a href="engine.html"><span>上一页</span>Engine 与 ReAct</a>
+            <a href="security.html"><span>下一页</span>权限与审批</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memory - MyHarness 开发者文档</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <nav class="nav">
+          <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a href="plan-task.html">Plan / Task</a><a class="active" href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <article class="doc">
+          <p class="eyebrow">Persistent Context</p>
+          <h1>Memory</h1>
+          <p class="lead">Memory 用来保存跨会话仍然有价值的信息，例如用户偏好、项目约定、长期事实。它不同于 messages，也不同于压缩摘要。</p>
+
+          <h2>1. 当前何时添加 Memory</h2>
+          <p>当前实现以工具写入为主。模型可以调用 memory 工具新增、搜索、列出、读取和删除记忆。系统不会把每一句对话都自动写成 memory。</p>
+          <table>
+            <thead><tr><th>动作</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><code>add</code></td><td>写入一条长期记忆，通常需要模型判断该信息未来仍有用。</td></tr>
+              <tr><td><code>search</code></td><td>根据查询文本检索相关记忆。</td></tr>
+              <tr><td><code>list</code></td><td>列出当前可见记忆。</td></tr>
+              <tr><td><code>get</code></td><td>读取某条记忆详情。</td></tr>
+              <tr><td><code>delete</code></td><td>删除不再需要或错误的记忆。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>2. 推理前如何召回</h2>
+          <p>Engine 在进入主循环前，会根据最新用户输入检索 MemoryStore。召回结果会临时插入为系统上下文，让模型参考。循环结束前，这段临时 memory context 会从 messages 中移除，避免污染真实对话历史。</p>
+
+          <h2>3. Memory、messages、summary 的区别</h2>
+          <div class="grid three">
+            <section class="card"><h3>Messages</h3><p>完整对话流水，表示用户和模型真实说过什么。</p></section>
+            <section class="card"><h3>Summary</h3><p>压缩后的上下文摘要，服务当前会话继续推理。</p></section>
+            <section class="card"><h3>Memory</h3><p>跨会话的长期事实，由工具写入并可被搜索召回。</p></section>
+          </div>
+
+          <h2>4. 存储结构</h2>
+          <p>SQLite 后端有 memories 表，通常包含 id、content、scope、metadata、created_at 等字段。内存后端提供相同接口，适合测试。</p>
+
+          <h2>5. 前端管理</h2>
+          <p>REST 层提供 <code>/memory</code> 相关接口，前端可以做成 Memory 管理面板。最小功能包括搜索、查看、删除和新增。后续可以加入标签、作用域、来源会话和置信度。</p>
+
+          <h2>6. 当前仍需完善的地方</h2>
+          <ul>
+            <li>自动写入策略还比较保守，需要更清晰的“什么时候值得记忆”。</li>
+            <li>缺少独立的 memory 审批或用户确认策略。</li>
+            <li>召回排序目前以简单搜索为主，后续可接 embedding 或更强的检索器。</li>
+          </ul>
+
+          <div class="next-prev">
+            <a href="plan-task.html"><span>上一页</span>Plan / Task</a>
+            <a href="multi-agent.html"><span>下一页</span>多 Agent</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>
+

@@ -69,7 +69,10 @@ class ToolExecutor:
         self._limits: dict[str, int] = limits if limits is not None else dict(LIMITS)
 
     async def execute_all(
-        self, calls: list[ToolCallBlock], round_idx: int
+        self,
+        calls: list[ToolCallBlock],
+        round_idx: int,
+        on_event: Callable[[dict], Awaitable[None]] | None = None,
     ) -> list[ToolResultBlock]:
         """
         Execute all tool calls concurrently (independent within a round).
@@ -79,11 +82,14 @@ class ToolExecutor:
         interrupt the run (e.g. ask_user) return a result whose
         `is_interrupt=True`; the executor copies that flag through.
         """
-        tasks = [self._execute_one(call, round_idx) for call in calls]
+        tasks = [self._execute_one(call, round_idx, on_event) for call in calls]
         return list(await asyncio.gather(*tasks))
 
     async def _execute_one(
-        self, call: ToolCallBlock, round_idx: int
+        self,
+        call: ToolCallBlock,
+        round_idx: int,
+        on_event: Callable[[dict], Awaitable[None]] | None = None,
     ) -> ToolResultBlock:
         if self._hooks is not None:
             hook_result = await self._hooks.emit(
@@ -142,6 +148,19 @@ class ToolExecutor:
                 "tool_call", "triggered-executed",
                 detail={"tool": call.tool_name, "round": round_idx},
             )
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "tool_started",
+                            "round": round_idx,
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "input": dict(call.tool_input),
+                        },
+                    }
+                )
             # The executor threads the LLM-generated tool_call_id to the
             # handler as a reserved kwarg _tool_call_id, but ONLY if the
             # handler signature accepts it. This keeps backwards-compat
@@ -162,6 +181,19 @@ class ToolExecutor:
                 "tool_call", "execution-error",
                 detail={"tool": call.tool_name, "error": detail, "round": round_idx},
             )
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "tool_error",
+                            "round": round_idx,
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "error": detail,
+                        },
+                    }
+                )
             if self._hooks is not None:
                 await self._hooks.emit(
                     HookEvent(
@@ -210,6 +242,20 @@ class ToolExecutor:
                         },
                     )
                 )
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "tool_finished",
+                            "round": round_idx,
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "is_interrupt": True,
+                            "output_length": len(content),
+                        },
+                    }
+                )
             return ToolResultBlock(
                 tool_call_id=call.tool_call_id,
                 content=content,
@@ -246,6 +292,20 @@ class ToolExecutor:
                         },
                     )
                 )
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "tool_finished",
+                            "round": round_idx,
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "is_overflow": True,
+                            "output_length": len(content),
+                        },
+                    }
+                )
             return ToolResultBlock(
                 tool_call_id=call.tool_call_id,
                 content=f"[Output exceeded {limit} char limit. Full output stored at ref:{ref_id}]",
@@ -267,6 +327,20 @@ class ToolExecutor:
                         "output_length": len(content),
                     },
                 )
+            )
+
+        if on_event is not None:
+            await on_event(
+                {
+                    "type": "runtime.event",
+                    "data": {
+                        "phase": "tool_finished",
+                        "round": round_idx,
+                        "tool": call.tool_name,
+                        "tool_call_id": call.tool_call_id,
+                        "output_length": len(content),
+                    },
+                }
             )
 
         return ToolResultBlock(

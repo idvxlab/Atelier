@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>权限与审批 · MyHarnessPy</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">MH</div><div><strong>MyHarnessPy</strong><span>开发者文档</span></div></div>
+        <nav>
+          <div class="nav-section"><div class="nav-title">开始</div><a class="nav-link" href="../index.html">总览</a><a class="nav-link" href="quickstart.html">运行与目录</a><a class="nav-link" href="config.html">配置系统</a></div>
+          <div class="nav-section"><div class="nav-title">核心机制</div><a class="nav-link" href="engine.html">Engine 与 ReAct</a><a class="nav-link" href="tools.html">工具系统</a><a class="nav-link active" href="security.html">权限与审批</a><a class="nav-link" href="storage.html">状态与存储</a></div>
+          <div class="nav-section"><div class="nav-title">智能体能力</div><a class="nav-link" href="agents.html">Persona 与 Agent</a><a class="nav-link" href="skills.html">Skill</a><a class="nav-link" href="plan-task.html">Plan 与 Task</a><a class="nav-link" href="memory.html">Memory</a><a class="nav-link" href="multi-agent.html">多 Agent</a></div>
+          <div class="nav-section"><div class="nav-title">扩展</div><a class="nav-link" href="mcp.html">MCP</a><a class="nav-link" href="frontend.html">Web 前端</a><a class="nav-link" href="extending.html">如何扩展</a></div>
+        </nav>
+      </aside>
+      <main class="content">
+        <article class="doc">
+          <div class="eyebrow">Permissions</div>
+          <h1>权限与审批</h1>
+          <p class="lead">权限系统回答三个问题：模型能看见哪些工具，哪些工具需要审批，当前会话如何处理审批。</p>
+
+          <h2>工具可见性</h2>
+          <p>全局工具可见性由 <code>config.yaml</code> 控制：</p>
+          <pre><code>tools:
+  enabled:
+    - read_file
+    - shell
+    - memory
+    - todo_write</code></pre>
+          <p>persona 可以再通过 <code>allowed_tools</code> 收窄工具范围。最终注册工具是：</p>
+          <pre><code>global enabled ∩ persona allowed_tools</code></pre>
+          <p>如果 persona 没有设置 <code>allowed_tools</code>，就使用全局 enabled。</p>
+
+          <h2>confirm_tools</h2>
+          <p><code>confirm_tools</code> 决定哪些工具属于高风险工具。</p>
+          <pre><code>confirm_tools:
+  - shell
+  - powershell</code></pre>
+          <p>当模型调用这些工具时，Engine 会进入 confirmation gate。前端看到 <code>WAITING_CONFIRMATION</code> 后展示审批面板。</p>
+
+          <h2>approval_mode</h2>
+          <table>
+            <thead><tr><th>模式</th><th>行为</th></tr></thead>
+            <tbody>
+              <tr><td><code>ask</code></td><td>命中 confirm_tools 时等待用户批准或拒绝。</td></tr>
+              <tr><td><code>auto</code></td><td>自动批准高风险工具，但仍记录事件。</td></tr>
+              <tr><td><code>full</code></td><td>绕过 confirm_tools gate，当前会话全权限运行。</td></tr>
+            </tbody>
+          </table>
+          <p>运行时可以通过 <code>PATCH /sessions/{id}/approval-mode</code> 切换。</p>
+
+          <h2>persona 默认审批模式</h2>
+          <p>persona frontmatter 可以设置：</p>
+          <pre><code>default_approval_mode: ask</code></pre>
+          <p>创建会话时，如果请求没有明确传入 approval_mode，后端会读取 persona 的默认值。子 Agent 创建时也会应用子 AgentProfile 的默认审批模式；没有默认值时继承父 Agent 的审批模式。</p>
+
+          <h2>审批执行路径</h2>
+          <ol>
+            <li>ReactLoop 准备执行工具前调用 <code>on_pre_execute</code>。</li>
+            <li>AgentEngine 的 <code>_confirmation_gate()</code> 检查工具名是否在 confirm_tools。</li>
+            <li>如果 approval_mode 是 <code>full</code>，直接放行。</li>
+            <li>如果 approval_mode 是 <code>auto</code>，自动放行并记录事件。</li>
+            <li>如果 approval_mode 是 <code>ask</code>，状态转为 <code>WAITING_CONFIRMATION</code>。</li>
+            <li>用户点击允许时调用 <code>/confirm</code>，点击拒绝时调用 <code>/deny</code>。</li>
+            <li>拒绝会抛出 <code>CancelledError</code>，Engine 回到 <code>WAITING_INPUT</code>。</li>
+          </ol>
+
+          <h2>多 Agent 权限</h2>
+          <p>AgentProfile 支持：</p>
+          <pre><code>can_spawn: true
+spawn_allowlist:
+  - reviewer
+  - docs-writer</code></pre>
+          <p><code>spawn_agent</code> 真正创建子 Agent 前会检查父 AgentProfile。如果 <code>can_spawn: false</code>，直接返回错误。如果有 allowlist，只能创建列表中的 agent。</p>
+
+          <div class="callout warn">
+            <strong>边界</strong>
+            当前权限还不是操作系统级沙箱。它控制的是模型工具可见性、审批 gate 和 agent 调度规则。真实文件系统安全还需要依赖工具实现和运行环境约束。
+          </div>
+
+          <div class="next-prev">
+            <a href="tools.html"><span>上一页</span>工具系统</a>
+            <a href="storage.html"><span>下一页</span>状态与存储</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>
+

@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 import subprocess
 import importlib
+import asyncio
 
 import pytest
 
@@ -402,6 +403,19 @@ async def test_todo_write_set():
 
 
 @pytest.mark.asyncio
+async def test_todo_write_rejects_multiple_in_progress_on_set():
+    result = await todo_write_tool(
+        session_id="multi-progress",
+        action="set",
+        todos=[
+            {"content": "task 1", "status": "in_progress"},
+            {"content": "task 2", "status": "in_progress"},
+        ],
+    )
+    assert "only one todo item may be in_progress" in result
+
+
+@pytest.mark.asyncio
 async def test_todo_write_get():
     await todo_write_tool(
         session_id="s2",
@@ -429,6 +443,25 @@ async def test_todo_write_update():
         session_id="s3", action="update", index=0, status="completed"
     )
     assert "completed" in result
+
+
+@pytest.mark.asyncio
+async def test_todo_write_rejects_second_in_progress_on_update():
+    await todo_write_tool(
+        session_id="second-progress",
+        action="set",
+        todos=[
+            {"content": "task 1", "status": "in_progress"},
+            {"content": "task 2", "status": "pending"},
+        ],
+    )
+    result = await todo_write_tool(
+        session_id="second-progress",
+        action="update",
+        index=1,
+        status="in_progress",
+    )
+    assert "Item [0] is already in_progress" in result
 
 
 @pytest.mark.asyncio
@@ -562,6 +595,33 @@ async def test_memory_tool_add_search_delete():
     entry_id = json.loads(added)["entry_id"]
     deleted = await tool(action="delete", entry_id=entry_id)
     assert deleted == "Deleted."
+
+
+@pytest.mark.asyncio
+async def test_background_task_start_and_status():
+    from harness.tools.builtin.background_task import background_task_tool
+
+    started = await background_task_tool(
+        action="start",
+        command=[
+            sys.executable,
+            "-c",
+            "print('background-ok')",
+        ],
+        timeout=10,
+    )
+    assert "Background task bg_" in started
+    task_id = started.split("Background task ", 1)[1].split(" ", 1)[0]
+
+    status = ""
+    for _ in range(100):
+        status = await background_task_tool(action="status", task_id=task_id)
+        if "output:\nbackground-ok" in status:
+            break
+        await asyncio.sleep(0.05)
+
+    assert "status: completed" in status
+    assert "background-ok" in status
 
 
 # ──────────────────────────────────────────────────────────────────────

@@ -146,6 +146,27 @@ async def test_auto_compression_reinjects_identity_and_goal():
     assert any("My important goal" in t for t in goal_texts)
 
 
+@pytest.mark.asyncio
+async def test_auto_compression_saves_transcript(tmp_path):
+    cfg = CompressionConfig(
+        token_window=10,
+        auto_trigger_ratio=0.1,
+        micro_keep_recent=1,
+        transcript_dir=str(tmp_path),
+        session_id="session-a",
+    )
+    compressor = ContextCompressor(summarizer=_MockSummarizer(), config=cfg)
+
+    messages = [_make_user_msg("Start" * 20, round_idx=0)]
+    await compressor.maybe_compress(messages, round_idx=7)
+
+    files = list((tmp_path / "session-a").glob("round_7_*.jsonl"))
+    assert files
+    raw = files[0].read_text(encoding="utf-8")
+    assert '"role": "user"' in raw
+    assert "StartStart" in raw
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Token estimator
 # ──────────────────────────────────────────────────────────────────────

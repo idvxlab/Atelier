@@ -87,6 +87,16 @@ def _normalise_todos(todos: list[dict]) -> list[dict]:
     return items
 
 
+def _validate_single_in_progress(items: list[dict]) -> str:
+    count = sum(1 for item in items if item.get("status") == "in_progress")
+    if count > 1:
+        return (
+            "Error: only one todo item may be in_progress at a time. "
+            "Mark the current step completed or pending before starting another."
+        )
+    return ""
+
+
 def _plan_status(items: list[dict]) -> str:
     if not items:
         return "pending"
@@ -197,9 +207,13 @@ async def todo_write_tool(
     if action == "set":
         if todos is None:
             return "Error: todos is required when action=set"
+        items = _normalise_todos(todos)
+        validation_error = _validate_single_in_progress(items)
+        if validation_error:
+            return validation_error
         await persist_session_todos(
             session_id,
-            todos,
+            items,
             session_store=session_store,
             plan_store=plan_store,
         )
@@ -232,6 +246,13 @@ async def todo_write_tool(
             return f"Error: index {index} out of range (0-{len(items) - 1})"
         if status not in ("pending", "in_progress", "completed"):
             return f"Error: status must be one of pending, in_progress, completed; got '{status}'"
+        if status == "in_progress":
+            for i, item in enumerate(items):
+                if i != index and item.get("status") == "in_progress":
+                    return (
+                        "Error: only one todo item may be in_progress at a time. "
+                        f"Item [{i}] is already in_progress."
+                    )
         items[index]["status"] = status
         await persist_session_todos(
             session_id,

@@ -24,3 +24,4 @@ build/
 .pytest_cache/
 
 .claude/
+.myharness/transcripts/

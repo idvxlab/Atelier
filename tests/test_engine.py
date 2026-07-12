@@ -285,6 +285,41 @@ async def test_memory_context_is_not_persisted_in_session_messages():
 
 
 @pytest.mark.asyncio
+async def test_snapshot_returns_full_visible_history_and_hides_internal_reminders():
+    engine = _build_engine("Done.")
+    for i in range(25):
+        engine._messages.append(
+            Message(role="user", content=[TextBlock(text=f"visible {i}")])
+        )
+    engine._messages.append(
+        Message(
+            role="user",
+            content=[
+                TextBlock(
+                    text=(
+                        "<reminder>Update the visible plan with todo_write "
+                        "before continuing.</reminder>"
+                    )
+                )
+            ],
+        )
+    )
+
+    snapshot = await engine.get_snapshot()
+    texts = [
+        block.get("text", "")
+        for message in snapshot["last_messages"]
+        for block in message["content"]
+        if block.get("type") == "text"
+    ]
+
+    assert len(snapshot["last_messages"]) == 25
+    assert texts[0] == "visible 0"
+    assert texts[-1] == "visible 24"
+    assert not any("Update the visible plan" in text for text in texts)
+
+
+@pytest.mark.asyncio
 async def test_engine_completes_on_text_reply():
     engine = _build_engine("The answer is 42.")
     await engine.send_message("What is the answer?")

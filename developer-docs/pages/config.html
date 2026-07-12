@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>配置系统 · MyHarnessPy</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">MH</div><div><strong>MyHarnessPy</strong><span>开发者文档</span></div></div>
+        <nav>
+          <div class="nav-section"><div class="nav-title">开始</div><a class="nav-link" href="../index.html">总览</a><a class="nav-link" href="quickstart.html">运行与目录</a><a class="nav-link active" href="config.html">配置系统</a></div>
+          <div class="nav-section"><div class="nav-title">核心机制</div><a class="nav-link" href="engine.html">Engine 与 ReAct</a><a class="nav-link" href="tools.html">工具系统</a><a class="nav-link" href="security.html">权限与审批</a><a class="nav-link" href="storage.html">状态与存储</a></div>
+          <div class="nav-section"><div class="nav-title">智能体能力</div><a class="nav-link" href="agents.html">Persona 与 Agent</a><a class="nav-link" href="skills.html">Skill</a><a class="nav-link" href="plan-task.html">Plan 与 Task</a><a class="nav-link" href="memory.html">Memory</a><a class="nav-link" href="multi-agent.html">多 Agent</a></div>
+          <div class="nav-section"><div class="nav-title">扩展</div><a class="nav-link" href="mcp.html">MCP</a><a class="nav-link" href="frontend.html">Web 前端</a><a class="nav-link" href="extending.html">如何扩展</a></div>
+        </nav>
+      </aside>
+      <main class="content">
+        <article class="doc">
+          <div class="eyebrow">Configuration</div>
+          <h1>配置系统</h1>
+          <p class="lead">配置系统决定使用哪个模型、哪些工具可见、哪些工具需要审批、状态存在哪里、MCP 如何连接。</p>
+
+          <h2>核心文件</h2>
+          <ul>
+            <li><code>config.yaml</code>：项目主配置。</li>
+            <li><code>.env</code>：本地密钥与 provider base url。</li>
+            <li><code>harness/config.py</code>：解析配置并生成 dataclass。</li>
+            <li><code>api/rest.py</code>：启动时加载配置，前端可通过 <code>/config/yaml</code> 编辑。</li>
+          </ul>
+
+          <h2>配置加载顺序</h2>
+          <ol>
+            <li>启动时 <code>load_dotenv(override=False)</code> 加载 <code>.env</code>。</li>
+            <li>优先读取 <code>config.yaml</code>。</li>
+            <li>如果没有 <code>config.yaml</code>，使用 <code>HarnessConfig.from_env()</code> 从环境变量构造最小配置。</li>
+            <li>provider 名称会经过别名归一，例如 <code>my-361api</code> 会归一到 <code>361api-openai</code>。</li>
+          </ol>
+
+          <h2>Provider 配置</h2>
+          <pre><code>default_provider: openai-hub
+
+providers:
+  openai-hub:
+    name: openai-compatible
+    model: "${OPENAI_HUB_MODEL}"
+    api_key: "${OPENAI_HUB_API_KEY}"
+    base_url: "${OPENAI_HUB_BASE_URL}"
+    max_tokens: 4096
+    temperature: 0.0</code></pre>
+          <p><code>name</code> 决定 provider 类型。当前主要支持 <code>openai-compatible</code> 和 <code>anthropic</code>。</p>
+
+          <h2>工具配置</h2>
+          <pre><code>tools:
+  enabled:
+    - read_file
+    - write_file
+    - edit_file
+    - shell
+    - memory
+    - todo_write
+  confirm_tools:
+    - shell
+    - powershell
+  limits:
+    shell: 15000
+    memory: 8000</code></pre>
+          <p><code>enabled</code> 决定全局可注册工具。persona 还可以用 <code>allowed_tools</code> 做进一步收窄。</p>
+          <p><code>confirm_tools</code> 决定哪些工具走审批 gate。是否真的弹审批还取决于当前 session 的 <code>approval_mode</code>。</p>
+
+          <h2>存储配置</h2>
+          <pre><code>storage:
+  backend: sqlite
+  path: ./harness.db</code></pre>
+          <p>当 backend 是 <code>sqlite</code> 时，Session、Memory、Plan 都使用同一个数据库文件。memory backend 主要适合测试和临时运行。</p>
+
+          <h2>压缩配置</h2>
+          <pre><code>compression:
+  token_window: 128000
+  auto_trigger_ratio: 0.65
+  micro_keep_recent: 6
+  summary_provider: openai-hub-mini</code></pre>
+          <p>压缩由 <code>ContextCompressor</code> 使用。<code>summary_provider</code> 可以指定一个便宜模型做摘要，避免主模型承担压缩成本。</p>
+
+          <h2>MCP 配置</h2>
+          <pre><code>mcp_servers:
+  filesystem:
+    transport: stdio
+    command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."]</code></pre>
+          <p>启动时 <code>build_engine_with_mcp()</code> 会连接 server，拉取工具 schema，并注册为 Harness 工具。</p>
+
+          <h2>如何修改配置</h2>
+          <ul>
+            <li>直接编辑 <code>config.yaml</code>。</li>
+            <li>通过前端配置面板编辑 <code>config.yaml</code>，后端接口会先用 YAML parser 校验。</li>
+            <li>修改 provider key/base_url 时通常只需要改 <code>.env</code>。</li>
+          </ul>
+
+          <div class="callout warn">
+            <strong>注意</strong>
+            修改配置后，已经创建的内存中 engine 不会自动重建。通常需要新建会话或重启服务，才能完整应用新 provider、工具和 MCP 配置。
+          </div>
+
+          <div class="next-prev">
+            <a href="quickstart.html"><span>上一页</span>运行与目录</a>
+            <a href="engine.html"><span>下一页</span>Engine 与 ReAct</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>
+

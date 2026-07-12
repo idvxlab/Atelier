@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude Code 章节对照 - MyHarness 开发者文档</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <nav class="nav">
+          <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a><a class="active" href="coverage.html">章节对照</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <article class="doc">
+          <p class="eyebrow">Coverage Audit</p>
+          <h1>对照 learn-claude-code 的章节审计</h1>
+          <p class="lead">本页以 <code>D:\GitHub\learnHarness\learn-claude-code</code> 的 12 个中文章节为参照，检查 MyHarness 当前实现和文档有没有遗漏、有没有设计不对齐。结论分成四类：已覆盖、部分覆盖、设计不同、缺失。</p>
+
+          <h2>总览</h2>
+          <table>
+            <thead>
+              <tr><th>章节</th><th>参照主题</th><th>MyHarness 状态</th><th>结论</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>s01</td><td>Agent Loop</td><td>已覆盖</td><td>AgentEngine + ReactLoop 已是完整异步主循环。</td></tr>
+              <tr><td>s02</td><td>Tool Use</td><td>已覆盖并增强</td><td>ToolRegistry / ToolExecutor 比 dispatch map 更完整。</td></tr>
+              <tr><td>s03</td><td>TodoWrite</td><td>已覆盖基本版</td><td>已有 todo_write + PlanStore，并已补“仅一个 in_progress”硬约束和多轮 nag 提醒。</td></tr>
+              <tr><td>s04</td><td>Subagents</td><td>设计不同</td><td>MyHarness 子 Agent 持久成 session，不是一次性丢弃上下文。</td></tr>
+              <tr><td>s05</td><td>Skill Loading</td><td>已覆盖</td><td>轻量描述注入 + use_skill 全文加载已实现。</td></tr>
+              <tr><td>s06</td><td>Context Compact</td><td>已覆盖基本版</td><td>已有 micro / auto 压缩，并已补 auto compact 前 transcript 原文归档。</td></tr>
+              <tr><td>s07</td><td>Task System</td><td>部分覆盖</td><td>已有 TaskRecord 视图，但没有持久任务图、依赖边、owner。</td></tr>
+              <tr><td>s08</td><td>Background Tasks</td><td>已覆盖轻量版</td><td>已新增 background_task 工具，可 start/status/list/cancel 后台命令。</td></tr>
+              <tr><td>s09</td><td>Agent Teams</td><td>缺失核心模型</td><td>没有 TeamMember、MessageBus、JSONL inbox 和常驻队友生命周期。</td></tr>
+              <tr><td>s10</td><td>Team Protocols</td><td>缺失核心模型</td><td>没有模型间 request-response 协议和计划审批 FSM。</td></tr>
+              <tr><td>s11</td><td>Autonomous Agents</td><td>缺失核心模型</td><td>没有空闲轮询、自动认领任务、持续自治队友。</td></tr>
+              <tr><td>s12</td><td>Worktree Isolation</td><td>缺失</td><td>没有任务与 git worktree 的绑定和隔离执行平面。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>s01 Agent Loop</h2>
+          <p>参照仓库强调一个不变循环：发送 messages 和 tools 给模型，遇到 tool_use 执行工具，把 tool_result 放回消息，再继续。</p>
+          <p>MyHarness 对应实现是 <code>harness/engine/engine.py</code> 的 AgentEngine 和 <code>harness/engine/loop.py</code> 的 ReactLoop。它已经超出最小循环，支持状态机、取消、审批等待、队列、压缩、事件和 WebSocket 推送。</p>
+          <div class="callout info"><strong>判断</strong> 已覆盖。文档里已有“主循环”页，不需要补实现，只需要在汇报时强调循环是所有机制的底座。</div>
+
+          <h2>s02 Tool Use</h2>
+          <p>参照仓库用 dispatch map 说明“加工具不改循环”。MyHarness 的 <code>ToolRegistry</code> 和 <code>ToolExecutor</code> 就是这个思想的工程化版本。</p>
+          <p>当前工具层还包含并发执行、hook、审批 gate、结果溢出处理、MCP 工具包装、闭包绑定运行时依赖等能力。</p>
+          <div class="callout info"><strong>判断</strong> 已覆盖并增强。需要继续确认所有文件工具都有路径沙箱和输出截断，尤其是 shell / powershell。</div>
+
+          <h2>s03 TodoWrite</h2>
+          <p>参照仓库的重点不是“有 todo 工具”这么简单，而是三个约束：多步任务先建计划、同一时间只允许一个 in_progress、连续多轮不更新 todo 时注入提醒。</p>
+          <p>MyHarness 已有 <code>todo_write</code>、<code>PlanStore</code>、SQLite plans / plan_items、前端 Plan 面板和系统计划提醒。对应文件包括 <code>harness/tools/builtin/todo_tool.py</code>、<code>harness/storage/plan_store.py</code>、<code>harness/factory.py</code> 和 <code>static/index.html</code>。</p>
+          <p>当前已经补齐两个关键约束：<code>todo_write</code> 会拒绝多个 <code>in_progress</code>；ReactLoop 连续 3 轮工具调用没有更新 <code>todo_write</code> 时，会插入隐藏提醒，要求模型更新可见计划。</p>
+          <div class="callout info"><strong>判断</strong> 基本版已覆盖。后续如果要更强，可以把提醒策略抽成独立 PlanPolicy，并在前端显示“计划过期”状态。</div>
+
+          <h2>s04 Subagents</h2>
+          <p>参照仓库的 subagent 是临时上下文：运行自己的 messages，最终只给父 agent 返回摘要，子上下文丢弃。</p>
+          <p>MyHarness 采用更产品化的设计：子 agent 是一个真实 session，有 <code>sub_*</code> id、metadata、parent_session_id、display_name、spawn_depth、可单独打开查看，并可在左侧会话树展示。核心实现在 <code>harness/tools/builtin/spawn_agent.py</code> 和 <code>AgentEngine.register_pending_spawn()</code>。</p>
+          <div class="callout info"><strong>判断</strong> 这是设计不同，不是错误。要在文档里明确：MyHarness 选择“可追踪子会话”，代价是需要前端 session tree 和 pending_spawns 管理。</div>
+
+          <h2>s05 Skill Loading</h2>
+          <p>参照仓库采用两层知识注入：系统提示里只列 Skill 名称和描述，模型需要时调用 load_skill 读取全文。</p>
+          <p>MyHarness 对应 <code>harness/skills.py</code> 和 <code>use_skill</code> 工具。它扫描项目级和用户级目录，也兼容 Claude 风格目录。当前文档的 Skill 页已经覆盖“描述注入 + 按需全文加载”。</p>
+          <div class="callout info"><strong>判断</strong> 已覆盖。后续优化重点不是有没有 Skill，而是减少模型过度调用 Skill。</div>
+
+          <h2>s06 Context Compact</h2>
+          <p>参照仓库有三层：旧 tool_result micro compact、token 阈值触发 auto compact、manual compact 工具，并把完整 transcript 存到磁盘用于恢复。</p>
+          <p>MyHarness 的 <code>ContextCompressor</code> 已有两层：micro 清理旧 tool result，auto 调 summarizer 摘要旧消息，并强制重注入 system_identity 和 task_goal。这一点比参照仓库更注意身份漂移。</p>
+          <p>当前已经在 auto compact 前保存完整 transcript，默认路径是 <code>.myharness/transcripts/&lt;session_id&gt;/round_*.jsonl</code>。当前 <code>/compact</code> 仍是 command 系统能力，不等同于模型可调用的 compact tool。</p>
+          <div class="callout info"><strong>判断</strong> 基本版已覆盖。后续可以把 transcript 做成 REST 调试接口，并决定是否提供模型可调用 compact tool。</div>
+
+          <h2>s07 Task System</h2>
+          <p>参照仓库把 todo 升级为持久任务图：每个 task 有 id、status、blockedBy、owner，完成任务会自动解除依赖。</p>
+          <p>MyHarness 当前的 <code>TaskRecord</code> 是统一展示模型，不是持久任务图。它合并 plan item、pending command、pending spawn，适合 UI 呈现，但不能表达 DAG、blockedBy、owner、自动解锁。</p>
+          <div class="callout warning"><strong>建议</strong> 新增 TaskStore / TaskGraph，保留 TaskRecord 作为 UI projection。不要把 TaskRecord 扩展成所有业务状态，否则会混淆“事实存储”和“展示视图”。</div>
+
+          <h2>s08 Background Tasks</h2>
+          <p>参照仓库的后台任务是命令级：启动后台线程跑慢命令，完成后把通知队列注入下一轮 LLM。</p>
+          <p>MyHarness 已新增轻量后台任务工具 <code>background_task</code>，支持 <code>start</code>、<code>status</code>、<code>list</code>、<code>cancel</code>。它适合跑测试、安装、构建这类慢命令，让模型稍后主动查询结果。</p>
+          <div class="callout info"><strong>判断</strong> 轻量版已覆盖。后续可以补前端后台任务面板和“后台完成后自动注入下一轮上下文”。</div>
+
+          <h2>s09 Agent Teams</h2>
+          <p>参照仓库从这里开始进入长期团队系统：TeamMember 名册、队友生命周期、MessageBus、每个 agent 的 JSONL inbox。</p>
+          <p>MyHarness 有多 session 和子 agent，但没有持久队友名册，也没有 agent 间邮箱。子 agent 多数仍由父会话通过 spawn 工具直接创建并等待结果。</p>
+          <div class="callout warning"><strong>建议</strong> 若要做团队，应新增 TeamStore、TeamMember、MessageEnvelope、MessageBus。session tree 不能完全替代团队模型。</div>
+
+          <h2>s10 Team Protocols</h2>
+          <p>参照仓库把关机请求和计划审批抽象成 request-response FSM：pending -> approved / rejected。</p>
+          <p>MyHarness 已有人机审批和 ask_user，但没有 agent-agent 协议审批。现有 approval_mode 面向工具风险，不是队友之间的计划审查。</p>
+          <div class="callout warning"><strong>建议</strong> 抽象 ProtocolRequest / ProtocolDecision，可复用给 plan review、shutdown、handoff、merge approval。</div>
+
+          <h2>s11 Autonomous Agents</h2>
+          <p>参照仓库的自治 agent 会在 IDLE 阶段轮询 inbox 和任务板，自动认领未分配任务，并在压缩后重注入身份。</p>
+          <p>MyHarness 的子 agent 目前由 spawn 触发，运行到完成后返回；没有 idle polling、自动认领、长期存活工作者。压缩身份重注入在单会话层已做，但没有 teammate identity lifecycle。</p>
+          <div class="callout warning"><strong>建议</strong> 自治应建立在 TaskGraph + TeamMember + MessageBus 之上，不建议先写轮询循环，否则会缺少稳定任务来源。</div>
+
+          <h2>s12 Worktree Task Isolation</h2>
+          <p>参照仓库把任务控制面和执行目录分开：Task 绑定 git worktree，每个任务在独立目录运行，并记录 worktree 生命周期事件。</p>
+          <p>MyHarness 当前没有 worktree 管理器。shell / powershell 默认仍在同一个 workspace 中执行，因此并行 agent 改同一文件时可能互相污染。</p>
+          <div class="callout warning"><strong>建议</strong> 在实现长期团队前，至少设计 WorktreeManager 接口：create、bind_task、run_in_worktree、keep、remove、events。</div>
+
+          <h2>优先级建议</h2>
+          <ol>
+            <li>s03 / s06 / s08 已完成基本版：计划约束、transcript 归档、后台任务工具。</li>
+            <li>s07 暂缓：当前 PlanStore + TaskRecord 先满足基础 harness，不急着做 TaskGraph。</li>
+            <li>s09-s12 继续放入未来增强：TeamMember、MessageBus、Protocol FSM、Autonomous worker、WorktreeManager。</li>
+          </ol>
+
+          <div class="next-prev">
+            <a href="extending.html"><span>上一页</span>扩展开发</a>
+            <a href="../index.html"><span>回到</span>总览</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>

@@ -16,6 +16,10 @@ from harness.tools.builtin.todo_tool import (
     make_todo_write_tool,
     TODO_WRITE_SCHEMA,
 )
+from harness.tools.builtin.background_task import (
+    background_task_tool,
+    BACKGROUND_TASK_SCHEMA,
+)
 from harness.tools.builtin.spawn_agent import (
     SPAWN_AGENT_SCHEMA, make_spawn_agent_tool,
     SPAWN_AGENTS_SCHEMA, make_spawn_agents_tool,
@@ -36,6 +40,7 @@ __all__ = [
     "think_tool", "THINK_SCHEMA",
     "MEMORY_SCHEMA", "make_memory_tool",
     "todo_write_tool", "make_todo_write_tool", "TODO_WRITE_SCHEMA",
+    "background_task_tool", "BACKGROUND_TASK_SCHEMA",
     "SPAWN_AGENT_SCHEMA", "make_spawn_agent_tool",
     "SPAWN_AGENTS_SCHEMA", "make_spawn_agents_tool",
 ]

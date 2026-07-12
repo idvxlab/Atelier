@@ -15,6 +15,9 @@ Layer 2 — Auto (expensive, calls a small model):
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -30,6 +33,8 @@ class CompressionConfig:
     micro_keep_recent: int = 6       # keep last N rounds fully intact
     task_goal: str = ""              # injected after every auto-compression
     system_identity: str = ""        # injected after every auto-compression
+    transcript_dir: str = ".myharness/transcripts"
+    session_id: str = ""
 
 
 class ContextCompressor:
@@ -125,6 +130,7 @@ class ContextCompressor:
         recent_msgs = messages[keep_from:]
 
         summary_prompt = _build_summary_prompt(old_msgs)
+        _save_transcript(messages, cfg, round_idx)
         summary_text = await self._summarizer.complete(summary_prompt)
 
         rebuilt: list[Message] = []
@@ -204,3 +210,49 @@ def _build_summary_prompt(messages: list[Message]) -> str:
             if isinstance(block, TextBlock) and block.text.strip():
                 lines.append(f"[{msg.role}]: {block.text[:500]}")
     return "\n".join(lines)
+
+
+def _save_transcript(
+    messages: list[Message], cfg: CompressionConfig, round_idx: int
+) -> Path | None:
+    """Persist full pre-compression messages as JSONL for later recovery."""
+    if not cfg.transcript_dir:
+        return None
+    try:
+        root = Path(cfg.transcript_dir)
+        session_dir = root / (cfg.session_id or "unknown_session")
+        session_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        path = session_dir / f"round_{round_idx}_{stamp}.jsonl"
+        with path.open("w", encoding="utf-8") as fh:
+            for msg in messages:
+                fh.write(json.dumps(_message_to_dict(msg), ensure_ascii=False))
+                fh.write("\n")
+        return path
+    except Exception:
+        return None
+
+
+def _message_to_dict(msg: Message) -> dict:
+    blocks = []
+    for block in msg.content:
+        data = {"type": getattr(block, "type", "")}
+        for attr in (
+            "text",
+            "thinking",
+            "tool_call_id",
+            "tool_name",
+            "tool_input",
+            "content",
+            "is_error",
+        ):
+            if hasattr(block, attr):
+                data[attr] = getattr(block, attr)
+        blocks.append(data)
+    return {
+        "role": msg.role,
+        "message_id": msg.message_id,
+        "round_index": msg.round_index,
+        "is_compressed": msg.is_compressed,
+        "content": blocks,
+    }

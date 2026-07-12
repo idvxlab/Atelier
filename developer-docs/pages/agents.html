@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Persona 与 Agent - MyHarness 开发者文档</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <nav class="nav">
+          <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a class="active" href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <article class="doc">
+          <p class="eyebrow">Agent Profiles</p>
+          <h1>Persona 与主智能体</h1>
+          <p class="lead">MyHarness 把“智能体身份”做成 persona 文件，再在运行时转换成 AgentProfile。它控制系统提示词、可用工具、默认模型、审批模式，以及是否允许创建子智能体。</p>
+
+          <h2>1. Persona 放在哪里</h2>
+          <p>Persona 和 Skill 共用扫描入口，主要由 <code>harness/skills.py</code> 负责读取。系统会扫描项目级和用户级目录，然后按 front matter 解析。</p>
+          <ul>
+            <li>项目级目录适合和仓库一起提交，例如 <code>.myharness/personas</code> 或项目 Skill 目录中的 persona 类型文件。</li>
+            <li>用户级目录适合本机私有配置，例如个人 API 偏好、常用角色。</li>
+            <li>隐藏 persona 可以保留在系统中，但不在前端普通列表展示。</li>
+          </ul>
+
+          <h2>2. AgentProfile 字段</h2>
+          <p><code>harness/agents.py</code> 中的 AgentProfile 是运行时结构。它不是单纯展示名称，而是会影响 Engine 构造。</p>
+          <table>
+            <thead><tr><th>字段</th><th>作用</th></tr></thead>
+            <tbody>
+              <tr><td><code>name</code> / <code>description</code></td><td>前端展示和模型选择角色时使用。</td></tr>
+              <tr><td><code>system_prompt</code></td><td>注入 Prompt 组装层，决定角色工作方式。</td></tr>
+              <tr><td><code>allowed_tools</code></td><td>限制该智能体能看到和调用的工具集合。</td></tr>
+              <tr><td><code>provider</code> / <code>model</code></td><td>覆盖会话默认模型配置。</td></tr>
+              <tr><td><code>default_approval_mode</code></td><td>会话创建时的默认审批策略。</td></tr>
+              <tr><td><code>can_spawn</code></td><td>决定是否可以调用 <code>spawn_agent</code>。</td></tr>
+              <tr><td><code>spawn_allowlist</code></td><td>限定它能创建哪些子智能体。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>3. 创建会话时如何生效</h2>
+          <ol>
+            <li>前端或 REST 创建 session，传入 persona 名称或 profile id。</li>
+            <li><code>api/rest.py</code> 写入 session metadata。</li>
+            <li><code>harness/factory.py</code> 读取 metadata，选择 provider、approval mode 和 persona。</li>
+            <li>系统提示词组装时把 persona system prompt 放进 PromptBlock。</li>
+            <li>工具注册阶段根据 allowed_tools 过滤工具。</li>
+          </ol>
+
+          <h2>4. 当前几个主智能体的定位</h2>
+          <p>当前项目已经从早期占位 persona 逐步转向更通用的角色设计。比较推荐的方向是：</p>
+          <div class="grid two">
+            <section class="card"><h3>Builder</h3><p>适合直接实现、修改代码、运行测试、处理可执行任务。权限可以相对完整，但高风险工具仍走审批。</p></section>
+            <section class="card"><h3>Planner</h3><p>适合拆解目标、写计划、发现风险、管理待办。可减少写文件和 shell 权限，更多依赖 todo 与 ask_user。</p></section>
+            <section class="card"><h3>Researcher</h3><p>适合检索、阅读、归纳材料。工具偏向搜索、读取、web_fetch，默认不写项目文件。</p></section>
+            <section class="card"><h3>Reviewer</h3><p>适合代码审查、文档审查、风险分析。它应更多输出 findings，而不是自动修复。</p></section>
+          </div>
+
+          <h2>5. 修改建议</h2>
+          <p>新增 persona 时优先写清三个问题：它为谁服务、默认能做什么、什么动作必须审批。这样 AgentProfile 就不会只是一个名字，而是真正成为运行时约束。</p>
+
+          <div class="callout warning">
+            <strong>注意</strong>
+            persona 的 allowed_tools 只是可见工具范围，最终是否执行仍会经过 ToolExecutor、approval mode、confirm_tools 和 hook。
+          </div>
+
+          <div class="next-prev">
+            <a href="storage.html"><span>上一页</span>状态与存储</a>
+            <a href="skills.html"><span>下一页</span>Skill 机制</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>
+

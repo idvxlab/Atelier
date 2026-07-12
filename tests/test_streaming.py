@@ -38,7 +38,7 @@ class _StreamingLLM:
         return "Summary."
 
 
-def _build_engine(llm=None) -> AgentEngine:
+def _build_engine(llm=None, max_rounds: int = 5) -> AgentEngine:
     sid = "stream-test"
     emitter = EventEmitter(sid)
     if llm is None:
@@ -53,7 +53,7 @@ def _build_engine(llm=None) -> AgentEngine:
         tool_executor=executor,
         compressor=compressor,
         emitter=emitter,
-        max_rounds=5,
+        max_rounds=max_rounds,
     )
     return AgentEngine(
         config=EngineConfig(session_id=sid),
@@ -192,11 +192,16 @@ async def test_streaming_with_tool_call_protocol():
     engine._loop._registry.register(noop_schema, noop_handler)
 
     tokens: list[str] = []
+    events: list[dict] = []
 
     async def collect_token(text: str) -> None:
         tokens.append(text)
 
+    async def collect_event(event: dict) -> None:
+        events.append(event)
+
     engine.add_token_listener(collect_token)
+    engine.add_event_listener(collect_event)
     await engine.send_message("Do the thing.")
     await asyncio.sleep(0.2)
 
@@ -208,3 +213,136 @@ async def test_streaming_with_tool_call_protocol():
         b["text"] for b in assistant_msgs[-1]["content"] if b.get("type") == "text"
     )
     assert "Finished." in last_text
+    assert any(
+        event.get("type") == "runtime.event"
+        and event.get("data", {}).get("phase") == "continuation_required"
+        for event in events
+    )
+    assert any(
+        event.get("phase") == "continuation_required"
+        and isinstance(event.get("seq"), int)
+        for event in snapshot.get("runtime_events", [])
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_reply_after_tool_result_is_retried_and_hidden():
+    class _EmptyAfterToolLLM:
+        def __init__(self):
+            self.round = 0
+
+        async def chat(self, messages, tools=None):
+            if self.round == 0:
+                self.round += 1
+                return Message(
+                    role="assistant",
+                    content=[
+                        ToolCallBlock(
+                            tool_call_id="t-empty",
+                            tool_name="noop",
+                            tool_input={},
+                        )
+                    ],
+                )
+            if self.round == 1:
+                self.round += 1
+                return Message(role="assistant", content=[])
+            return Message(role="assistant", content=[TextBlock(text="Finished after retry.")])
+
+        async def stream_chat(self, messages, tools=None, on_token=None):
+            return await self.chat(messages, tools)
+
+        async def complete(self, prompt):
+            return "Summary."
+
+    from harness.types.tools import ToolSchema
+
+    llm = _EmptyAfterToolLLM()
+    engine = _build_engine(llm)
+    async def noop_handler(**_kwargs):
+        return "ok"
+
+    engine._loop._registry.register(
+        ToolSchema(name="noop", description="Does nothing.", params=[]),
+        noop_handler,
+    )
+
+    await engine.send_message("Do the thing.")
+    await asyncio.sleep(0.2)
+
+    snapshot = await engine.get_snapshot()
+    texts = [
+        b.get("text", "")
+        for m in snapshot["last_messages"]
+        for b in m["content"]
+        if b.get("type") == "text"
+    ]
+    assert snapshot["state"] == "COMPLETED"
+    assert any("Finished after retry." in text for text in texts)
+    assert not any("<internal>" in text for text in texts)
+
+
+@pytest.mark.asyncio
+async def test_loop_limit_is_visible_after_repeated_tool_calls():
+    class _AlwaysToolLLM:
+        def __init__(self):
+            self.round = 0
+
+        async def chat(self, messages, tools=None):
+            self.round += 1
+            return Message(
+                role="assistant",
+                content=[
+                    ToolCallBlock(
+                        tool_call_id=f"t-limit-{self.round}",
+                        tool_name="noop",
+                        tool_input={},
+                    )
+                ],
+            )
+
+        async def stream_chat(self, messages, tools=None, on_token=None):
+            return await self.chat(messages, tools)
+
+        async def complete(self, prompt):
+            return "Summary."
+
+    from harness.types.tools import ToolSchema
+
+    llm = _AlwaysToolLLM()
+    engine = _build_engine(llm, max_rounds=2)
+    events: list[dict] = []
+
+    async def collect_event(event: dict) -> None:
+        events.append(event)
+
+    async def noop_handler(**_kwargs):
+        return "ok"
+
+    engine.add_event_listener(collect_event)
+    engine._loop._registry.register(
+        ToolSchema(name="noop", description="Does nothing.", params=[]),
+        noop_handler,
+    )
+
+    await engine.send_message("Keep using tools.")
+    await asyncio.sleep(0.25)
+
+    snapshot = await engine.get_snapshot()
+    texts = [
+        b.get("text", "")
+        for m in snapshot["last_messages"]
+        for b in m["content"]
+        if b.get("type") == "text"
+    ]
+    assert snapshot["state"] == "COMPLETED"
+    assert any("已达到本轮最大循环次数" in text for text in texts)
+    assert any(
+        event.get("type") == "runtime.event"
+        and event.get("data", {}).get("phase") == "loop_limit_exceeded"
+        for event in events
+    )
+    assert any(
+        event.get("phase") == "loop_limit_exceeded"
+        for event in snapshot.get("runtime_events", [])
+    )

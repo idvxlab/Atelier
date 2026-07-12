@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>扩展开发 - MyHarness 开发者文档</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <nav class="nav">
+          <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a class="active" href="extending.html">扩展开发</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <article class="doc">
+          <p class="eyebrow">Developer Guide</p>
+          <h1>扩展开发</h1>
+          <p class="lead">这一页面向继续开发 MyHarness 的同学，说明新增能力时应该改哪里、怎么验证，以及哪些边界不要绕过。</p>
+
+          <h2>1. 新增内置工具</h2>
+          <ol>
+            <li>在 <code>harness/tools/builtin</code> 下实现工具函数。</li>
+            <li>定义清晰的参数 schema 和返回结构。</li>
+            <li>在 ToolRegistry 注册工具。</li>
+            <li>根据风险决定是否加入 <code>confirm_tools</code>。</li>
+            <li>补充测试，至少覆盖成功、参数错误和审批路径。</li>
+          </ol>
+
+          <h2>2. 新增 Provider</h2>
+          <p>Provider 应实现统一聊天接口，把项目内部 message / tool schema 转成厂商 API 格式，再把返回值转回统一结构。新增 Provider 时要注意流式输出、工具调用格式、错误码和 base_url 配置。</p>
+
+          <h2>3. 新增 Persona</h2>
+          <p>Persona 不应该只是换一个名字。请同时明确 system prompt、allowed_tools、默认 provider、默认 approval mode、是否允许 spawn，以及适合处理的任务边界。</p>
+
+          <h2>4. 新增 Skill</h2>
+          <p>Skill 应写成按需加载的能力说明。描述要足够具体，避免模型在无关任务里频繁调用。大型参考资料可以放在 Skill 附带文件中，由 Skill 正文说明何时读取。</p>
+
+          <h2>5. 新增持久化对象</h2>
+          <p>新增持久化对象时需要同时考虑内存后端、SQLite 后端、REST snapshot 和前端展示。只改 SQLite 容易导致测试环境或前端状态不一致。</p>
+
+          <h2>6. 新增 Hook</h2>
+          <p>Hook 适合放在不想侵入主循环但需要观察或修改行为的地方，例如工具执行前后、模型调用前后、审批决策、memory 写入和 session 创建。</p>
+          <table>
+            <thead><tr><th>Hook 点</th><th>适合做什么</th></tr></thead>
+            <tbody>
+              <tr><td>before tool</td><td>参数审计、风险标记、限流。</td></tr>
+              <tr><td>after tool</td><td>记录结果、触发通知、抽取 memory。</td></tr>
+              <tr><td>before model</td><td>统计 token、注入额外上下文。</td></tr>
+              <tr><td>session created</td><td>自动命名、绑定父子关系、初始化默认状态。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>7. 推荐验证清单</h2>
+          <ul>
+            <li>CLI 是否能跑通同样能力。</li>
+            <li>Web 是否能实时展示状态变化。</li>
+            <li>approval mode 切换后行为是否符合预期。</li>
+            <li>子智能体是否正确挂到会话树。</li>
+            <li>SQLite 重启后状态是否恢复。</li>
+            <li>错误路径是否写入 events，前端是否可见。</li>
+          </ul>
+
+          <h2>8. 仍建议继续补的能力</h2>
+          <p>为了把框架推进到更完整的 harness，可以继续完善独立持久 Memory 策略、后台任务完成后的自动上下文注入、TeamMember / MessageEnvelope、任务依赖图、自动结果汇总、worktree 隔离，以及更细粒度的工具权限策略。</p>
+
+          <div class="next-prev">
+            <a href="frontend.html"><span>上一页</span>Web 前端</a>
+            <a href="coverage.html"><span>下一页</span>章节对照</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>

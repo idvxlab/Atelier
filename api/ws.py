@@ -52,6 +52,7 @@ _FORWARDED_EVENT_TYPES = {
     "question.resolved",
     "title_generated",
     "subagent.created",
+    "runtime.event",
     # Rewrite history ("edit and regenerate"): the engine emits these on
     # success (message_rewritten) and on refusal (message_rewrite_refused).
     # Forwarding them lets the frontend react without polling.

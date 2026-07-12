@@ -45,6 +45,7 @@ from harness.tools.builtin import (
     THINK_SCHEMA, think_tool,
     MEMORY_SCHEMA, make_memory_tool,
     TODO_WRITE_SCHEMA, todo_write_tool, make_todo_write_tool,
+    BACKGROUND_TASK_SCHEMA, background_task_tool,
 )
 from harness.tools.executor import ToolExecutor
 from harness.tools.overflow import OverflowStore
@@ -152,6 +153,7 @@ ALL_TOOLS: dict[str, tuple] = {
     "think":       (THINK_SCHEMA,       think_tool),
     "memory":      (MEMORY_SCHEMA,      None),
     "todo_write":  (TODO_WRITE_SCHEMA,  todo_write_tool),
+    "background_task": (BACKGROUND_TASK_SCHEMA, background_task_tool),
 }
 
 
@@ -245,7 +247,7 @@ def build_engine(
         "makes progress invisible.\n"
     )
 
-    # Append tool-failure recovery instructions so the agent retries intelligently
+    
     _RECOVERY_INSTRUCTIONS = (
         "\n\n## Tool Failure Recovery\n"
         "When a tool returns an error:\n"
@@ -294,6 +296,7 @@ def build_engine(
             auto_trigger_ratio=comp.auto_trigger_ratio,
             micro_keep_recent=comp.micro_keep_recent,
             system_identity=full_system,
+            session_id=session_id,
         ),
     )
 

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Engine 与 ReAct · MyHarnessPy</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">MH</div><div><strong>MyHarnessPy</strong><span>开发者文档</span></div></div>
+        <nav>
+          <div class="nav-section"><div class="nav-title">开始</div><a class="nav-link" href="../index.html">总览</a><a class="nav-link" href="quickstart.html">运行与目录</a><a class="nav-link" href="config.html">配置系统</a></div>
+          <div class="nav-section"><div class="nav-title">核心机制</div><a class="nav-link active" href="engine.html">Engine 与 ReAct</a><a class="nav-link" href="tools.html">工具系统</a><a class="nav-link" href="security.html">权限与审批</a><a class="nav-link" href="storage.html">状态与存储</a></div>
+          <div class="nav-section"><div class="nav-title">智能体能力</div><a class="nav-link" href="agents.html">Persona 与 Agent</a><a class="nav-link" href="skills.html">Skill</a><a class="nav-link" href="plan-task.html">Plan 与 Task</a><a class="nav-link" href="memory.html">Memory</a><a class="nav-link" href="multi-agent.html">多 Agent</a></div>
+          <div class="nav-section"><div class="nav-title">扩展</div><a class="nav-link" href="mcp.html">MCP</a><a class="nav-link" href="frontend.html">Web 前端</a><a class="nav-link" href="extending.html">如何扩展</a></div>
+        </nav>
+      </aside>
+      <main class="content">
+        <article class="doc">
+          <div class="eyebrow">Runtime</div>
+          <h1>AgentEngine 与 ReAct 主循环</h1>
+          <p class="lead">Engine 是一个会话的单一事实源。ReactLoop 是实际执行推理和工具调用的循环。两者分工清楚：Engine 管状态，Loop 管每轮怎么跑。</p>
+
+          <h2>相关文件</h2>
+          <table>
+            <thead><tr><th>文件</th><th>职责</th></tr></thead>
+            <tbody>
+              <tr><td><code>harness/engine/engine.py</code></td><td>会话状态、消息、队列、审批、question、快照。</td></tr>
+              <tr><td><code>harness/engine/loop.py</code></td><td>ReAct 循环、模型调用、工具执行、interrupt。</td></tr>
+              <tr><td><code>harness/engine/state_machine.py</code></td><td>状态枚举和状态转移约束。</td></tr>
+              <tr><td><code>harness/factory.py</code></td><td>把 provider、工具、压缩器、loop、engine 装配起来。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>EngineConfig</h2>
+          <p><code>EngineConfig</code> 是运行时会话配置，关键字段包括：</p>
+          <ul>
+            <li><code>session_id</code>：当前会话 id。</li>
+            <li><code>system_prompt</code>：构建后的完整系统提示词。</li>
+            <li><code>confirm_tools</code>：需要审批的工具集合。</li>
+            <li><code>provider_name</code> 和 <code>agent_id</code>：当前会话使用的 provider 和 agent profile。</li>
+            <li><code>spawn_depth</code>：多 Agent 嵌套深度。</li>
+            <li><code>question_mode</code>：是否允许 ask_user。</li>
+            <li><code>approval_mode</code>：ask、auto、full。</li>
+            <li><code>memory_store</code> 和 <code>plan_store</code>：长期记忆和计划存储。</li>
+          </ul>
+
+          <h2>Engine 管理的状态</h2>
+          <ul>
+            <li><code>_messages</code>：当前会话的消息列表。</li>
+            <li><code>_sm</code>：状态机。</li>
+            <li><code>_pending_tool_calls</code>：等待审批的工具调用。</li>
+            <li><code>_pending_question_requests</code>：等待用户回答的问题。</li>
+            <li><code>_pending_commands</code>：运行中继续输入形成的队列。</li>
+            <li><code>_pending_spawns</code>：正在运行的子 Agent。</li>
+            <li><code>_event_listeners</code>：WebSocket 使用的事件监听器。</li>
+          </ul>
+
+          <h2>状态机</h2>
+          <table>
+            <thead><tr><th>状态</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td><code>WAITING_INPUT</code></td><td>等待用户输入。</td></tr>
+              <tr><td><code>RUNNING</code></td><td>主循环运行中。</td></tr>
+              <tr><td><code>WAITING_CONFIRMATION</code></td><td>工具命中审批规则，等待用户允许或拒绝。</td></tr>
+              <tr><td><code>WAITING_INTERRUPT</code></td><td>ask_user 已提出问题，等待用户回答。</td></tr>
+              <tr><td><code>COMPLETED</code></td><td>当前任务完成。</td></tr>
+              <tr><td><code>ERROR</code></td><td>运行出错。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>send_message 的逻辑</h2>
+          <ol>
+            <li>如果 Engine 正在 <code>RUNNING</code>，新输入不会直接插入 messages，而是进入 <code>pending_commands</code>。</li>
+            <li>如果任务看起来复杂，Engine 会尝试插入一条隐藏计划提醒，要求模型使用 <code>todo_write</code>。</li>
+            <li>追加用户消息。</li>
+            <li>状态转为 <code>RUNNING</code>。</li>
+            <li>后台创建任务执行 <code>_run_loop_guarded()</code>。</li>
+            <li>顶层 Agent 首次运行时会异步生成标题。</li>
+          </ol>
+
+          <h2>ReactLoop 每轮顺序</h2>
+          <ol>
+            <li>检查 cancel 信号。</li>
+            <li>执行上下文压缩。</li>
+            <li>读取工具 schema。</li>
+            <li>调用 LLM。</li>
+            <li>如果没有 tool call，追加 assistant 消息并结束。</li>
+            <li>检测重复工具调用，必要时注入 break message。</li>
+            <li>进入审批 gate。</li>
+            <li>并发执行工具。</li>
+            <li>验证 assistant/tool 消息配对。</li>
+            <li>原子追加 assistant 和 tool_result。</li>
+            <li>如果 tool_result 是 interrupt，暂停到 Engine 层。</li>
+            <li>安全点处理 pending command。</li>
+          </ol>
+
+          <h2>为什么要有 pending queue</h2>
+          <p>OpenAI-compatible 工具调用协议要求 assistant 的 tool_call 后面必须紧跟对应 tool_result。如果用户在中间插入新消息，下一次请求可能直接失败。</p>
+          <p>因此运行中的用户输入会先进入 <code>pending_commands</code>。当前工具链闭合后，Engine 再按顺序处理队列。</p>
+
+          <h2>快照接口</h2>
+          <p><code>GET /sessions/{id}/state</code> 调用 <code>engine.get_snapshot()</code>，返回前端需要的状态：</p>
+          <ul>
+            <li>会话状态、是否运行中、错误信息。</li>
+            <li>最近消息。</li>
+            <li>pending approval、pending question、pending commands、pending spawns。</li>
+            <li><code>todos</code> 和统一任务视图 <code>tasks</code>。</li>
+            <li>question mode、approval mode、agent id。</li>
+          </ul>
+
+          <div class="next-prev">
+            <a href="config.html"><span>上一页</span>配置系统</a>
+            <a href="tools.html"><span>下一页</span>工具系统</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>
+

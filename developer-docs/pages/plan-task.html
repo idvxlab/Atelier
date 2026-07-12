@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plan / Task - MyHarness 开发者文档</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <nav class="nav">
+          <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a class="active" href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <article class="doc">
+          <p class="eyebrow">Planning Layer</p>
+          <h1>Plan / Task</h1>
+          <p class="lead">Plan 是模型自己维护的步骤清单，Task 是系统统一展示的任务视图。前者帮助推理过程有结构，后者把 todo、队列、子智能体等运行时工作统一呈现给用户。</p>
+
+          <h2>1. PlanState 是什么</h2>
+          <p>PlanState 表示当前会话的计划状态。它通常由 <code>todo_write</code> 写入，每个 item 有标题、状态、顺序、来源等信息。</p>
+          <ul>
+            <li><code>pending</code>：还没开始。</li>
+            <li><code>in_progress</code>：当前正在处理。</li>
+            <li><code>completed</code>：已经完成。</li>
+          </ul>
+          <p>当前实现会把 plan 写入 storage 的 plans / plan_items，同时也同步到 session metadata，方便前端 snapshot 直接展示。</p>
+          <p>为了让计划真正约束执行，<code>todo_write</code> 会拒绝多个 <code>in_progress</code>。如果模型连续 3 轮工具调用没有更新计划，ReactLoop 会插入隐藏提醒，要求它更新 todo。</p>
+
+          <h2>2. TaskRecord / TaskStatus 是什么</h2>
+          <p>TaskRecord 是更宽的运行时任务模型，不只表示计划项。它把几个来源合成一个统一列表：</p>
+          <table>
+            <thead><tr><th>来源</th><th>映射方式</th></tr></thead>
+            <tbody>
+              <tr><td>Plan item</td><td>来自 todo_write 的步骤，适合展示“模型打算做什么”。</td></tr>
+              <tr><td>Pending command</td><td>等待审批或等待恢复的命令。</td></tr>
+              <tr><td>Pending spawn</td><td>已创建但未汇报完成的子智能体任务。</td></tr>
+              <tr><td>Session queue</td><td>会话排队中的用户输入或后续命令。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>3. 模型怎么拆解任务</h2>
+          <p>MyHarness 不使用硬编码 planner 算法拆任务，而是通过 Prompt 和工具约束引导模型自己拆解：</p>
+          <ol>
+            <li>Prompt 组装层把 planning 指令注入系统消息，要求复杂任务先列步骤。</li>
+            <li>模型判断任务是否需要计划。如果需要，它调用 <code>todo_write</code>。</li>
+            <li><code>todo_write</code> 把步骤持久化，并通过 snapshot / WebSocket 推给前端。</li>
+            <li>主循环继续执行后续工具调用或文本输出。</li>
+            <li>步骤状态变化时，模型再次调用 <code>todo_write</code> 更新。</li>
+          </ol>
+
+          <h2>4. 为什么有时看不到 Plan</h2>
+          <p>如果用户在输入里要求“做计划”，但模型没有调用 <code>todo_write</code>，前端就没有结构化 plan 可展示，只能看到普通文本回复。常见原因有三类：</p>
+          <ul>
+            <li>Prompt 没有强制复杂任务必须调用 <code>todo_write</code>。</li>
+            <li>当前 persona 的 allowed_tools 没有包含 todo 工具。</li>
+            <li>前端只展示 messages，没有把 snapshot.tasks / todos 做成明显 UI。</li>
+          </ul>
+          <p>当前系统已经有复杂任务提醒和多轮未更新提醒，但模型仍可能在简单任务里不建计划，这是正常的。</p>
+
+          <h2>5. 前端应该怎么展示</h2>
+          <p>推荐左侧会话树保留会话层级，右侧或侧栏提供独立任务面板。任务面板至少显示标题、状态、来源和所属 session。如果是子智能体生成的 plan，需要显示 parent_session_id，避免用户误以为新建了无关会话。</p>
+
+          <h2>6. 和长期任务系统的区别</h2>
+          <p>PlanState 偏向当前会话内的步骤管理。TaskRecord 可以逐步扩展成长期任务图，但如果要支持跨会话任务，需要补充全局 task id、依赖关系、负责人和恢复策略。</p>
+
+          <div class="next-prev">
+            <a href="skills.html"><span>上一页</span>Skill 机制</a>
+            <a href="memory.html"><span>下一页</span>Memory</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>

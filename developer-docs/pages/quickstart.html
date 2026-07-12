@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>运行与目录 · MyHarnessPy</title>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">MH</div><div><strong>MyHarnessPy</strong><span>开发者文档</span></div></div>
+        <nav>
+          <div class="nav-section"><div class="nav-title">开始</div><a class="nav-link" href="../index.html">总览</a><a class="nav-link active" href="quickstart.html">运行与目录</a><a class="nav-link" href="config.html">配置系统</a></div>
+          <div class="nav-section"><div class="nav-title">核心机制</div><a class="nav-link" href="engine.html">Engine 与 ReAct</a><a class="nav-link" href="tools.html">工具系统</a><a class="nav-link" href="security.html">权限与审批</a><a class="nav-link" href="storage.html">状态与存储</a></div>
+          <div class="nav-section"><div class="nav-title">智能体能力</div><a class="nav-link" href="agents.html">Persona 与 Agent</a><a class="nav-link" href="skills.html">Skill</a><a class="nav-link" href="plan-task.html">Plan 与 Task</a><a class="nav-link" href="memory.html">Memory</a><a class="nav-link" href="multi-agent.html">多 Agent</a></div>
+          <div class="nav-section"><div class="nav-title">扩展</div><a class="nav-link" href="mcp.html">MCP</a><a class="nav-link" href="frontend.html">Web 前端</a><a class="nav-link" href="extending.html">如何扩展</a></div>
+        </nav>
+      </aside>
+      <main class="content">
+        <article class="doc">
+          <div class="eyebrow">Start Here</div>
+          <h1>运行方式与目录结构</h1>
+          <p class="lead">这一页说明如何把项目跑起来、如何测试、每个目录负责什么。它适合新成员接手项目时先读。</p>
+
+          <h2>Python 环境</h2>
+          <p>项目要求 Python 3.11+。当前机器上可用解释器位于：</p>
+          <pre><code>D:\Anaconda\python.exe</code></pre>
+          <p>安装依赖和开发依赖：</p>
+          <pre><code>D:\Anaconda\python.exe -m pip install -e .[dev]</code></pre>
+
+          <h2>启动 Web 服务</h2>
+          <p>Web 后端使用 FastAPI + Uvicorn。启动命令：</p>
+          <pre><code>D:\Anaconda\python.exe -m uvicorn api.rest:app --host 127.0.0.1 --port 8000 --reload</code></pre>
+          <p>启动后访问：</p>
+          <pre><code>http://127.0.0.1:8000</code></pre>
+          <p>前端由 <code>api/rest.py</code> 直接返回 <code>static/index.html</code>。静态资源挂载在 <code>/static</code>。</p>
+
+          <h2>启动 CLI</h2>
+          <p>CLI 与 Web 复用同一套 <code>build_engine()</code>、provider、ToolRegistry 和 AgentEngine。</p>
+          <pre><code>D:\Anaconda\python.exe cli.py</code></pre>
+          <p>可用参数包括 provider、persona、question mode 等。CLI 内部也支持命令系统，例如列工具、列 persona、查看状态。</p>
+
+          <h2>运行测试</h2>
+          <pre><code>D:\Anaconda\python.exe -m pytest</code></pre>
+          <p>常用针对性测试：</p>
+          <pre><code>D:\Anaconda\python.exe -m pytest tests/test_engine.py tests/test_tools.py
+D:\Anaconda\python.exe -m pytest tests/test_spawn_agent.py
+D:\Anaconda\python.exe -m pytest tests/test_storage.py tests/test_tasks.py</code></pre>
+
+          <h2>目录结构</h2>
+          <table>
+            <thead><tr><th>目录</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><code>api/</code></td><td>REST 和 WebSocket 入口。</td></tr>
+              <tr><td><code>harness/engine/</code></td><td>AgentEngine、ReactLoop、状态机、压缩、PromptCache。</td></tr>
+              <tr><td><code>harness/tools/</code></td><td>工具 schema、注册、执行和内置工具。</td></tr>
+              <tr><td><code>harness/storage/</code></td><td>Session、Checkpoint、Memory、Plan 的抽象与后端。</td></tr>
+              <tr><td><code>harness/llm/</code></td><td>OpenAI-compatible 和 Anthropic provider。</td></tr>
+              <tr><td><code>harness/mcp/</code></td><td>MCP client、transport、bridge。</td></tr>
+              <tr><td><code>.myharness/personas/</code></td><td>persona 和 AgentProfile 配置。</td></tr>
+              <tr><td><code>.myharness/skills/</code></td><td>项目级 skill。</td></tr>
+              <tr><td><code>static/</code></td><td>当前 Web 应用前端。</td></tr>
+              <tr><td><code>developer-docs/</code></td><td>本开发者文档站。</td></tr>
+            </tbody>
+          </table>
+
+          <h2>开发注意事项</h2>
+          <ul>
+            <li>改工具时要同时检查 <code>harness/factory.py</code> 的 <code>ALL_TOOLS</code> 和 <code>config.yaml</code> 的 <code>tools.enabled</code>。</li>
+            <li>改会话状态时要确认 <code>/sessions/{id}/state</code> 返回值和前端渲染同步。</li>
+            <li>改多 Agent 时要检查 session metadata 中的 <code>parent_session_id</code>、<code>spawn_depth</code> 和 <code>display_name</code>。</li>
+            <li>改持久化结构时要补 SQLite 与内存后端两套实现。</li>
+          </ul>
+
+          <div class="next-prev">
+            <a href="../index.html"><span>上一页</span>总览</a>
+            <a href="config.html"><span>下一页</span>配置系统</a>
+          </div>
+        </article>
+      </main>
+    </div>
+  </body>
+</html>
+

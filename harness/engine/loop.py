@@ -36,6 +36,7 @@ from harness.observability.events import EventEmitter
 from harness.hooks import HookEvent, HookManager
 
 OnMessageCallback = Callable[[Message], Awaitable[None]]
+RuntimeEventCallback = Callable[[dict], Awaitable[None]]
 
 
 class InterruptSignal(BaseException):
@@ -82,6 +83,7 @@ class ReactLoop:
         self._prompt_cache: PromptCache = prompt_cache if prompt_cache is not None else PromptCache()
         self._hooks = hooks
         self._session_id = session_id
+        self._rounds_since_todo_write = 0
 
     async def run(
         self,
@@ -92,6 +94,7 @@ class ReactLoop:
         on_token: TokenCallback | None = None,
         on_pre_execute: Callable[[list], Awaitable[bool]] | None = None,
         drain_callback: Callable[[str], Awaitable[None]] | None = None,
+        on_event: RuntimeEventCallback | None = None,
     ) -> None:
         """
         Main ReAct cycle. `messages` is the live list owned by AgentEngine.
@@ -102,8 +105,16 @@ class ReactLoop:
         when it is drained from the intervention queue. Used by AgentEngine
         to remove the corresponding entry from _pending_commands.
         """
+        empty_reply_retries = 0
         for round_idx in range(self._max_rounds):
             self._emitter.set_round(round_idx)
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {"phase": "round_started", "round": round_idx},
+                    }
+                )
 
             # ── 1. Cancel check at round START (must be immediate) ─────────
             if cancel_event.is_set():
@@ -147,6 +158,18 @@ class ReactLoop:
                 "llm_call", "triggered-executed",
                 detail={"round": round_idx, "msg_count": len(messages)},
             )
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "llm_started",
+                            "round": round_idx,
+                            "message_count": len(messages),
+                            "tool_count": len(tools),
+                        },
+                    }
+                )
             if self._hooks is not None:
                 hook_result = await self._hooks.emit(
                     HookEvent(
@@ -166,6 +189,18 @@ class ReactLoop:
                     )
             reply: Message = await self._chat_or_cancel(messages, tools, cancel_event, on_token)
             reply.round_index = round_idx
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "llm_finished",
+                            "round": round_idx,
+                            "has_tool_calls": reply.has_tool_calls(),
+                            "tool_count": len(reply.tool_calls()),
+                        },
+                    }
+                )
             if self._hooks is not None:
                 await self._hooks.emit(
                     HookEvent(
@@ -181,11 +216,61 @@ class ReactLoop:
 
             # ── 5. No tool calls → done ────────────────────────────────────
             if not reply.has_tool_calls():
+                if not self._has_visible_assistant_output(reply):
+                    empty_reply_retries += 1
+                    self._emitter.emit(
+                        "empty_assistant_reply", "triggered-intercepted",
+                        detail={"round": round_idx, "retry": empty_reply_retries},
+                    )
+                    if on_event is not None:
+                        await on_event(
+                            {
+                                "type": "runtime.event",
+                                "data": {
+                                    "phase": "empty_reply_retry",
+                                    "round": round_idx,
+                                    "retry": empty_reply_retries,
+                                },
+                            }
+                        )
+                    if empty_reply_retries <= 2:
+                        await on_message(
+                            Message(
+                                role="user",
+                                content=[
+                                    TextBlock(
+                                        text=(
+                                            "<internal>Previous tools completed, "
+                                            "but your last assistant response was "
+                                            "empty. Continue from the tool results "
+                                            "and provide the next action or final "
+                                            "answer. Do not return an empty "
+                                            "message.</internal>"
+                                        )
+                                    )
+                                ],
+                                round_index=round_idx,
+                            )
+                        )
+                        continue
+                    reply = Message(
+                        role="assistant",
+                        content=[
+                            TextBlock(
+                                text=(
+                                    "工具已经执行完成，但模型连续返回空内容，"
+                                    "本轮已停止。请继续发送一句话让我接着补全。"
+                                )
+                            )
+                        ],
+                        round_index=round_idx,
+                    )
                 await on_message(reply)
                 await self._drain_interventions(
                     intervention_queue, round_idx, on_message, drain_callback
                 )
                 return
+            empty_reply_retries = 0
 
             # ── 6. Loop detection ──────────────────────────────────────────
             tool_calls = reply.tool_calls()
@@ -226,8 +311,13 @@ class ReactLoop:
 
             # ── 7. Execute all tools concurrently ──────────────────────────
             results: list[ToolResultBlock] = await self._executor.execute_all(
-                tool_calls, round_idx
+                tool_calls, round_idx, on_event=on_event
             )
+            called_todo_write = any(c.tool_name == "todo_write" for c in tool_calls)
+            if called_todo_write:
+                self._rounds_since_todo_write = 0
+            elif self._registry.get("todo_write") is not None:
+                self._rounds_since_todo_write += 1
 
             tool_result_msg = Message(
                 role="tool",
@@ -241,6 +331,27 @@ class ReactLoop:
             # ── 9. Append pair atomically ──────────────────────────────────
             await on_message(reply)
             await on_message(tool_result_msg)
+            if (
+                self._registry.get("todo_write") is not None
+                and self._rounds_since_todo_write >= 3
+            ):
+                await on_message(
+                    Message(
+                        role="system",
+                        content=[
+                            TextBlock(
+                                text=(
+                                    "<reminder>Update the visible plan with "
+                                    "todo_write before continuing. Mark finished "
+                                    "steps completed and keep exactly one step "
+                                    "in_progress.</reminder>"
+                                )
+                            )
+                        ],
+                        round_index=round_idx,
+                    )
+                )
+                self._rounds_since_todo_write = 0
 
             # ── 9.5. Interrupt detection — engine-level pause ─────────────
             # If any tool result carries is_interrupt=True, the engine
@@ -274,11 +385,53 @@ class ReactLoop:
             await self._drain_interventions(
                 intervention_queue, round_idx, on_message
             )
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "continuation_required",
+                            "round": round_idx,
+                            "next_round": round_idx + 1,
+                        },
+                    }
+                )
 
         # Exceeded max rounds
         self._emitter.emit(
             "max_rounds_exceeded", "execution-error",
             detail={"max_rounds": self._max_rounds},
+        )
+        if on_event is not None:
+            await on_event(
+                {
+                    "type": "runtime.event",
+                    "data": {
+                        "phase": "loop_limit_exceeded",
+                        "round": self._max_rounds,
+                        "max_rounds": self._max_rounds,
+                    },
+                }
+            )
+        await on_message(
+            Message(
+                role="assistant",
+                content=[
+                    TextBlock(
+                        text=(
+                            f"已达到本轮最大循环次数（{self._max_rounds}），"
+                            "我先暂停，避免无限执行。请继续发送需求，我会从当前进度接着做。"
+                        )
+                    )
+                ],
+                round_index=self._max_rounds,
+            )
+        )
+
+    def _has_visible_assistant_output(self, msg: Message) -> bool:
+        return any(
+            isinstance(block, TextBlock) and block.text.strip()
+            for block in msg.content
         )
 
     async def _chat_or_cancel(

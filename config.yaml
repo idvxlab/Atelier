@@ -134,6 +134,7 @@ tools:
     - think
     - memory
     - todo_write
+    - background_task
 
   confirm_tools:
     - shell
@@ -147,6 +148,7 @@ tools:
     web_search: 8000
     memory: 8000
     todo_write: 5000
+    background_task: 8000
 
 mcp_servers:
   filesystem:
