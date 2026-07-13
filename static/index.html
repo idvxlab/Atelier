@@ -1065,8 +1065,7 @@
       }
 
       .tool-icon {
-        color: var(--yellow);
-        font-size: 13px;
+        display: none;
       }
 
       .tool-name {
@@ -1940,6 +1939,13 @@
 
           <!-- Sidebar bottom -->
           <div id="sidebar-bottom">
+            <button
+              class="btn btn-sm"
+              style="width: 100%; margin-bottom: 6px"
+              onclick="openMemoryPanel()"
+            >
+              &#35760;&#24518;
+            </button>
             <button
               class="btn btn-sm"
               style="width: 100%"
@@ -3332,7 +3338,7 @@
         const round = Number.isInteger(evt.round) ? `R${evt.round + 1} ` : "";
         if (evt.phase === "round_started") return `${round}\u5f00\u59cb\u65b0\u4e00\u8f6e\u6267\u884c`;
         if (evt.phase === "llm_started") {
-          return `${round}\u6b63\u5728\u8bf7\u6c42\u6a21\u578b\uff0c\u6d88\u606f ${evt.message_count || 0} \u6761\uff0c\u5de5\u5177 ${evt.tool_count || 0} \u4e2a`;
+          return `${round}\u6b63\u5728\u8bf7\u6c42\u6a21\u578b\uff0c\u4e0a\u4e0b\u6587\u6d88\u606f ${evt.message_count || 0} \u6761\uff0c\u53ef\u7528\u5de5\u5177 ${evt.tool_count || 0} \u4e2a`;
         }
         if (evt.phase === "llm_finished") {
           return evt.has_tool_calls
@@ -4578,7 +4584,7 @@
         wrap.className = "thinking-block";
         wrap.innerHTML =
           `<div class="thinking-header">` +
-          `<span>&#128173; &#24605;&#32771;&#36807;&#31243;</span>` +
+          `<span>&#24605;&#32771;&#36807;&#31243;</span>` +
           `<span class="thinking-toggle">&#25910;&#36215; &#9650;</span>` +
           `</div>` +
           `<div class="thinking-body"><div class="thinking-content"></div></div>`;
@@ -4957,6 +4963,15 @@
         if (panel.classList.contains("open")) buildConfigTree();
       }
 
+      async function openMemoryPanel() {
+        const panel = document.getElementById("config-panel");
+        if (!panel.classList.contains("open")) {
+          panel.classList.add("open");
+        }
+        await buildConfigTree();
+        await loadMemoryPanel();
+      }
+
       async function buildConfigTree() {
         const tree = document.getElementById("config-tree");
         tree.innerHTML = "";
@@ -5014,6 +5029,7 @@
       function treeFileRow(name, onclick) {
         const row = document.createElement("div");
         row.className = "tree-file";
+        row.dataset.name = name;
         row.innerHTML = `<span>📄 ${escHtml(name)}</span><span class="del-btn" title="删除">✕</span>`;
         row.addEventListener("click", onclick);
         return row;
@@ -5092,7 +5108,11 @@
       async function loadMemoryPanel() {
         document.querySelectorAll(".tree-file").forEach((el) => {
           const txt = el.querySelector("span")?.textContent;
-          el.classList.toggle("active", txt === "📄 长期记忆");
+          const isMemoryNode =
+            el.dataset.name === "\u957f\u671f\u8bb0\u5fc6" ||
+            (txt || "").includes("\u957f\u671f\u8bb0\u5fc6") ||
+            (txt || "").includes("memory");
+          el.classList.toggle("active", isMemoryNode);
         });
         currentConfigFile = { type: "memory", name: "memory" };
         document.getElementById("config-filename").textContent = "memory";

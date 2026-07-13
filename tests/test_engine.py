@@ -83,6 +83,12 @@ class TestLoopDetector:
         ld = LoopDetector(window=5, threshold=2)
         assert not ld.is_repeated(self._make_calls("read_file"))
 
+    def test_default_detects_repeat_on_third_occurrence(self):
+        ld = LoopDetector()
+        assert not ld.is_repeated(self._make_calls("shell"))
+        assert not ld.is_repeated(self._make_calls("shell"))
+        assert ld.is_repeated(self._make_calls("shell"))
+
     def test_detects_repeat_on_second_occurrence(self):
         ld = LoopDetector(window=5, threshold=2)
         ld.is_repeated(self._make_calls("shell"))   # first — not repeated
@@ -348,6 +354,38 @@ async def test_snapshot_returns_full_visible_history_and_hides_internal_reminder
     assert texts[0] == "visible 0"
     assert texts[-1] == "visible 24"
     assert not any("Update the visible plan" in text for text in texts)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_hides_internal_loop_detector_message():
+    engine = _build_engine("Done.")
+    engine._messages.append(
+        Message(role="user", content=[TextBlock(text="visible request")])
+    )
+    engine._messages.append(
+        Message(
+            role="system",
+            content=[
+                TextBlock(
+                    text=(
+                        "<internal>Repeated tool call detected. "
+                        "Please reconsider your approach.</internal>"
+                    )
+                )
+            ],
+        )
+    )
+
+    snapshot = await engine.get_snapshot()
+    texts = [
+        block.get("text", "")
+        for message in snapshot["last_messages"]
+        for block in message["content"]
+        if block.get("type") == "text"
+    ]
+
+    assert "visible request" in texts
+    assert not any("Repeated tool call detected" in text for text in texts)
 
 
 @pytest.mark.asyncio

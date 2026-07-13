@@ -16,7 +16,7 @@ class LoopDetector:
     so that call order within a round doesn't matter.
     """
 
-    def __init__(self, window: int = 5, threshold: int = 2) -> None:
+    def __init__(self, window: int = 5, threshold: int = 3) -> None:
         self._window = window
         self._threshold = threshold
         self._history: deque[str] = deque(maxlen=window)

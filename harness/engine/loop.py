@@ -80,7 +80,7 @@ class ReactLoop:
         self._compressor = compressor
         self._emitter = emitter
         self._max_rounds = max_rounds
-        self._detector = LoopDetector(window=5, threshold=2)
+        self._detector = LoopDetector(window=5, threshold=3)
         self._prompt_cache: PromptCache = prompt_cache if prompt_cache is not None else PromptCache()
         self._hooks = hooks
         self._session_id = session_id
@@ -296,14 +296,14 @@ class ReactLoop:
                 # because no tool_result is pending at this point — we're
                 # short-circuiting before executing tools)
                 break_msg = Message(
-                    role="user",
+                    role="system",
                     content=[
                         TextBlock(
                             text=(
-                                "[SYSTEM: Repeated tool call detected. "
+                                "<internal>Repeated tool call detected. "
                                 "You are calling the same tools with the same "
                                 "arguments repeatedly. Please reconsider your "
-                                "approach and try a different strategy.]"
+                                "approach and try a different strategy.</internal>"
                             )
                         )
                     ],
