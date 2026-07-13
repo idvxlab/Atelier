@@ -24,8 +24,11 @@
 pip install -e ".[dev]"
 
 # 启动 Web 服务（推荐）
+# 注意：运行智能体长任务/写文件任务时不要加 --reload。
+# --reload 会在智能体写入文件后重启服务，导致会话停在 tool_result 后。
+uvicorn api.rest:app --port 8000
 
-uvicorn api.rest:app --reload --port 8000# 浏览器打开 http://localhost:8000
+# 浏览器打开 http://localhost:8000
 
 # 或直接用 CLI（无需启动服务器）
 python cli.py --persona coder

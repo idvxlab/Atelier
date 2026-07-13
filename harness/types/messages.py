@@ -142,3 +142,84 @@ def validate_message_sequence(messages: list[Message]) -> None:
                 raise ProtocolViolationError(
                     f"Message[{i}] has role='tool' but message[{i-1}] has no tool_calls"
                 )
+
+
+def repair_message_sequence(messages: list[Message]) -> list[Message]:
+    """
+    Return a protocol-safe copy of messages.
+
+    This is a recovery guard for persisted or compressed histories. If an
+    assistant tool_call is missing its immediate tool_result, synthesize an
+    error result so the next LLM request remains valid and the model can
+    recover instead of the provider rejecting the whole request.
+    """
+    repaired: list[Message] = []
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+
+        # Drop orphan tool messages; providers reject them and there is no
+        # preceding assistant call they can answer.
+        if msg.role == "tool" and (
+            not repaired
+            or repaired[-1].role != "assistant"
+            or not repaired[-1].has_tool_calls()
+        ):
+            i += 1
+            continue
+
+        repaired.append(msg)
+
+        if msg.role == "assistant" and msg.has_tool_calls():
+            call_ids = [b.tool_call_id for b in msg.tool_calls()]
+            next_msg = messages[i + 1] if i + 1 < len(messages) else None
+            if next_msg is not None and next_msg.role == "tool":
+                next_blocks = [
+                    block
+                    for block in next_msg.content
+                    if isinstance(block, ToolResultBlock)
+                    and block.tool_call_id in set(call_ids)
+                ]
+                present = {
+                    block.tool_call_id
+                    for block in next_blocks
+                    if isinstance(block, ToolResultBlock)
+                }
+                for call_id in call_ids:
+                    if call_id not in present:
+                        next_blocks.append(_missing_tool_result(call_id))
+                repaired.append(
+                    Message(
+                        role="tool",
+                        content=next_blocks,
+                        round_index=next_msg.round_index,
+                        is_compressed=next_msg.is_compressed,
+                    )
+                )
+                i += 2
+                continue
+
+            repaired.append(
+                Message(
+                    role="tool",
+                    content=[_missing_tool_result(call_id) for call_id in call_ids],
+                    round_index=msg.round_index,
+                    is_compressed=True,
+                )
+            )
+
+        i += 1
+
+    return repaired
+
+
+def _missing_tool_result(call_id: str) -> ToolResultBlock:
+    return ToolResultBlock(
+        tool_call_id=call_id,
+        content=(
+            "Error: previous tool result was missing from the persisted "
+            "conversation history. Continue by reassessing the current state "
+            "and retrying the necessary action if it is still needed."
+        ),
+        is_error=True,
+    )

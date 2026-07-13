@@ -610,6 +610,34 @@ async def get_state(session_id: str) -> dict[str, Any]:
     return snapshot
 
 
+@app.post("/sessions/{session_id}/continue")
+async def continue_session(session_id: str) -> dict[str, Any]:
+    engine = _engines.get(session_id)
+    if engine is None:
+        await get_state(session_id)
+        engine = _engines.get(session_id)
+    if engine is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session '{session_id}' not found",
+        )
+    return await engine.continue_if_needed()
+
+
+@app.post("/sessions/{session_id}/recover")
+async def recover_session(session_id: str) -> dict[str, Any]:
+    engine = _engines.get(session_id)
+    if engine is None:
+        await get_state(session_id)
+        engine = _engines.get(session_id)
+    if engine is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session '{session_id}' not found",
+        )
+    return await engine.recover_if_possible()
+
+
 @app.get("/memory")
 async def list_memory(
     query: str = "",

@@ -24,6 +24,7 @@ from harness.types.messages import (
     Message,
     TextBlock,
     ToolResultBlock,
+    repair_message_sequence,
     validate_message_sequence,
 )
 from harness.engine.compression import ContextCompressor
@@ -136,6 +137,13 @@ class ReactLoop:
                 messages[:] = compressed
                 self._emitter.emit(
                     "compression_applied", "triggered-executed",
+                    detail={"round": round_idx, "msg_count": len(messages)},
+                )
+            repaired = repair_message_sequence(messages)
+            if repaired is not messages and repaired != messages:
+                messages[:] = repaired
+                self._emitter.emit(
+                    "message_sequence_repaired", "triggered-intercepted",
                     detail={"round": round_idx, "msg_count": len(messages)},
                 )
 
@@ -382,6 +390,26 @@ class ReactLoop:
                 )
 
             # ── 10. Drain interventions ONLY after tool_result is flushed ──
+            await on_message(
+                Message(
+                    role="user",
+                    content=[
+                        TextBlock(
+                            text=(
+                                "<internal>Tool results for this batch have "
+                                "been recorded. Continue the task from these "
+                                "results: briefly analyze progress with "
+                                "`think` when useful, then either call the "
+                                "next needed tools or provide the final "
+                                "answer. Do not stop immediately after tool "
+                                "results.</internal>"
+                            )
+                        )
+                    ],
+                    round_index=round_idx,
+                )
+            )
+
             await self._drain_interventions(
                 intervention_queue, round_idx, on_message
             )

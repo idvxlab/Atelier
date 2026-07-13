@@ -12,15 +12,20 @@ if TYPE_CHECKING:
 TODO_WRITE_SCHEMA = ToolSchema(
     name="todo_write",
     description=(
-        "Create, read, and update the visible session plan. Use this before "
-        "non-trivial multi-step work and update it as steps progress."
+        "Create, replace, read, and update the single visible session plan. "
+        "Use this before non-trivial multi-step work, update it as steps "
+        "progress, and replace it with action=set when the user asks for a "
+        "new, revised, or more detailed plan."
     ),
     params=[
         ToolParam(name="session_id", type="string", description="Current session identifier"),
         ToolParam(
             name="action",
             type="string",
-            description="Action: set (initialize visible plan), update (change one step status), or get (retrieve plan)",
+            description=(
+                "Action: set (replace the current visible plan), update "
+                "(change one step status), or get (retrieve plan)"
+            ),
         ),
         ToolParam(
             name="todos",

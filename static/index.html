@@ -564,7 +564,6 @@
       }
       .clarify-custom-input {
         width: 100%;
-        margin-top: 8px;
         padding: 6px 10px;
         border: 1px solid var(--border);
         border-radius: 6px;
@@ -573,6 +572,19 @@
         font-family: var(--font);
         font-size: 13px;
         outline: none;
+      }
+      .clarify-custom-row {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        margin-top: 8px;
+      }
+      .clarify-custom-row .clarify-custom-input {
+        flex: 1;
+        min-width: 0;
+      }
+      .clarify-custom-row .btn {
+        flex-shrink: 0;
       }
       .clarify-actions {
         display: flex;
@@ -2259,7 +2271,10 @@
       let streamIsThinking = false;
       let pendingUserEchoes = [];
       let activeThinkingGroup = null;
+      let lastToolResultsBelongToThinkingGroup = false;
       let runtimeEvents = [];
+      const autoContinuationKeys = new Set();
+      const autoRecoveryKeys = new Set();
       let allCommands = []; // command list from GET /commands
       let filteredCommands = []; // search-filtered subset
       let currentQuestionMode = "question";
@@ -3085,11 +3100,25 @@
           });
           block.appendChild(opts);
           if (q.custom) {
+            const customRow = div("clarify-custom-row");
             const custom = document.createElement("input");
             custom.className = "clarify-custom-input";
             custom.dataset.qi = String(qi);
             custom.placeholder = "自定义回答";
-            block.appendChild(custom);
+            custom.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitClarification(req.request_id, prompts);
+              }
+            });
+            const customSubmit = document.createElement("button");
+            customSubmit.type = "button";
+            customSubmit.className = "btn btn-primary btn-sm";
+            customSubmit.textContent = "提交";
+            customSubmit.onclick = () => submitClarification(req.request_id, prompts);
+            customRow.appendChild(custom);
+            customRow.appendChild(customSubmit);
+            block.appendChild(customRow);
           }
           block.appendChild(div("clarify-status"));
           card.appendChild(block);
@@ -3242,6 +3271,7 @@
 
       function appendRuntimeEvent(evt) {
         if (!evt || !evt.phase) return;
+        if (evt.seq && runtimeEvents.some((item) => item.seq === evt.seq)) return;
         runtimeEvents.push({
           ...evt,
           at: evt.at
@@ -3258,14 +3288,26 @@
       }
 
       function setRuntimeEvents(events) {
-        runtimeEvents = Array.isArray(events)
-          ? events.slice(-40).map((evt) => ({
-              ...evt,
-              at: evt.at
-                ? new Date(evt.at).toLocaleTimeString()
-                : new Date().toLocaleTimeString(),
-            }))
-          : [];
+        if (!Array.isArray(events) || !events.length) {
+          renderRuntimeEvents();
+          return;
+        }
+        const keyed = new Map();
+        for (const evt of runtimeEvents) {
+          const key = evt.seq ? "seq:" + evt.seq : JSON.stringify(evt);
+          keyed.set(key, evt);
+        }
+        for (const evt of events) {
+          const normalized = {
+            ...evt,
+            at: evt.at
+              ? new Date(evt.at).toLocaleTimeString()
+              : new Date().toLocaleTimeString(),
+          };
+          const key = normalized.seq ? "seq:" + normalized.seq : JSON.stringify(normalized);
+          keyed.set(key, normalized);
+        }
+        runtimeEvents = Array.from(keyed.values()).slice(-40);
         renderRuntimeEvents();
       }
 
@@ -3280,6 +3322,8 @@
           continuation_required: "\u7ee7\u7eed\u63a8\u7406",
           empty_reply_retry: "\u7a7a\u56de\u590d\u91cd\u8bd5",
           loop_limit_exceeded: "\u8fbe\u5230\u4e0a\u9650",
+          interrupted_after_tool: "\u53ef\u7ee7\u7eed",
+          engine_recovery_started: "\u6b63\u5728\u6062\u590d",
         };
         return labels[phase] || String(phase);
       }
@@ -3313,6 +3357,12 @@
         }
         if (evt.phase === "loop_limit_exceeded") {
           return `\u5df2\u8fbe\u5230\u672c\u8f6e\u6700\u5927\u6267\u884c\u6b65\u6570 ${evt.max_rounds || ""}\uff0c\u5df2\u6682\u505c\u4ee5\u907f\u514d\u65e0\u9650\u5faa\u73af`;
+        }
+        if (evt.phase === "interrupted_after_tool") {
+          return "\u4e0a\u6b21\u6267\u884c\u5df2\u5199\u5165\u5de5\u5177\u7ed3\u679c\uff0c\u4f46\u6ca1\u6709\u8fdb\u5165\u4e0b\u4e00\u8f6e\u6a21\u578b\u63a8\u7406\u3002\u6b63\u5728\u4ece\u5f53\u524d\u8fdb\u5ea6\u6062\u590d";
+        }
+        if (evt.phase === "engine_recovery_started") {
+          return "\u68c0\u6d4b\u5230\u53ef\u6062\u590d\u7684\u6267\u884c\u4e2d\u65ad\uff0c\u5df2\u8bf7\u6c42\u6a21\u578b\u4ece\u5f53\u524d\u8fdb\u5ea6\u7ee7\u7eed";
         }
         return JSON.stringify(evt);
       }
@@ -3951,6 +4001,11 @@
           errBanner.style.display = "block";
           errBanner.textContent =
             "⚠ 引擎出错：" + (snap.last_error || "").split("\n").slice(-1)[0];
+          const detail = (snap.last_error || "").split("\n").slice(-1)[0];
+          errBanner.textContent = snap.recoverable_error
+            ? "\u672c\u8f6e\u6267\u884c\u4e2d\u65ad\uff0c\u6b63\u5728\u5c1d\u8bd5\u4ece\u5f53\u524d\u8fdb\u5ea6\u6062\u590d\uff1a" + detail
+            : "\u672c\u8f6e\u6267\u884c\u4e2d\u65ad\uff1a" + detail;
+          if (snap.recoverable_error) autoRecoverIfNeeded(snap);
         } else {
           errBanner.style.display = "none";
         }
@@ -4001,6 +4056,8 @@
           streamText = "";
           streamThinkingText = "";
           streamIsThinking = false;
+          activeThinkingGroup = null;
+          lastToolResultsBelongToThinkingGroup = false;
           lastMsgCount = 0;
           pendingUserEchoes = [];
 
@@ -4064,9 +4121,52 @@
         renderPlan(planTasks.length ? planTasks : snap.todos || []);
         renderPendingCommands(snap.pending_commands || []);
         setRuntimeEvents(snap.runtime_events || []);
+        if (snap.needs_continuation) {
+          appendRuntimeEvent({
+            phase: "interrupted_after_tool",
+            seq: "needs-continuation-" + (snap.session_id || currentSessionId || ""),
+          });
+          autoContinueIfNeeded(snap);
+        }
 
         // Scroll to bottom
         container.scrollTop = container.scrollHeight;
+      }
+
+      async function autoContinueIfNeeded(snap) {
+        const sid = snap.session_id || currentSessionId;
+        if (!sid || snap.is_running || !snap.needs_continuation) return;
+        const key = `${sid}:${snap.session_version ?? "unknown"}`;
+        if (autoContinuationKeys.has(key)) return;
+        autoContinuationKeys.add(key);
+        try {
+          const result = await api(`/sessions/${sid}/continue`, "POST");
+          if (result && result.status === "started") {
+            setTimeout(doPoll, 250);
+          }
+        } catch (err) {
+          console.warn("[autoContinueIfNeeded] failed", err);
+        }
+      }
+
+      async function autoRecoverIfNeeded(snap) {
+        const sid = snap.session_id || currentSessionId;
+        if (!sid || snap.is_running || !snap.recoverable_error) return;
+        const key = `${sid}:${snap.session_version ?? "unknown"}:${snap.last_error || ""}`;
+        if (autoRecoveryKeys.has(key)) return;
+        autoRecoveryKeys.add(key);
+        try {
+          const result = await api(`/sessions/${sid}/recover`, "POST");
+          if (result && result.status === "started") {
+            appendRuntimeEvent({
+              phase: "engine_recovery_started",
+              seq: "recover-" + key,
+            });
+            setTimeout(doPoll, 250);
+          }
+        } catch (err) {
+          console.warn("[autoRecoverIfNeeded] failed", err);
+        }
       }
 
       function renderMessage(container, m) {
@@ -4163,6 +4263,7 @@
             .forEach((tr) => {
               // think tool result is already shown via the tool-call block — skip duplicate
               if (tr.tool_name === "think") return;
+              if (isSyntheticRecoveryToolResult(tr)) return;
               container.appendChild(renderToolResult(tr));
             });
         }
@@ -4523,6 +4624,8 @@
             .map((b) => b.text)
             .join("\n");
           if (!text) return;
+          activeThinkingGroup = null;
+          lastToolResultsBelongToThinkingGroup = false;
           if (reconcileOptimisticUserMessage(text, m.message_id)) return;
           const el = div("msg user");
           const messageId = m.message_id || "";
@@ -4555,14 +4658,17 @@
         }
 
         if (role === "assistant") {
+          lastToolResultsBelongToThinkingGroup = false;
           const textBlocks = content.filter((b) => b.type === "text" && b.text);
           const toolCalls = content.filter((b) => b.type === "tool_call");
           const thinkBlocks = content.filter(
             (b) => b.type === "thinking" && b.thinking,
           );
+          let thinkingGroupForMessage = null;
 
           if (thinkBlocks.length) {
             activeThinkingGroup = createThinkingGroup();
+            thinkingGroupForMessage = activeThinkingGroup;
             container.appendChild(activeThinkingGroup.wrap);
             thinkBlocks.forEach((tb) =>
               appendThinkingText(activeThinkingGroup, tb.thinking),
@@ -4572,17 +4678,20 @@
           toolCalls.forEach((tc) => {
             if (tc.tool_name === "think") {
               const thought = (tc.tool_input?.thought || "").trim();
-              if (thought)
-                appendThinkingText(ensureThinkingGroup(container), thought);
+              if (thought) {
+                thinkingGroupForMessage = ensureThinkingGroup(container);
+                appendThinkingText(thinkingGroupForMessage, thought);
+              }
               return;
             }
-            const parent = activeThinkingGroup
-              ? activeThinkingGroup.content
+            const parent = thinkingGroupForMessage
+              ? thinkingGroupForMessage.content
               : container;
+            if (thinkingGroupForMessage) lastToolResultsBelongToThinkingGroup = true;
             parent.appendChild(
               renderToolCall(
                 tc,
-                activeThinkingGroup
+                thinkingGroupForMessage
                   ? { compact: true }
                   : { defaultOpen: false },
               ),
@@ -4601,16 +4710,35 @@
 
         if (role === "tool") {
           // Inside a thinking group, tool results are redundant with tool call details — skip them
-          if (activeThinkingGroup) return;
+          const resultParent =
+            lastToolResultsBelongToThinkingGroup && activeThinkingGroup
+              ? activeThinkingGroup.content
+              : container;
+          const compactResults = resultParent !== container;
           content
             .filter((b) => b.type === "tool_result")
             .forEach((tr) => {
               if (tr.tool_name === "think") return;
-              container.appendChild(
-                renderToolResult(tr, { defaultOpen: false }),
+              if (isSyntheticRecoveryToolResult(tr)) return;
+              resultParent.appendChild(
+                renderToolResult(
+                  tr,
+                  compactResults
+                    ? { compact: true }
+                    : { defaultOpen: false },
+                ),
               );
             });
+          activeThinkingGroup = null;
+          lastToolResultsBelongToThinkingGroup = false;
         }
+      }
+
+      function isSyntheticRecoveryToolResult(tr) {
+        const content = tr && tr.content ? String(tr.content) : "";
+        return content.startsWith(
+          "Error: previous tool result was missing from the persisted conversation history.",
+        );
       }
 
       function renderToolCall(tc, options = {}) {

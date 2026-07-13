@@ -93,7 +93,9 @@ _PLAN_REMINDER_TEXT = (
     "System reminder: this looks like non-trivial work. If there is no visible "
     "plan yet, first call think, then call todo_write(action=\"set\") with "
     "2-6 concrete steps for the current session_id. Keep the plan updated with "
-    "todo_write(action=\"update\") as work progresses."
+    "todo_write(action=\"update\") as work progresses. If the user asks for a "
+    "new, revised, or more detailed plan, replace the current visible plan with "
+    "todo_write(action=\"set\") instead of trying to maintain multiple plans."
 )
 
 _PLAN_KEYWORDS = (
@@ -291,6 +293,8 @@ class AgentEngine:
                 am = record.metadata.get("approval_mode")
                 if am in ("ask", "auto", "full"):
                     self._approval_mode = am
+                if record.metadata.get("title") or record.metadata.get("display_name"):
+                    self._title_generated = True
             # Force state to WAITING_INPUT after reload — the engine is idle
             # and the user can send a new message to continue.
             # Skip if already in WAITING_INPUT (no-transition-from-itself).
@@ -359,6 +363,15 @@ class AgentEngine:
                 "session_id": self._config.session_id,
                 "state": self._sm.state.name,
                 "is_running": self._sm.state == EngineState.RUNNING,
+                "needs_continuation": (
+                    self._sm.state == EngineState.WAITING_INPUT
+                    and bool(visible_messages)
+                    and visible_messages[-1].role == "tool"
+                ),
+                "recoverable_error": (
+                    self._sm.state == EngineState.ERROR
+                    and self._is_recoverable_engine_error(self._last_error)
+                ),
                 "last_error": self._last_error,
                 "last_messages": [
                     serialize_message(m) for m in visible_messages
@@ -401,6 +414,124 @@ class AgentEngine:
         ]
 
         return snap
+
+    async def continue_if_needed(self) -> dict[str, Any]:
+        """
+        Resume a session that was left idle immediately after tool results.
+
+        This is explicit instead of hidden inside get_snapshot(): simply
+        viewing an old session should not start a model call. The frontend can
+        call this when the snapshot says needs_continuation=true.
+        """
+        async with self._state_lock:
+            state = self._sm.state
+            if state not in (EngineState.WAITING_INPUT, EngineState.COMPLETED):
+                return {"status": "ignored", "reason": state.name}
+            if not self._last_visible_message_is_tool():
+                return {"status": "ignored", "reason": "no_tool_tail"}
+            if state == EngineState.COMPLETED:
+                self._sm.transition(EngineState.WAITING_INPUT)
+            self._last_error = ""
+            self._sm.transition(EngineState.RUNNING)
+            self._emitter.emit(
+                "state_transition",
+                "triggered-executed",
+                detail={
+                    "to": EngineState.RUNNING.name,
+                    "source": "continue_if_needed",
+                },
+            )
+        await self._emit_event(
+            {
+                "type": "runtime.event",
+                "data": {"phase": "auto_continuation_started"},
+            }
+        )
+        asyncio.create_task(self._run_loop_guarded())
+        return {"status": "started"}
+
+    async def recover_if_possible(self) -> dict[str, Any]:
+        """Resume from recoverable engine errors without treating the chat as broken."""
+        async with self._state_lock:
+            if self._sm.state != EngineState.ERROR:
+                return {"status": "ignored", "reason": self._sm.state.name}
+            if not self._is_recoverable_engine_error(self._last_error):
+                return {"status": "ignored", "reason": "not_recoverable"}
+            error_tail = self._last_error.splitlines()[-1] if self._last_error else ""
+            self._sm.transition(EngineState.WAITING_INPUT)
+            self._messages.append(
+                Message(
+                    role="user",
+                    content=[
+                        TextBlock(
+                            text=(
+                                "<internal>The previous engine turn failed in "
+                                "a recoverable way. Continue from the current "
+                                "conversation state, reassess the latest tool "
+                                "results, and retry the needed action or give "
+                                f"a final answer. Error summary: {error_tail}"
+                                "</internal>"
+                            )
+                        )
+                    ],
+                )
+            )
+            self._last_error = ""
+            self._sm.transition(EngineState.RUNNING)
+            self._emitter.emit(
+                "state_transition",
+                "triggered-executed",
+                detail={
+                    "to": EngineState.RUNNING.name,
+                    "source": "recover_if_possible",
+                },
+            )
+        await self._emit_event(
+            {
+                "type": "runtime.event",
+                "data": {"phase": "engine_recovery_started"},
+            }
+        )
+        asyncio.create_task(self._run_loop_guarded())
+        return {"status": "started"}
+
+    def _is_recoverable_engine_error(self, error: str) -> bool:
+        lowered = (error or "").casefold()
+        if not lowered:
+            return False
+        nonrecoverable = (
+            "401",
+            "unauthorized",
+            "invalid api key",
+            "insufficient",
+            "quota",
+            "rate limit",
+        )
+        if any(marker in lowered for marker in nonrecoverable):
+            return False
+        recoverable = (
+            "connection error",
+            "connection",
+            "timeout",
+            "timed out",
+            "temporarily unavailable",
+            "tool_call",
+            "tool result",
+            "tool_result",
+            "tool messages",
+            "missing",
+            "unterminated string",
+            "json",
+            "protocol",
+        )
+        return any(marker in lowered for marker in recoverable)
+
+    def _last_visible_message_is_tool(self) -> bool:
+        for msg in reversed(self._messages):
+            if self._is_internal_ui_hidden_message(msg):
+                continue
+            return msg.role == "tool"
+        return False
 
     def _is_internal_ui_hidden_message(self, msg: Message) -> bool:
         """Return True for model-side nudges that should not render as chat."""
@@ -523,9 +654,11 @@ class AgentEngine:
 
         # Concurrency rule: transition inside lock, then release before async work
         async with self._state_lock:
-            # Session reuse: COMPLETED -> WAITING_INPUT implicitly before starting again
-            if self._sm.state == EngineState.COMPLETED:
+            # Session reuse/recovery: terminal states re-enter WAITING_INPUT
+            # before starting a new run.
+            if self._sm.state in (EngineState.COMPLETED, EngineState.ERROR):
                 self._sm.transition(EngineState.WAITING_INPUT)
+            self._last_error = ""
             if reminder_msg is not None:
                 self._messages.append(reminder_msg)
             self._messages.append(user_msg)
@@ -1688,6 +1821,17 @@ class AgentEngine:
         Runs in background — failures are silently ignored (fallback handled by frontend).
         """
         try:
+            existing_meta: dict = {}
+            try:
+                record = await self._session_store.load(self._config.session_id)
+                if record and isinstance(record.metadata, dict):
+                    existing_meta = dict(record.metadata)
+            except Exception:
+                existing_meta = {}
+            if existing_meta.get("title") or existing_meta.get("display_name"):
+                self._title_generated = True
+                return
+
             # Wait briefly for the first assistant message to have some context
             max_wait = 15.0  # seconds
             waited = 0.0
@@ -1761,6 +1905,9 @@ class AgentEngine:
                     meta = dict(record.metadata)
             except Exception:
                 pass
+            if meta.get("title") or meta.get("display_name"):
+                self._title_generated = True
+                return
             meta["title"] = title
             await self._session_store.save(
                 self._config.session_id,

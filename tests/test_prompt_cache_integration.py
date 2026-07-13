@@ -84,6 +84,8 @@ def test_system_prompt_contains_visible_plan_rule():
     assert "Planning with todo_write" in base
     assert "The frontend renders this plan" in base
     assert "todo_write(action=\"set\")" in base
+    assert "full replacement plan" in base
+    assert "one visible plan per session" in base
 
     system_identity = eng._loop._compressor._cfg.system_identity
     assert system_identity is not None

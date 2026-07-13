@@ -131,6 +131,8 @@ tools:
     - powershell
     - web_fetch
     - web_search
+    - create_directory
+    - list_dir
     - think
     - memory
     - todo_write
@@ -146,14 +148,16 @@ tools:
     shell: 15000
     web_fetch: 8000
     web_search: 8000
+    create_directory: 5000
+    list_dir: 8000
     memory: 8000
     todo_write: 5000
     background_task: 8000
 
-mcp_servers:
-  filesystem:
-    transport: stdio
-    command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."]
+mcp_servers: {}
+  # filesystem:
+  #   transport: stdio
+  #   command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."]
   # figma:
   #   transport: http
   #   url: "${FIGMA_MCP_URL}"

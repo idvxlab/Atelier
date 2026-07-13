@@ -285,6 +285,37 @@ async def test_memory_context_is_not_persisted_in_session_messages():
 
 
 @pytest.mark.asyncio
+async def test_restore_marks_existing_title_as_generated():
+    engine = _build_engine("New generated title")
+    await engine._session_store.save(
+        engine.session_id,
+        [Message(role="user", content=[TextBlock(text="first topic")])],
+        metadata={"title": "Original topic"},
+    )
+
+    restored = await engine.restore_from_store()
+
+    assert restored is True
+    assert engine._title_generated is True
+
+
+@pytest.mark.asyncio
+async def test_title_generation_does_not_overwrite_existing_title():
+    engine = _build_engine("New generated title")
+    await engine._session_store.save(
+        engine.session_id,
+        [Message(role="user", content=[TextBlock(text="first topic")])],
+        metadata={"title": "Original topic"},
+    )
+
+    await engine._generate_title_async("later follow-up")
+
+    record = await engine._session_store.load(engine.session_id)
+    assert record is not None
+    assert record.metadata["title"] == "Original topic"
+
+
+@pytest.mark.asyncio
 async def test_snapshot_returns_full_visible_history_and_hides_internal_reminders():
     engine = _build_engine("Done.")
     for i in range(25):
@@ -320,6 +351,84 @@ async def test_snapshot_returns_full_visible_history_and_hides_internal_reminder
 
 
 @pytest.mark.asyncio
+async def test_snapshot_marks_tool_result_without_followup_as_needing_continuation():
+    engine = _build_engine("Done.")
+    engine._messages.append(
+        Message(
+            role="assistant",
+            content=[
+                ToolCallBlock(
+                    tool_call_id="call-needs-continue",
+                    tool_name="noop",
+                    tool_input={},
+                )
+            ],
+        )
+    )
+    engine._messages.append(
+        Message(
+            role="tool",
+            content=[
+                ToolResultBlock(
+                    tool_call_id="call-needs-continue",
+                    content="ok",
+                )
+            ],
+        )
+    )
+
+    snapshot = await engine.get_snapshot()
+
+    assert snapshot["state"] == "WAITING_INPUT"
+    assert snapshot["needs_continuation"] is True
+
+
+@pytest.mark.asyncio
+async def test_continue_if_needed_resumes_after_tool_result_tail():
+    engine = _build_engine("Recovered from tool result.")
+    engine._messages.extend(
+        [
+            Message(role="user", content=[TextBlock(text="run tool")]),
+            Message(
+                role="assistant",
+                content=[
+                    ToolCallBlock(
+                        tool_call_id="call-resume",
+                        tool_name="noop",
+                        tool_input={},
+                    )
+                ],
+            ),
+            Message(
+                role="tool",
+                content=[
+                    ToolResultBlock(
+                        tool_call_id="call-resume",
+                        tool_name="noop",
+                        content="ok",
+                    )
+                ],
+            ),
+        ]
+    )
+
+    result = await engine.continue_if_needed()
+    await asyncio.sleep(0.15)
+
+    snapshot = await engine.get_snapshot()
+    assert result["status"] == "started"
+    assert snapshot["state"] == "COMPLETED"
+    texts = [
+        b.get("text", "")
+        for m in snapshot["last_messages"]
+        for b in m["content"]
+        if b.get("type") == "text"
+    ]
+    assert any("Recovered from tool result." in text for text in texts)
+    assert snapshot["needs_continuation"] is False
+
+
+@pytest.mark.asyncio
 async def test_engine_completes_on_text_reply():
     engine = _build_engine("The answer is 42.")
     await engine.send_message("What is the answer?")
@@ -330,6 +439,77 @@ async def test_engine_completes_on_text_reply():
     # Last message should be the assistant reply
     last = snapshot["last_messages"][-1]
     assert last["role"] == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_send_message_recovers_from_error_state():
+    engine = _build_engine("Recovered.")
+    async with engine._state_lock:
+        engine._sm.transition(EngineState.ERROR)
+        engine._last_error = "previous failure"
+
+    result = await engine.send_message("continue after error")
+    await asyncio.sleep(0.1)
+
+    snapshot = await engine.get_snapshot()
+    assert result["status"] == "started"
+    assert snapshot["state"] == "COMPLETED"
+    assert snapshot["last_error"] == ""
+    assert snapshot["last_messages"][-1]["role"] == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_recover_if_possible_resumes_recoverable_error():
+    engine = _build_engine("Recovered after protocol repair.")
+    async with engine._state_lock:
+        engine._sm.transition(EngineState.ERROR)
+        engine._last_error = (
+            "An assistant message with 'tool_calls' must be followed by "
+            "tool messages responding to each tool_call_id."
+        )
+
+    result = await engine.recover_if_possible()
+    await asyncio.sleep(0.1)
+
+    snapshot = await engine.get_snapshot()
+    assert result["status"] == "started"
+    assert snapshot["state"] == "COMPLETED"
+    assert snapshot["last_error"] == ""
+    assert snapshot["last_messages"][-1]["role"] == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_connection_error_is_marked_recoverable():
+    engine = _build_engine("Recovered after connection retry.")
+    async with engine._state_lock:
+        engine._sm.transition(EngineState.ERROR)
+        engine._last_error = "Connection error."
+
+    snapshot = await engine.get_snapshot()
+    assert snapshot["recoverable_error"] is True
+
+    result = await engine.recover_if_possible()
+    await asyncio.sleep(0.1)
+
+    snapshot = await engine.get_snapshot()
+    assert result["status"] == "started"
+    assert snapshot["state"] == "COMPLETED"
+    assert snapshot["last_error"] == ""
+
+
+@pytest.mark.asyncio
+async def test_auth_error_is_not_recoverable():
+    engine = _build_engine("Should not run.")
+    async with engine._state_lock:
+        engine._sm.transition(EngineState.ERROR)
+        engine._last_error = "Error code: 401 - Unauthorized"
+
+    snapshot = await engine.get_snapshot()
+    result = await engine.recover_if_possible()
+
+    assert snapshot["recoverable_error"] is False
+    assert result["status"] == "ignored"
+    assert result["reason"] == "not_recoverable"
 
 
 @pytest.mark.asyncio

@@ -39,6 +39,8 @@ from harness.tools.builtin import (
     GREP_SCHEMA, grep_tool,
     POWERSHELL_SCHEMA, powershell_tool,
     WRITE_FILE_SCHEMA, write_file_tool,
+    CREATE_DIRECTORY_SCHEMA, create_directory_tool,
+    LIST_DIR_SCHEMA, list_dir_tool,
     EDIT_FILE_SCHEMA, edit_file_tool,
     WEB_FETCH_SCHEMA, web_fetch_tool,
     WEB_SEARCH_SCHEMA, web_search_tool,
@@ -150,6 +152,8 @@ ALL_TOOLS: dict[str, tuple] = {
     "powershell":  (POWERSHELL_SCHEMA,  powershell_tool),
     "web_fetch":   (WEB_FETCH_SCHEMA,   web_fetch_tool),
     "web_search":  (WEB_SEARCH_SCHEMA,  web_search_tool),
+    "create_directory": (CREATE_DIRECTORY_SCHEMA, create_directory_tool),
+    "list_dir":    (LIST_DIR_SCHEMA,    list_dir_tool),
     "think":       (THINK_SCHEMA,       think_tool),
     "memory":      (MEMORY_SCHEMA,      None),
     "todo_write":  (TODO_WRITE_SCHEMA,  todo_write_tool),
@@ -241,7 +245,12 @@ def build_engine(
         "2. Keep exactly one item `in_progress` while working.\n"
         "3. After finishing a step, call `todo_write(action=\"update\")` to mark "
         "it `completed`, then move the next step to `in_progress`.\n"
-        "4. Do not create plans for one-shot factual answers, greetings, or very "
+        "4. There is only one visible plan per session. When the user asks for "
+        "a new plan, revised plan, more detailed plan, or changes the task "
+        "scope, call `todo_write(action=\"set\")` with the full replacement "
+        "plan. Do not preserve stale items unless the user explicitly asks "
+        "to keep them.\n"
+        "5. Do not create plans for one-shot factual answers, greetings, or very "
         "small edits that can be completed in one action.\n"
         "The frontend renders this plan for the user, so skipping `todo_write` "
         "makes progress invisible.\n"

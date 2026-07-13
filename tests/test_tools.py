@@ -19,6 +19,8 @@ from harness.tools.builtin.edit_file import edit_file_tool
 from harness.tools.builtin.web_fetch import web_fetch_tool
 from harness.tools.builtin.web_search import web_search_tool
 from harness.tools.builtin.think_tool import think_tool
+from harness.tools.builtin.create_directory import create_directory_tool
+from harness.tools.builtin.list_dir import list_dir_tool
 from harness.tools.builtin.todo_tool import make_todo_write_tool, todo_write_tool
 from harness.llm.base import LLMConfig
 from harness.llm.openai_provider import OpenAIProvider
@@ -110,6 +112,41 @@ async def test_executor_handles_unknown_tool():
 
     assert results[0].is_error
     assert "not found" in results[0].content
+
+
+@pytest.mark.asyncio
+async def test_executor_returns_error_for_invalid_tool_arguments_without_calling_handler():
+    reg = ToolRegistry()
+    schema = ToolSchema(name="greet", description="Greet", params=[])
+    called = False
+
+    async def handler() -> str:
+        nonlocal called
+        called = True
+        return "should not run"
+
+    reg.register(schema, handler)
+    emitter = EventEmitter("test")
+    overflow = OverflowStore()
+    executor = ToolExecutor(registry=reg, overflow=overflow, emitter=emitter)
+
+    calls = [
+        ToolCallBlock(
+            tool_call_id="c-bad-json",
+            tool_name="greet",
+            tool_input={
+                "_invalid_tool_arguments": True,
+                "_raw": '{"name": "unterminated',
+                "_error": "Unterminated string starting at",
+            },
+        )
+    ]
+    results = await executor.execute_all(calls, round_idx=0)
+
+    assert not called
+    assert results[0].is_error
+    assert "invalid JSON arguments" in results[0].content
+    assert "Retry this tool call" in results[0].content
 
 
 @pytest.mark.asyncio
@@ -403,6 +440,29 @@ async def test_todo_write_set():
 
 
 @pytest.mark.asyncio
+async def test_todo_write_set_replaces_current_plan():
+    await todo_write_tool(
+        session_id="replace-plan",
+        action="set",
+        todos=[
+            {"content": "old task", "status": "in_progress"},
+            {"content": "old follow-up", "status": "pending"},
+        ],
+    )
+
+    await todo_write_tool(
+        session_id="replace-plan",
+        action="set",
+        todos=[{"content": "new detailed task", "status": "in_progress"}],
+    )
+
+    result = await todo_write_tool(session_id="replace-plan", action="get")
+    assert "new detailed task" in result
+    assert "old task" not in result
+    assert "old follow-up" not in result
+
+
+@pytest.mark.asyncio
 async def test_todo_write_rejects_multiple_in_progress_on_set():
     result = await todo_write_tool(
         session_id="multi-progress",
@@ -657,3 +717,13 @@ async def test_web_search_smoke():
     result = await web_search_tool(query="python httpx", max_results=3)
     # Should always return a string — results, "No results", or a graceful error message
     assert isinstance(result, str) and len(result) > 0
+
+@pytest.mark.asyncio
+async def test_create_directory_and_list_dir(tmp_path):
+    nested = tmp_path / "demo" / "static"
+
+    created = await create_directory_tool(str(nested))
+    listed = await list_dir_tool(str(tmp_path), recursive=True)
+
+    assert "Created directory" in created
+    assert "demo/static" in listed.replace("\\", "/")

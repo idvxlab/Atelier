@@ -91,6 +91,44 @@ class ToolExecutor:
         round_idx: int,
         on_event: Callable[[dict], Awaitable[None]] | None = None,
     ) -> ToolResultBlock:
+        if call.tool_input.get("_invalid_tool_arguments"):
+            detail = call.tool_input.get("_error") or "invalid JSON arguments"
+            raw = str(call.tool_input.get("_raw") or "")
+            preview = raw[:500]
+            self._emitter.emit(
+                "tool_call", "execution-error",
+                detail={
+                    "tool": call.tool_name,
+                    "reason": "invalid_tool_arguments",
+                    "error": detail,
+                    "round": round_idx,
+                },
+            )
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "tool_error",
+                            "round": round_idx,
+                            "tool": call.tool_name,
+                            "tool_call_id": call.tool_call_id,
+                            "error": f"Invalid tool arguments: {detail}",
+                        },
+                    }
+                )
+            return ToolResultBlock(
+                tool_call_id=call.tool_call_id,
+                content=(
+                    "Error: invalid JSON arguments for tool "
+                    f"'{call.tool_name}': {detail}. "
+                    "Retry this tool call with a complete JSON object. "
+                    f"Raw arguments preview: {preview}"
+                ),
+                is_error=True,
+                tool_name=call.tool_name,
+            )
+
         if self._hooks is not None:
             hook_result = await self._hooks.emit(
                 HookEvent(
