@@ -21,6 +21,7 @@ import yaml
 
 SKILLS_DIR         = Path(".myharness/skills")   # where skill CRUD writes to
 PERSONAS_DIR       = Path(".myharness/personas")
+PROJECT_SKILL_SOURCES = {"project", "project-claude"}
 
 def _get_skill_scan_dirs() -> list[tuple[Path, str]]:
     """Return [(directory, source_label), ...] in priority order."""
@@ -139,30 +140,63 @@ def parse_skill_md(path: Path) -> dict[str, Any]:
     return meta
 
 
-def load_skill(name: str) -> dict[str, Any]:
+def _iter_skill_dirs(project_only: bool = False) -> list[tuple[Path, str]]:
+    """Return skill scan dirs, optionally limited to project-local sources."""
+    dirs = _get_skill_scan_dirs()
+    if not project_only:
+        return dirs
+    return [(scan_dir, source) for scan_dir, source in dirs if source in PROJECT_SKILL_SOURCES]
+
+
+def _resolve_skill_file(
+    name: str,
+    *,
+    project_only: bool = False,
+) -> tuple[Path, str] | None:
+    """Resolve a skill name to the first matching file and its source label."""
+    for scan_dir, source in _iter_skill_dirs(project_only=project_only):
+        if not scan_dir.exists():
+            continue
+
+        folder_md = scan_dir / name / "SKILL.md"
+        if folder_md.exists():
+            return folder_md, source
+
+        legacy_md = scan_dir / f"{name}.md"
+        if legacy_md.exists():
+            return legacy_md, source
+
+    return None
+
+
+def _display_skill_path(path: Path) -> str:
+    """Return a stable display path for config UIs and API responses."""
+    try:
+        return path.relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def resolve_project_skill_path(name: str) -> tuple[Path, str] | None:
+    """Resolve a project-local skill from .myharness/skills or .claude/skills."""
+    return _resolve_skill_file(name, project_only=True)
+
+
+def load_skill(name: str, project_only: bool = False) -> dict[str, Any]:
     """Load a skill by name, searching all directories in priority order.
 
     Priority: .myharness/skills/ > ~/.myharness/skills/ > .claude/skills/
 
     For each directory, looks for ``{name}/SKILL.md`` first, then ``{name}.md`` (legacy).
     """
-    for scan_dir, source in _get_skill_scan_dirs():
-        if not scan_dir.exists():
-            continue
-
-        # Folder-based: {dir}/{name}/SKILL.md
-        folder_md = scan_dir / name / "SKILL.md"
-        if folder_md.exists():
-            meta = parse_skill_md(folder_md)
-            meta.setdefault("_source", source)
-            return meta
-
-        # Legacy flat: {dir}/{name}.md
-        legacy_md = scan_dir / f"{name}.md"
-        if legacy_md.exists():
-            meta = parse_skill_md(legacy_md)
-            meta.setdefault("_source", source)
-            return meta
+    resolved = _resolve_skill_file(name, project_only=project_only)
+    if resolved is not None:
+        skill_path, source = resolved
+        meta = parse_skill_md(skill_path)
+        meta.setdefault("_source", source)
+        meta.setdefault("_source_file", str(skill_path))
+        meta.setdefault("_display_path", _display_skill_path(skill_path))
+        return meta
 
     available = [s["name"] for s in list_skills()]
     raise ValueError(
@@ -177,7 +211,12 @@ def load_skill_content(name: str) -> str:
     return load_skill(name).get("system_prompt", "")
 
 
-def _scan_skill_dir(scan_dir: Path, source: str) -> list[dict[str, Any]]:
+def _scan_skill_dir(
+    scan_dir: Path,
+    source: str,
+    *,
+    include_paths: bool = False,
+) -> list[dict[str, Any]]:
     """Scan a single directory for skills, returning [{name, description, source}, ...]."""
     results: list[dict[str, Any]] = []
     if not scan_dir.exists():
@@ -191,11 +230,14 @@ def _scan_skill_dir(scan_dir: Path, source: str) -> list[dict[str, Any]]:
         if skill_md.exists():
             try:
                 meta = parse_skill_md(skill_md)
-                results.append({
+                entry = {
                     "name":        str(meta.get("name") or item.name),
                     "description": str(meta.get("description", "")),
                     "source":      source,
-                })
+                }
+                if include_paths:
+                    entry["path"] = _display_skill_path(skill_md)
+                results.append(entry)
             except Exception:
                 pass
 
@@ -205,18 +247,25 @@ def _scan_skill_dir(scan_dir: Path, source: str) -> list[dict[str, Any]]:
             continue
         try:
             meta = parse_skill_md(md_file)
-            results.append({
+            entry = {
                 "name":        str(meta.get("name") or md_file.stem),
                 "description": str(meta.get("description", "")),
                 "source":      source,
-            })
+            }
+            if include_paths:
+                entry["path"] = _display_skill_path(md_file)
+            results.append(entry)
         except Exception:
             pass
 
     return results
 
 
-def list_skills() -> list[dict[str, str]]:
+def list_skills(
+    *,
+    project_only: bool = False,
+    include_paths: bool = False,
+) -> list[dict[str, str]]:
     """Return [{name, description, source}] for all skills across all directories.
 
     Sources: "system" (built-in), "project" (.myharness/), "global" (~/.myharness/),
@@ -228,8 +277,8 @@ def list_skills() -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
 
     # Scan in priority order, skip seen names (first match = highest priority)
-    for scan_dir, source in _get_skill_scan_dirs():
-        for entry in _scan_skill_dir(scan_dir, source):
+    for scan_dir, source in _iter_skill_dirs(project_only=project_only):
+        for entry in _scan_skill_dir(scan_dir, source, include_paths=include_paths):
             if entry["name"] in seen:
                 continue
             seen.add(entry["name"])

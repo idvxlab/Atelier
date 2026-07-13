@@ -42,8 +42,10 @@ from harness.config import HarnessConfig
 from harness.engine.engine import AgentEngine
 from harness.factory import build_engine, build_engine_with_mcp
 from harness.skills import (
+    load_skill,
     load_persona,
     list_skills, list_personas,
+    resolve_project_skill_path,
     read_file_safe, write_file_safe,
     SKILLS_DIR, PERSONAS_DIR,
 )
@@ -934,25 +936,49 @@ async def config_overview() -> dict[str, Any]:
 
 @app.get("/config/skills")
 async def api_list_skills() -> dict[str, Any]:
-    return {"skills": list_skills()}
+    skills = list_skills(include_paths=True)
+    for skill in skills:
+        skill["editable"] = skill.get("source") in {"project", "project-claude"}
+    return {"skills": skills}
 
 
 @app.get("/config/skills/{name}")
 async def api_get_skill(name: str) -> dict[str, Any]:
-    folder_md = SKILLS_DIR / name / "SKILL.md"
-    if folder_md.exists():
-        return {"name": name, "content": folder_md.read_text(encoding="utf-8"), "format": "folder"}
-    legacy_md = SKILLS_DIR / f"{name}.md"
-    if legacy_md.exists():
-        return {"name": name, "content": legacy_md.read_text(encoding="utf-8"), "format": "md"}
-    raise HTTPException(status_code=404, detail=f"Skill '{name}' not found")
+    _check_safe_name(name)
+    try:
+        meta = load_skill(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    source_file = meta.get("_source_file")
+    if not source_file:
+        raise HTTPException(status_code=404, detail=f"Skill '{name}' not found")
+
+    path = Path(str(source_file))
+    fmt = "folder" if path.name == "SKILL.md" else "md"
+    return {
+        "name": name,
+        "content": path.read_text(encoding="utf-8"),
+        "format": fmt,
+        "source": meta.get("_source", ""),
+        "path": str(meta.get("_display_path", path.as_posix())),
+        "editable": meta.get("_source", "") in {"project", "project-claude"},
+    }
 
 
 @app.put("/config/skills/{name}")
 async def api_save_skill(name: str, req: ConfigWriteRequest) -> dict[str, Any]:
     _check_safe_name(name)
-    write_file_safe(SKILLS_DIR / name / "SKILL.md", req.content)
-    return {"status": "saved", "name": name}
+    existing = _find_skill_meta(name)
+    if existing is not None and existing.get("_source") not in {"project", "project-claude"}:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Skill '{name}' is read-only because it comes from a global directory",
+        )
+    resolved = resolve_project_skill_path(name)
+    target = resolved[0] if resolved is not None else (SKILLS_DIR / name / "SKILL.md")
+    write_file_safe(target, req.content)
+    return {"status": "saved", "name": name, "path": str(target.as_posix())}
 
 
 @app.post("/config/skills")
@@ -962,19 +988,29 @@ async def api_create_skill(req: CreateFileRequest) -> dict[str, Any]:
     if path.exists():
         raise HTTPException(status_code=409, detail=f"Skill '{req.name}' already exists")
     write_file_safe(path, req.content)
-    return {"status": "created", "name": req.name}
+    return {"status": "created", "name": req.name, "path": str(path.as_posix())}
 
 
 @app.delete("/config/skills/{name}", status_code=204)
 async def api_delete_skill(name: str):
     import shutil
-    folder = SKILLS_DIR / name
-    if folder.is_dir():
-        shutil.rmtree(folder)
+    _check_safe_name(name)
+    existing = _find_skill_meta(name)
+    if existing is not None and existing.get("_source") not in {"project", "project-claude"}:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Skill '{name}' is read-only because it comes from a global directory",
+        )
+    resolved = resolve_project_skill_path(name)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail=f"Skill '{name}' not found")
+
+    skill_path, _source = resolved
+    if skill_path.name == "SKILL.md" and skill_path.parent.is_dir():
+        shutil.rmtree(skill_path.parent)
         return
-    legacy = SKILLS_DIR / f"{name}.md"
-    if legacy.exists():
-        legacy.unlink()
+    if skill_path.exists():
+        skill_path.unlink()
         return
     raise HTTPException(status_code=404, detail=f"Skill '{name}' not found")
 
@@ -1189,6 +1225,13 @@ def _check_safe_name(name: str) -> None:
     """Prevent path traversal in file names."""
     if not name or "/" in name or "\\" in name or ".." in name:
         raise HTTPException(status_code=400, detail=f"Invalid name: '{name}'")
+
+
+def _find_skill_meta(name: str) -> dict[str, Any] | None:
+    try:
+        return load_skill(name)
+    except ValueError:
+        return None
 
 
 def _require_config() -> HarnessConfig:

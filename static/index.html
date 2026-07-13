@@ -4977,21 +4977,28 @@
         tree.innerHTML = "";
 
         // Skills
-        tree.appendChild(div("tree-folder", "📁 skills/"));
         try {
           const r = await api("/config/skills");
-          (r.skills || []).forEach((s) => {
-            const row = treeFileRow(s.name, () =>
-              loadConfigFile("skill", s.name),
+          const skills = r.skills || [];
+          tree.appendChild(div("tree-folder", "📁 skills/"));
+          skills.forEach((s) => {
+            const sourceLabel = formatSkillSourceLabel(s.source);
+            const row = treeFileRow(
+              `${s.name} (${sourceLabel})`,
+              () => loadConfigFile("skill", s.name),
+              !s.editable,
             );
-            row.querySelector(".del-btn").onclick = (e) => {
-              e.stopPropagation();
-              confirmDeleteConfig("skill", s.name);
-            };
+            if (s.path) row.title = s.path;
+            if (s.editable) {
+              row.querySelector(".del-btn").onclick = (e) => {
+                e.stopPropagation();
+                confirmDeleteConfig("skill", s.name);
+              };
+            }
             tree.appendChild(row);
           });
+          tree.appendChild(addNewRow("skill"));
         } catch (e) {}
-        tree.appendChild(addNewRow("skill"));
 
         // Agent configs
         tree.appendChild(div("tree-folder", "📁 personas/"));
@@ -5026,13 +5033,25 @@
         tree.appendChild(memoryRow);
       }
 
-      function treeFileRow(name, onclick) {
+      function treeFileRow(name, onclick, readOnly = false) {
         const row = document.createElement("div");
         row.className = "tree-file";
         row.dataset.name = name;
+        row.dataset.readOnly = readOnly ? "true" : "false";
         row.innerHTML = `<span>📄 ${escHtml(name)}</span><span class="del-btn" title="删除">✕</span>`;
+        if (readOnly) {
+          row.querySelector(".del-btn").remove();
+        }
         row.addEventListener("click", onclick);
         return row;
+      }
+
+      function formatSkillSourceLabel(source) {
+        if (source === "project") return ".myharness";
+        if (source === "project-claude") return ".claude";
+        if (source === "global") return "~/.myharness";
+        if (source === "global-claude") return "~/.claude";
+        return source || "unknown";
       }
 
       function addNewRow(type) {
@@ -5078,7 +5097,7 @@
           );
         });
 
-        currentConfigFile = { type, name };
+        currentConfigFile = { type, name, editable: true };
         document.getElementById("config-filename").textContent =
           type === "yaml"
             ? "config.yaml"
@@ -5099,8 +5118,25 @@
           else if (type === "persona")
             r = await api(`/config/personas/${name}`);
           else r = await api("/config/yaml");
+          currentConfigFile = { type, name, editable: r.editable !== false };
+          if (type === "skill" && r.path) {
+            document.getElementById("config-filename").textContent = r.path;
+          }
           document.getElementById("config-editor").value = r.content || "";
+          if (type === "skill" && r.editable === false) {
+            document.getElementById("config-editor").disabled = true;
+            document.getElementById("config-save-btn").disabled = true;
+            document.getElementById("config-del-btn").disabled = true;
+            document.getElementById("config-status").textContent = "只读";
+          }
         } catch (e) {
+          document.getElementById("config-editor").value = "";
+          document.getElementById("config-editor").disabled = true;
+          document.getElementById("config-save-btn").disabled = true;
+          document.getElementById("config-del-btn").disabled = true;
+          document.getElementById("config-filename").style.color =
+            "var(--danger)";
+          document.getElementById("config-status").textContent = "加载失败";
           toast("加载失败: " + e.message, true);
         }
       }
@@ -5201,6 +5237,7 @@
       async function saveConfigFile() {
         if (!currentConfigFile) return;
         if (currentConfigFile.type === "memory") return;
+        if (currentConfigFile.editable === false) return;
         const { type, name } = currentConfigFile;
         const content = document.getElementById("config-editor").value;
         try {
@@ -5253,7 +5290,8 @@
         if (
           !currentConfigFile ||
           currentConfigFile.type === "yaml" ||
-          currentConfigFile.type === "memory"
+          currentConfigFile.type === "memory" ||
+          currentConfigFile.editable === false
         ) return;
         confirmDeleteConfig(currentConfigFile.type, currentConfigFile.name);
       }
