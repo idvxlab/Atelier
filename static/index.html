@@ -3784,6 +3784,9 @@
         } else if (frame.type === "subagent.created") {
           refreshSessions();
           triggerPoll();
+        } else if (frame.type === "subagent.waiting_approval") {
+          refreshSessions();
+          triggerPoll();
         } else if (frame.type === "runtime.event") {
           appendRuntimeEvent(frame.data || {});
         } else if (frame.type === "message_queued") {
@@ -4020,13 +4023,17 @@
         const confirmPanel = document.getElementById("confirm-panel");
         const confirmInfo = document.getElementById("confirm-tool-info");
         if (
-          snap.state === "WAITING_CONFIRMATION" &&
-          snap.pending_approval?.length
+          snap.pending_approval?.length &&
+          (snap.state === "WAITING_CONFIRMATION" ||
+           snap.pending_approval.some((t) => t.subagent_session_id))
         ) {
           confirmInfo.innerHTML = snap.pending_approval
             .map((t) => {
               const inputStr = JSON.stringify(t.input, null, 2);
-              return `<div class="confirm-tool"><strong>${escHtml(t.name)}</strong><pre>${escHtml(inputStr)}</pre></div>`;
+              const label = t.subagent_session_id
+                ? `<span style="color:#8b949e;font-size:11px">子Agent: ${escHtml(t.subagent_display_name || t.subagent_session_id.slice(0,8))}</span><br>`
+                : "";
+              return `<div class="confirm-tool">${label}<strong>${escHtml(t.name)}</strong><pre>${escHtml(inputStr)}</pre></div>`;
             })
             .join("");
           confirmPanel.classList.remove("hidden");

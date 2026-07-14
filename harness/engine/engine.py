@@ -233,6 +233,11 @@ class AgentEngine:
         self._question_request_results: dict[str, dict[str, Any]] = {}
         self._question_request_results_lock = asyncio.Lock()
 
+        # Parent engine reference — set when this engine runs as a sub-agent.
+        # Used to propagate state changes (e.g. WAITING_CONFIRMATION) to the
+        # parent's UI so approval panels appear without a manual refresh.
+        self._parent_engine: "AgentEngine | None" = None
+
         # WebSocket event channel — listeners are notified for every
         # question.asked / question.updated / question.resolved. Frontends
         # use this as the primary sync path; GET /state remains a
@@ -384,6 +389,22 @@ class AgentEngine:
             }
             if self._pending_tool_calls is not None:
                 snap["pending_approval"] = self._pending_tool_calls
+            # Aggregate sub-agent pending approvals into the parent snapshot
+            # so the approval panel appears without navigating to the sub-agent.
+            try:
+                from api import rest as rest_module
+                for ps in list(self._pending_spawns):
+                    sub_engine = rest_module._engines.get(ps.sub_id)
+                    if sub_engine is not None and sub_engine._pending_tool_calls is not None:
+                        for tc in sub_engine._pending_tool_calls:
+                            sub_item = dict(tc)
+                            sub_item["subagent_session_id"] = ps.sub_id
+                            sub_item["subagent_display_name"] = ps.display_name
+                            if snap.get("pending_approval") is None:
+                                snap["pending_approval"] = []
+                            snap["pending_approval"].append(sub_item)
+            except Exception:
+                pass
 
         # Gather pending commands/spawns (reads from lock-free lists)
         async with self._pending_commands_lock:
@@ -412,6 +433,26 @@ class AgentEngine:
                 pending_spawns=snap.get("pending_spawns", []),
             )
         ]
+        # Update sub-agent task statuses from their actual engine state
+        for t in snap["tasks"]:
+            if t.get("source") != "subagent":
+                continue
+            sub_id = t.get("related_session_id", "")
+            if not sub_id:
+                continue
+            try:
+                from api import rest as rest_module
+                sub_engine = rest_module._engines.get(sub_id)
+                if sub_engine is not None:
+                    sub_state = sub_engine._sm.state
+                    if sub_state == EngineState.WAITING_CONFIRMATION:
+                        t["status"] = "waiting"
+                    elif sub_state == EngineState.ERROR:
+                        t["status"] = "failed"
+                    elif sub_state == EngineState.COMPLETED:
+                        t["status"] = "completed"
+            except Exception:
+                pass
 
         return snap
 
@@ -711,6 +752,7 @@ class AgentEngine:
                 "state_transition", "triggered-executed",
                 detail={"to": EngineState.RUNNING.name, "via": "run_to_completion"},
             )
+        self._parent_engine = parent_engine
         await self._run_loop_guarded()
 
         # Notify parent engine that this sub-agent has completed
@@ -737,11 +779,42 @@ class AgentEngine:
     async def confirm(self) -> None:
         """Approve a pending tool action (WAITING_CONFIRMATION → RUNNING)."""
         async with self._state_lock:
-            if self._sm.state != EngineState.WAITING_CONFIRMATION:
+            if self._sm.state == EngineState.WAITING_CONFIRMATION:
+                self._confirmation_approved = True
+                self._sm.transition(EngineState.RUNNING)
+                self._confirmation_event.set()
                 return
-            self._confirmation_approved = True
-            self._sm.transition(EngineState.RUNNING)
-        self._confirmation_event.set()
+        # Forward to waiting sub-agents when the parent receives the confirm
+        try:
+            from api import rest as rest_module
+            for ps in list(self._pending_spawns):
+                sub = rest_module._engines.get(ps.sub_id)
+                if sub is not None and sub._sm.state == EngineState.WAITING_CONFIRMATION:
+                    await sub.confirm()
+        except Exception:
+            pass
+
+    async def deny(self) -> None:
+        """Deny a pending tool action — loop raises CancelledError → WAITING_INPUT."""
+        async with self._state_lock:
+            if self._sm.state == EngineState.WAITING_CONFIRMATION:
+                self._confirmation_approved = False
+                self._emitter.emit(
+                    "tool_confirmation", "triggered-intercepted",
+                    detail={"action": "denied"},
+                )
+                self._sm.transition(EngineState.RUNNING)
+                self._confirmation_event.set()
+                return
+        # Forward to waiting sub-agents
+        try:
+            from api import rest as rest_module
+            for ps in list(self._pending_spawns):
+                sub = rest_module._engines.get(ps.sub_id)
+                if sub is not None and sub._sm.state == EngineState.WAITING_CONFIRMATION:
+                    await sub.deny()
+        except Exception:
+            pass
 
     async def cancel_pending_command(self, index: int) -> bool:
         """
@@ -817,18 +890,6 @@ class AgentEngine:
         })
         await self._notify_state_listeners()
         return index
-
-    async def deny(self) -> None:
-        """Deny a pending tool action — loop raises CancelledError → WAITING_INPUT."""
-        async with self._state_lock:
-            if self._sm.state != EngineState.WAITING_CONFIRMATION:
-                return
-            self._confirmation_approved = False
-            self._emitter.emit(
-                "tool_confirmation", "triggered-intercepted",
-                detail={"action": "denied"},
-            )
-        self._confirmation_event.set()
 
     async def rewrite_message(self, message_id: str, new_text: str) -> dict[str, Any]:
         """
@@ -1598,6 +1659,14 @@ class AgentEngine:
                 await listener()
             except Exception:
                 pass
+        # Propagate to parent engine so the parent UI sees sub-agent state
+        # changes (e.g. WAITING_CONFIRMATION) without a manual refresh.
+        if self._parent_engine is not None:
+            for listener in list(self._parent_engine._state_listeners):
+                try:
+                    await listener()
+                except Exception:
+                    pass
 
     async def _confirmation_gate(self, tool_calls: "list[ToolCallBlock]") -> bool:
         """
@@ -1658,6 +1727,18 @@ class AgentEngine:
                 },
             )
         await self._notify_state_listeners()
+
+        # If this is a sub-agent, notify the parent engine's event channel
+        # so the frontend can show the approval panel immediately.
+        if self._parent_engine is not None:
+            await self._parent_engine._emit_event({
+                "type": "subagent.waiting_approval",
+                "data": {
+                    "session_id": self._config.session_id,
+                    "parent_session_id": self._parent_engine._config.session_id,
+                    "tools": [c.tool_name for c in tool_calls],
+                },
+            })
 
         # Block until confirm() or deny() fires the event
         await self._confirmation_event.wait()
@@ -1729,6 +1810,30 @@ class AgentEngine:
                     "state_transition", "triggered-executed",
                     detail={"to": EngineState.COMPLETED.name},
                 )
+            # Auto-complete any remaining open todo items
+            try:
+                from harness.tools.builtin.todo_tool import (
+                    load_session_todos, persist_session_todos,
+                )
+                todos = await load_session_todos(
+                    self._config.session_id,
+                    session_store=self._session_store,
+                    plan_store=self._config.plan_store,
+                )
+                updated = False
+                for item in todos:
+                    if item.get("status") not in ("completed",):
+                        item["status"] = "completed"
+                        updated = True
+                if updated:
+                    await persist_session_todos(
+                        self._config.session_id,
+                        todos,
+                        session_store=self._session_store,
+                        plan_store=self._config.plan_store,
+                    )
+            except Exception:
+                pass  # best-effort, don't block completion
             await self._notify_state_listeners()
 
         except InterruptSignal as sig:
