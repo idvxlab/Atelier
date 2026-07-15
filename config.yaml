@@ -137,6 +137,17 @@ tools:
     - memory
     - todo_write
     - background_task
+    - image_generate
+    - image_edit
+    - run_init
+    - design_bus_post
+    - design_bus_read
+    - research_fetch
+    - research_asset_discover
+    - research_asset_fetch
+    - research_asset_validate
+    - artifact_lint
+    - export_package
 
   confirm_tools:
     - shell
@@ -153,6 +164,17 @@ tools:
     memory: 8000
     todo_write: 5000
     background_task: 8000
+    image_generate: 8000
+    image_edit: 8000
+    run_init: 8000
+    design_bus_post: 8000
+    design_bus_read: 12000
+    research_fetch: 12000
+    research_asset_discover: 16000
+    research_asset_fetch: 12000
+    research_asset_validate: 12000
+    artifact_lint: 16000
+    export_package: 12000
 
 mcp_servers: {}
   # filesystem:

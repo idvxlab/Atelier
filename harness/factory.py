@@ -48,6 +48,17 @@ from harness.tools.builtin import (
     MEMORY_SCHEMA, make_memory_tool,
     TODO_WRITE_SCHEMA, todo_write_tool, make_todo_write_tool,
     BACKGROUND_TASK_SCHEMA, background_task_tool,
+    IMAGE_GENERATE_SCHEMA, image_generate_tool,
+    IMAGE_EDIT_SCHEMA, image_edit_tool,
+    RUN_INIT_SCHEMA, run_init_tool,
+    DESIGN_BUS_POST_SCHEMA, design_bus_post_tool,
+    DESIGN_BUS_READ_SCHEMA, design_bus_read_tool,
+    RESEARCH_FETCH_SCHEMA, research_fetch_tool,
+    RESEARCH_ASSET_DISCOVER_SCHEMA, research_asset_discover_tool,
+    RESEARCH_ASSET_FETCH_SCHEMA, research_asset_fetch_tool,
+    RESEARCH_ASSET_VALIDATE_SCHEMA, research_asset_validate_tool,
+    ARTIFACT_LINT_SCHEMA, artifact_lint_tool,
+    EXPORT_PACKAGE_SCHEMA, export_package_tool,
 )
 from harness.tools.executor import ToolExecutor
 from harness.tools.overflow import OverflowStore
@@ -158,6 +169,17 @@ ALL_TOOLS: dict[str, tuple] = {
     "memory":      (MEMORY_SCHEMA,      None),
     "todo_write":  (TODO_WRITE_SCHEMA,  todo_write_tool),
     "background_task": (BACKGROUND_TASK_SCHEMA, background_task_tool),
+    "image_generate": (IMAGE_GENERATE_SCHEMA, image_generate_tool),
+    "image_edit": (IMAGE_EDIT_SCHEMA, image_edit_tool),
+    "run_init": (RUN_INIT_SCHEMA, run_init_tool),
+    "design_bus_post": (DESIGN_BUS_POST_SCHEMA, design_bus_post_tool),
+    "design_bus_read": (DESIGN_BUS_READ_SCHEMA, design_bus_read_tool),
+    "research_fetch": (RESEARCH_FETCH_SCHEMA, research_fetch_tool),
+    "research_asset_discover": (RESEARCH_ASSET_DISCOVER_SCHEMA, research_asset_discover_tool),
+    "research_asset_fetch": (RESEARCH_ASSET_FETCH_SCHEMA, research_asset_fetch_tool),
+    "research_asset_validate": (RESEARCH_ASSET_VALIDATE_SCHEMA, research_asset_validate_tool),
+    "artifact_lint": (ARTIFACT_LINT_SCHEMA, artifact_lint_tool),
+    "export_package": (EXPORT_PACKAGE_SCHEMA, export_package_tool),
 }
 
 

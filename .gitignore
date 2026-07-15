@@ -25,3 +25,7 @@ build/
 
 .claude/
 .myharness/transcripts/
+
+# Runtime design harness outputs
+.design-harness/
+outputs/
