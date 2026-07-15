@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Skill 机制 - MyHarness 开发者文档</title>
+    <title>Skill 机制 - Atelier 开发者文档</title>
     <link rel="stylesheet" href="../assets/site.css" />
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
-        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <a class="brand" href="../index.html"><span class="brand-mark">AT</span><span>Atelier Docs</span></a>
         <nav class="nav">
           <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a class="active" href="skills.html">Skill 机制</a><a href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a>
         </nav>
@@ -18,7 +18,7 @@
         <article class="doc">
           <p class="eyebrow">Knowledge Injection</p>
           <h1>Skill 机制</h1>
-          <p class="lead">Skill 用来给智能体提供额外能力说明。MyHarness 的设计是“先注入描述，必要时再加载全文”，避免一开始就把大量文档塞进上下文。</p>
+          <p class="lead">Skill 用来给智能体提供额外能力说明。Atelier 的设计是“先注入描述，必要时再加载全文”，避免一开始就把大量文档塞进上下文。</p>
 
           <h2>1. 扫描与注册</h2>
           <p><code>SkillRegistry</code> 会扫描多个目录，把每个 Skill 的元信息注册成可检索对象。典型来源包括项目目录、用户目录，以及兼容 Claude 风格的 skill 目录。</p>

@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MCP 集成 - MyHarness 开发者文档</title>
+    <title>MCP 集成 - Atelier 开发者文档</title>
     <link rel="stylesheet" href="../assets/site.css" />
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
-        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <a class="brand" href="../index.html"><span class="brand-mark">AT</span><span>Atelier Docs</span></a>
         <nav class="nav">
           <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a class="active" href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a>
         </nav>
@@ -18,7 +18,7 @@
         <article class="doc">
           <p class="eyebrow">External Tools</p>
           <h1>MCP 集成</h1>
-          <p class="lead">MCP 让 MyHarness 可以加载外部工具服务器，把文件系统、浏览器、数据库或其他服务暴露成模型可调用的工具。它属于工具层的扩展入口。</p>
+          <p class="lead">MCP 让 Atelier 可以加载外部工具服务器，把文件系统、浏览器、数据库或其他服务暴露成模型可调用的工具。它属于工具层的扩展入口。</p>
 
           <h2>1. 配置方式</h2>
           <p>MCP server 通常配置在 <code>config.yaml</code>。每个 server 指定启动命令、参数和环境变量。Factory 创建 ToolRegistry 时读取配置并把 MCP 工具注册进统一工具列表。</p>
@@ -40,7 +40,7 @@
             <li>读取配置中的 MCP server 列表。</li>
             <li>启动或连接 server。</li>
             <li>读取 server 暴露的 tool schema。</li>
-            <li>包装成 MyHarness 的 ToolSpec。</li>
+            <li>包装成 Atelier 的 ToolSpec。</li>
             <li>执行时把参数转发给 MCP server，再把结果转成 ToolResult。</li>
           </ol>
 

@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MyHarnessPy 开发者文档</title>
+    <title>Atelier 开发者文档</title>
     <link rel="stylesheet" href="assets/site.css" />
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">MH</div>
+          <div class="brand-mark">AT</div>
           <div>
-            <strong>MyHarnessPy</strong>
+            <strong>Atelier</strong>
             <span>开发者文档</span>
           </div>
         </div>
@@ -50,7 +50,7 @@
       <main class="content">
         <article class="doc">
           <div class="eyebrow">Developer Guide</div>
-          <h1>MyHarnessPy 是怎样构建一个 Agent Harness 的</h1>
+          <h1>Atelier 是怎样构建一个 Agent Harness 的</h1>
           <p class="lead">
             这是一份面向开发者和汇报场景的可浏览文档。它把当前代码拆成配置、Engine、工具、权限、存储、Skill、Memory、多 Agent 和前端等模块，说明每个模块负责什么、如何运行、如何修改。
           </p>
@@ -94,7 +94,7 @@
 
           <h2>项目定位</h2>
           <p>
-            MyHarnessPy 不是普通聊天 UI。它是一个 Agent 运行时：模型可以调用工具，工具结果回到消息流，复杂任务可以写计划，可以排队，可以拆给子 Agent，状态可以通过 REST 和 WebSocket 被前端实时展示。
+            Atelier 不是普通聊天 UI。它是一个 Agent 运行时：模型可以调用工具，工具结果回到消息流，复杂任务可以写计划，可以排队，可以拆给子 Agent，状态可以通过 REST 和 WebSocket 被前端实时展示。
           </p>
           <p>
             它的架构目标是把这些机制统一在一个可配置的框架内：同一套核心引擎服务 Web 和 CLI，同一套工具注册服务内置工具和 MCP 工具，同一套 session store 保存主会话和子会话。

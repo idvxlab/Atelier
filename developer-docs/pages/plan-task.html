@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Plan / Task - MyHarness 开发者文档</title>
+    <title>Plan / Task - Atelier 开发者文档</title>
     <link rel="stylesheet" href="../assets/site.css" />
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
-        <a class="brand" href="../index.html"><span class="brand-mark">MH</span><span>MyHarness Docs</span></a>
+        <a class="brand" href="../index.html"><span class="brand-mark">AT</span><span>Atelier Docs</span></a>
         <nav class="nav">
           <a href="../index.html">总览</a><a href="quickstart.html">快速开始</a><a href="config.html">配置层</a><a href="engine.html">主循环</a><a href="tools.html">工具系统</a><a href="security.html">权限与审计</a><a href="storage.html">状态与存储</a><a href="agents.html">Persona 与 Agent</a><a href="skills.html">Skill 机制</a><a class="active" href="plan-task.html">Plan / Task</a><a href="memory.html">Memory</a><a href="multi-agent.html">多 Agent</a><a href="mcp.html">MCP 集成</a><a href="frontend.html">Web 前端</a><a href="extending.html">扩展开发</a>
         </nav>
@@ -43,7 +43,7 @@
           </table>
 
           <h2>3. 模型怎么拆解任务</h2>
-          <p>MyHarness 不使用硬编码 planner 算法拆任务，而是通过 Prompt 和工具约束引导模型自己拆解：</p>
+          <p>Atelier 不使用硬编码 planner 算法拆任务，而是通过 Prompt 和工具约束引导模型自己拆解：</p>
           <ol>
             <li>Prompt 组装层把 planning 指令注入系统消息，要求复杂任务先列步骤。</li>
             <li>模型判断任务是否需要计划。如果需要，它调用 <code>todo_write</code>。</li>
