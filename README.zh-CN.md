@@ -154,6 +154,18 @@ SERPER_API_KEY=your-serper-key
 
 如果没有搜索 key，`web_search` 会降级到能力有限的 DuckDuckGo instant-answer fallback。
 
+如果要使用设计图片生成和图片编辑工具，请配置 `image_generate` 与 `image_edit` 使用的图片接口：
+
+```env
+DESIGN_IMAGE_API_KEY=your-image-api-key
+DESIGN_IMAGE_BASE_URL=https://api.openai-hub.com/v1
+DESIGN_IMAGE_MODEL=gpt-image-2
+DESIGN_IMAGE_ENDPOINT=https://api.openai-hub.com/v1/images/generations
+DESIGN_IMAGE_EDIT_ENDPOINT=https://api.openai-hub.com/v1/images/edits
+```
+
+如果没有单独设置 `DESIGN_IMAGE_API_KEY` 或 `DESIGN_IMAGE_BASE_URL`，图片工具会回退使用 `OPENAI_HUB_API_KEY` 和 `OPENAI_HUB_BASE_URL`。也可以设置 `DESIGN_IMAGE_DEFAULT_SIZE`，例如 `1024x1024`。
+
 ### 3. 启动 Web UI
 
 ```bash
@@ -201,9 +213,11 @@ python cli.py --provider openai-hub
 | 工具 | 用途 |
 | --- | --- |
 | `read_file`, `write_file`, `edit_file`, `create_directory`, `list_dir` | 文件系统操作 |
+| `write_json` | 结构化 JSON 文件写入 |
 | `grep`, `glob`, `search` | 代码和文本搜索 |
 | `shell`, `powershell` | 本地命令执行 |
 | `web_search`, `web_fetch` | 网页搜索与网页读取 |
+| `image_generate`, `image_edit` | 设计图片生成与编辑 |
 | `todo_write` | 创建和更新可见计划 |
 | `memory` | 持久化记忆读写 |
 | `think` | 显式思考过程，前端可展示为执行轨迹 |

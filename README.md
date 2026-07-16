@@ -152,6 +152,18 @@ SERPER_API_KEY=your-serper-key
 
 Without a real search key, the `web_search` tool falls back to a limited DuckDuckGo instant-answer mode.
 
+For design image generation and image editing, configure the image endpoints used by `image_generate` and `image_edit`:
+
+```env
+DESIGN_IMAGE_API_KEY=your-image-api-key
+DESIGN_IMAGE_BASE_URL=https://api.openai-hub.com/v1
+DESIGN_IMAGE_MODEL=gpt-image-2
+DESIGN_IMAGE_ENDPOINT=https://api.openai-hub.com/v1/images/generations
+DESIGN_IMAGE_EDIT_ENDPOINT=https://api.openai-hub.com/v1/images/edits
+```
+
+If `DESIGN_IMAGE_API_KEY` or `DESIGN_IMAGE_BASE_URL` are not set, the image tools fall back to `OPENAI_HUB_API_KEY` and `OPENAI_HUB_BASE_URL`. You can also set `DESIGN_IMAGE_DEFAULT_SIZE` such as `1024x1024`.
+
 ### 3. Start the Web UI
 
 ```bash
@@ -199,9 +211,11 @@ Common built-in tools include:
 | Tool | Purpose |
 | --- | --- |
 | `read_file`, `write_file`, `edit_file`, `create_directory`, `list_dir` | File-system work |
+| `write_json` | Structured JSON file writing |
 | `grep`, `glob`, `search` | Code and text search |
 | `shell`, `powershell` | Local command execution |
 | `web_search`, `web_fetch` | Web search and page retrieval |
+| `image_generate`, `image_edit` | Design image generation and editing |
 | `todo_write` | Visible plan creation and updates |
 | `memory` | Persistent memory read/write |
 | `think` | Explicit reasoning notes shown in the runtime trace |
