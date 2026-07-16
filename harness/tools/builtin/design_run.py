@@ -78,6 +78,7 @@ SENDER_AGENTS = {
     "design-research",
     "design-planner",
     "design-designer",
+    "design-critic",
     "design-evaluator",
 }
 RECIPIENT_AGENTS = SENDER_AGENTS | {"all"}

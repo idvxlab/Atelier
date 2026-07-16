@@ -131,6 +131,25 @@ class _MockLLM:
         return "Summary."
 
 
+class _FlakyLLM:
+    """Raises once, then returns a normal assistant reply."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def chat(self, messages, tools=None):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("Connection error.")
+        return Message(role="assistant", content=[TextBlock(text="Recovered automatically.")])
+
+    async def stream_chat(self, messages, tools=None, on_token=None):
+        return await self.chat(messages, tools)
+
+    async def complete(self, prompt: str) -> str:
+        return "Summary."
+
+
 def _build_engine(reply_text: str = "Done.", system_prompt: str = "") -> AgentEngine:
     session_id = "test-engine"
     emitter = EventEmitter(session_id)
@@ -153,6 +172,33 @@ def _build_engine(reply_text: str = "Done.", system_prompt: str = "") -> AgentEn
     )
     return AgentEngine(
         config=EngineConfig(session_id=session_id, system_prompt=system_prompt),
+        loop=loop,
+        session_store=store,
+        emitter=emitter,
+        tool_registry=registry,
+    )
+
+
+def _build_engine_with_llm(llm, session_id: str = "test-engine") -> AgentEngine:
+    emitter = EventEmitter(session_id)
+    store = MemorySessionStore()
+    registry = ToolRegistry()
+    overflow = OverflowStore()
+    executor = ToolExecutor(registry=registry, overflow=overflow, emitter=emitter)
+    compressor = ContextCompressor(
+        summarizer=llm,
+        config=CompressionConfig(),
+    )
+    loop = ReactLoop(
+        llm=llm,
+        tool_registry=registry,
+        tool_executor=executor,
+        compressor=compressor,
+        emitter=emitter,
+        max_rounds=10,
+    )
+    return AgentEngine(
+        config=EngineConfig(session_id=session_id),
         loop=loop,
         session_store=store,
         emitter=emitter,
@@ -533,6 +579,23 @@ async def test_connection_error_is_marked_recoverable():
     assert result["status"] == "started"
     assert snapshot["state"] == "COMPLETED"
     assert snapshot["last_error"] == ""
+
+
+@pytest.mark.asyncio
+async def test_recoverable_error_auto_recovers_without_frontend_trigger():
+    llm = _FlakyLLM()
+    engine = _build_engine_with_llm(llm)
+
+    await engine.send_message("run a task")
+    await asyncio.sleep(0.2)
+
+    snapshot = await engine.get_snapshot()
+    assert llm.calls == 2
+    assert snapshot["state"] == "COMPLETED"
+    assert snapshot["recoverable_error"] is False
+    assert snapshot["last_error"] == ""
+    assert snapshot["last_messages"][-1]["role"] == "assistant"
+    assert "Recovered automatically." in snapshot["last_messages"][-1]["content"][0]["text"]
 
 
 @pytest.mark.asyncio

@@ -208,6 +208,7 @@ class AgentEngine:
         self._session_version: int = 0
         self._runtime_events: deque[dict[str, Any]] = deque(maxlen=80)
         self._runtime_event_seq: int = 0
+        self._auto_recovery_attempts: int = 0
 
         # Question mode ("question" | "noquestion") — default noquestion
         self._question_mode: str = getattr(
@@ -493,6 +494,20 @@ class AgentEngine:
 
     async def recover_if_possible(self) -> dict[str, Any]:
         """Resume from recoverable engine errors without treating the chat as broken."""
+        result = await self._prepare_recovery_if_possible()
+        if result.get("status") != "started":
+            return result
+        await self._emit_event(
+            {
+                "type": "runtime.event",
+                "data": {"phase": "engine_recovery_started"},
+            }
+        )
+        asyncio.create_task(self._run_loop_guarded())
+        return result
+
+    async def _prepare_recovery_if_possible(self) -> dict[str, Any]:
+        """Transition an ERROR engine into RUNNING with an internal recovery nudge."""
         async with self._state_lock:
             if self._sm.state != EngineState.ERROR:
                 return {"status": "ignored", "reason": self._sm.state.name}
@@ -527,13 +542,6 @@ class AgentEngine:
                     "source": "recover_if_possible",
                 },
             )
-        await self._emit_event(
-            {
-                "type": "runtime.event",
-                "data": {"phase": "engine_recovery_started"},
-            }
-        )
-        asyncio.create_task(self._run_loop_guarded())
         return {"status": "started"}
 
     def _is_recoverable_engine_error(self, error: str) -> bool:
@@ -700,6 +708,7 @@ class AgentEngine:
             if self._sm.state in (EngineState.COMPLETED, EngineState.ERROR):
                 self._sm.transition(EngineState.WAITING_INPUT)
             self._last_error = ""
+            self._auto_recovery_attempts = 0
             if reminder_msg is not None:
                 self._messages.append(reminder_msg)
             self._messages.append(user_msg)
@@ -754,6 +763,29 @@ class AgentEngine:
             )
         self._parent_engine = parent_engine
         await self._run_loop_guarded()
+
+        # Sub-agents run without an active frontend view, so the browser-side
+        # auto-recover path is not triggered for them. Recover transient
+        # provider/protocol/tool-result errors inline while the parent is still
+        # awaiting this subtask.
+        for _ in range(2):
+            if self._auto_recovery_attempts >= 2:
+                break
+            recovery = await self._prepare_recovery_if_possible()
+            if recovery.get("status") != "started":
+                break
+            self._auto_recovery_attempts += 1
+            await self._emit_event(
+                {
+                    "type": "runtime.event",
+                    "data": {
+                        "phase": "engine_recovery_started",
+                        "source": "subagent_inline_recover",
+                        "attempt": self._auto_recovery_attempts,
+                    },
+                }
+            )
+            await self._run_loop_guarded()
 
         # Notify parent engine that this sub-agent has completed
         if parent_engine is not None:
@@ -1764,9 +1796,11 @@ class AgentEngine:
         reminder_msg = await self._build_plan_reminder_message_if_needed(pc.text)
         user_msg = Message(role="user", content=[TextBlock(text=pc.text)])
         async with self._state_lock:
-            # COMPLETED -> WAITING_INPUT -> RUNNING
-            if self._sm.state == EngineState.COMPLETED:
+            # COMPLETED/ERROR -> WAITING_INPUT -> RUNNING
+            if self._sm.state in (EngineState.COMPLETED, EngineState.ERROR):
                 self._sm.transition(EngineState.WAITING_INPUT)
+            self._last_error = ""
+            self._auto_recovery_attempts = 0
             if reminder_msg is not None:
                 self._messages.append(reminder_msg)
             self._messages.append(user_msg)
@@ -1788,6 +1822,7 @@ class AgentEngine:
         """
         interrupt_signal: InterruptSignal | None = None
         memory_context_msg: Message | None = None
+        auto_recover_after_save = False
         try:
             gate = self._confirmation_gate if self._config.confirm_tools else None
             memory_context_msg = await self._build_memory_context_message_if_needed()
@@ -1806,6 +1841,7 @@ class AgentEngine:
             )
             async with self._state_lock:
                 self._sm.transition(EngineState.COMPLETED)
+                self._auto_recovery_attempts = 0
                 self._emitter.emit(
                     "state_transition", "triggered-executed",
                     detail={"to": EngineState.COMPLETED.name},
@@ -1857,6 +1893,7 @@ class AgentEngine:
 
         except asyncio.CancelledError:
             async with self._state_lock:
+                self._auto_recovery_attempts = 0
                 self._sm.transition(EngineState.WAITING_INPUT)
                 self._emitter.emit(
                     "state_transition", "triggered-executed",
@@ -1869,6 +1906,10 @@ class AgentEngine:
             self._last_error = traceback.format_exc()
             async with self._state_lock:
                 self._sm.transition(EngineState.ERROR)
+                auto_recover_after_save = (
+                    self._auto_recovery_attempts < 2
+                    and self._is_recoverable_engine_error(self._last_error)
+                )
             self._emitter.emit_error(
                 "engine_loop_error", str(exc),
             )
@@ -1888,6 +1929,24 @@ class AgentEngine:
                 )
             except Exception as exc:
                 self._emitter.emit_error("session_save_error", str(exc))
+
+        if auto_recover_after_save:
+            self._auto_recovery_attempts += 1
+            recovery = await self._prepare_recovery_if_possible()
+            if recovery.get("status") == "started":
+                await self._emit_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "engine_recovery_started",
+                            "source": "backend_auto_recover",
+                            "attempt": self._auto_recovery_attempts,
+                        },
+                    }
+                )
+                await self._notify_state_listeners()
+                await self._run_loop_guarded()
+                return
 
         # After completing (or erroring), drain queued commands sequentially.
         # We use a fresh task chain so the finally block above runs first.

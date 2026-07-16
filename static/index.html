@@ -785,6 +785,14 @@
         padding: 0 4px;
       }
 
+      .msg-agent {
+        margin-left: 6px;
+        color: var(--accent);
+        font-weight: 600;
+        text-transform: none;
+        letter-spacing: 0;
+      }
+
       .msg-bubble {
         background: var(--surface2);
         border: 1px solid var(--border);
@@ -2279,6 +2287,8 @@
       let activeThinkingGroup = null;
       let lastToolResultsBelongToThinkingGroup = false;
       let runtimeEvents = [];
+      let currentSnapshotMeta = {};
+      let currentSnapshotAgentId = "";
       const autoContinuationKeys = new Set();
       const autoRecoveryKeys = new Set();
       let allCommands = []; // command list from GET /commands
@@ -3537,9 +3547,14 @@
 
       async function _handleSlashInput(text, inp, btn) {
         hideCommandBar();
-        // Parse: /command_id arg1 arg2 ...
-        const parts = text.slice(1).trim().split(/\s+/);
-        const cmdName = parts[0];
+        // Parse: /command_id rest of user text. A single placeholder such as
+        // $ARGUMENTS should receive the full remaining text, including spaces.
+        const commandText = text.slice(1).trim();
+        const firstSpace = commandText.search(/\s/);
+        const cmdName =
+          firstSpace === -1 ? commandText : commandText.slice(0, firstSpace);
+        const restText =
+          firstSpace === -1 ? "" : commandText.slice(firstSpace + 1).trim();
         const cmd = _findCommand(cmdName);
 
         if (!cmd) {
@@ -3566,10 +3581,14 @@
           return;
         }
 
-        // Build args from positional params
-        const rawArgs = parts.slice(1);
+        // Build args from positional params. For one-param commands, preserve
+        // the entire tail so prompts like `/design 为同济大学 IDVX...` are not
+        // truncated to the first whitespace-delimited token.
+        const rawArgs = restText ? restText.split(/\s+/) : [];
         const args = {};
-        if (cmd.has_params && rawArgs.length > 0) {
+        if (cmd.has_params && cmd.params.length === 1 && restText) {
+          args[cmd.params[0]] = restText;
+        } else if (cmd.has_params && rawArgs.length > 0) {
           for (
             let i = 0;
             i < Math.min(cmd.params.length, rawArgs.length);
@@ -3839,7 +3858,7 @@
         streamEl = document.createElement("div");
         streamEl.className = "msg assistant";
         streamEl.innerHTML =
-          '<div class="msg-role">Assistant</div><div class="msg-bubble"></div>';
+          `<div class="msg-role">${assistantRoleLabel()}</div><div class="msg-bubble"></div>`;
         const dots = document.getElementById("typing-dots");
         if (dots) container.insertBefore(streamEl, dots);
         else container.appendChild(streamEl);
@@ -3967,6 +3986,8 @@
 
         const msgs = snap.last_messages || [];
         const meta = snap.meta || {};
+        currentSnapshotMeta = meta;
+        currentSnapshotAgentId = snap.agent_id || "";
         if (snap.question_mode && snap.question_mode !== currentQuestionMode) {
           currentQuestionMode = snap.question_mode;
         }
@@ -4714,7 +4735,7 @@
           if (textBlocks.length) {
             const raw = textBlocks.map((b) => b.text).join("\n\n");
             const el = div("msg assistant");
-            el.innerHTML = `<div class="msg-role">Assistant</div><div class="msg-bubble">${mdToHtml(raw)}</div><div class="msg-actions"><button class="msg-act-btn" onclick="copyMessageBubble(this)" title="复制">📋</button></div>`;
+            el.innerHTML = `<div class="msg-role">${assistantRoleLabel()}</div><div class="msg-bubble">${mdToHtml(raw)}</div><div class="msg-actions"><button class="msg-act-btn" onclick="copyMessageBubble(this)" title="复制">📋</button></div>`;
             container.appendChild(el);
             activeThinkingGroup = null;
           }
@@ -4745,6 +4766,21 @@
           activeThinkingGroup = null;
           lastToolResultsBelongToThinkingGroup = false;
         }
+      }
+
+      function assistantRoleLabel() {
+        const meta = currentSnapshotMeta || {};
+        const sessionInfo =
+          allSessions.find((s) => s.session_id === currentSessionId) || {};
+        const agent =
+          meta.persona ||
+          sessionInfo.persona ||
+          currentSnapshotAgentId ||
+          sessionInfo.agent_id ||
+          "";
+        return agent
+          ? `Assistant <span class="msg-agent">${escHtml(agent)}</span>`
+          : "Assistant";
       }
 
       function isSyntheticRecoveryToolResult(tr) {
@@ -4792,9 +4828,10 @@
           const agentItems = agents
             .map((a, i) => {
               const task = a.task || "";
+              const agent = a.agent || "subagent";
               return (
                 `<div style="padding:5px 0;display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--border)">` +
-                `<span style="color:var(--green);font-size:11px;white-space:nowrap;margin-top:2px;min-width:54px">Agent ${i + 1}</span>` +
+                `<span style="color:var(--green);font-size:11px;white-space:nowrap;margin-top:2px;min-width:120px">Agent ${i + 1} · ${escHtml(agent)}</span>` +
                 `<span style="font-size:12px;color:var(--text)">${escHtml(task.slice(0, 120))}${task.length > 120 ? "..." : ""}</span>` +
                 `</div>`
               );
@@ -4815,16 +4852,17 @@
 
         if (tc.tool_name === "spawn_agent") {
           const task = tc.tool_input?.task || "";
+          const agent = tc.tool_input?.agent || "subagent";
           const wrap = document.createElement("div");
           wrap.className = "tool-block";
           wrap.innerHTML =
             `<div class="tool-header open" onclick="toggleCollapse(this)">` +
             `<span class="tool-icon">&#128295;</span>` +
             `<span class="tool-name" style="color:var(--green)">spawn_agent</span>` +
-            `<span class="tool-summary">${escHtml(task.slice(0, 60))}${task.length > 60 ? "..." : ""}</span>` +
+            `<span class="tool-summary">${escHtml(agent)} · ${escHtml(task.slice(0, 60))}${task.length > 60 ? "..." : ""}</span>` +
             `<span class="tool-chevron">&#9654;</span>` +
             `</div>` +
-            `<div class="tool-body open" style="padding:6px 10px;font-size:12px;color:var(--text);white-space:pre-wrap">${escHtml(task)}</div>`;
+            `<div class="tool-body open" style="padding:6px 10px;font-size:12px;color:var(--text);white-space:pre-wrap"><div style="font-size:11px;color:var(--accent);margin-bottom:4px">agent: ${escHtml(agent)}</div>${escHtml(task)}</div>`;
           return wrap;
         }
 

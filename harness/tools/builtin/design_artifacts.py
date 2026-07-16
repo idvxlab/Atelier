@@ -255,13 +255,56 @@ def _finish_report(report: dict[str, Any]) -> str:
 
 def _render_index(run_id: str, brief: str, final_dir: Path, items: list[dict[str, Any]]) -> str:
     images = [i for i in items if str(i["file"]).lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
+    artifact_images = [
+        i for i in images
+        if str(i["file"]).replace("\\", "/").startswith("artifacts/")
+    ]
+    reference_images = [
+        i for i in images
+        if str(i["file"]).replace("\\", "/").startswith("research/assets/")
+    ]
+    other_images = [
+        i for i in images
+        if i not in artifact_images and i not in reference_images
+    ]
     cards = "\n".join(
-        f'<figure><img src="{_esc_attr(i["file"])}" alt=""><figcaption>{_esc(i["file"])}</figcaption></figure>'
-        for i in images
+        f'<figure class="result-card"><img src="{_esc_attr(i["file"])}" alt=""><figcaption>{_esc(Path(str(i["file"])).name)}</figcaption></figure>'
+        for i in artifact_images
+    )
+    reference_cards = "\n".join(
+        f'<figure class="reference-card"><img src="{_esc_attr(i["file"])}" alt=""><figcaption>{_esc(Path(str(i["file"])).name)}</figcaption></figure>'
+        for i in reference_images
+    )
+    other_cards = "\n".join(
+        f'<figure class="reference-card"><img src="{_esc_attr(i["file"])}" alt=""><figcaption>{_esc(Path(str(i["file"])).name)}</figcaption></figure>'
+        for i in other_images
     )
     file_rows = "\n".join(
         f"<tr><td>{_esc(i['file'])}</td><td>{i['bytes']}</td><td><code>{_esc(i['sha256'][:16])}</code></td></tr>"
         for i in items
+    )
+    reference_section = (
+        f"""
+  <section class="appendix">
+    <div class="section-heading">
+      <p class="eyebrow">Reference Library</p>
+      <h2>Research Assets</h2>
+      <p>Source images retained for grounding and audit. These are separated from final deliverables.</p>
+    </div>
+    <div class="reference-grid">{reference_cards}</div>
+  </section>"""
+        if reference_cards else ""
+    )
+    other_section = (
+        f"""
+  <section class="appendix">
+    <div class="section-heading">
+      <p class="eyebrow">Additional Images</p>
+      <h2>Supporting Files</h2>
+    </div>
+    <div class="reference-grid">{other_cards}</div>
+  </section>"""
+        if other_cards else ""
     )
     return f"""<!doctype html>
 <html lang="en">
@@ -270,23 +313,55 @@ def _render_index(run_id: str, brief: str, final_dir: Path, items: list[dict[str
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Atelier Design Package · {_esc(run_id)}</title>
   <style>
-    body {{ font-family: Inter, system-ui, sans-serif; margin: 32px; background: #f7f7f4; color: #1b1b1b; }}
-    h1 {{ margin-bottom: 4px; }}
-    .brief {{ max-width: 900px; color: #555; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 24px 0; }}
-    figure {{ margin: 0; padding: 12px; background: white; border: 1px solid #ddd; }}
+    :root {{ --ink:#171717; --muted:#666; --line:#dcd8ce; --paper:#f7f5ef; --card:#fffdfa; --accent:#184b82; }}
+    * {{ box-sizing: border-box; }}
+    body {{ font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; margin: 0; background: var(--paper); color: var(--ink); }}
+    main {{ max-width: 1180px; margin: 0 auto; padding: 48px 28px 64px; }}
+    header {{ border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 32px; }}
+    h1 {{ margin: 0 0 10px; font-size: clamp(34px, 6vw, 72px); line-height: .95; letter-spacing: 0; }}
+    h2 {{ margin: 0; font-size: 24px; }}
+    .eyebrow {{ margin: 0 0 8px; color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }}
+    .brief {{ max-width: 900px; color: var(--muted); font-size: 15px; line-height: 1.65; }}
+    .section-heading {{ display: flex; flex-direction: column; gap: 6px; margin: 36px 0 18px; max-width: 780px; }}
+    .section-heading p:not(.eyebrow) {{ margin: 0; color: var(--muted); line-height: 1.55; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin: 20px 0 40px; align-items: start; }}
+    .reference-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0 32px; }}
+    figure {{ margin: 0; background: var(--card); border: 1px solid var(--line); overflow: hidden; }}
+    .result-card {{ border-radius: 10px; box-shadow: 0 12px 32px rgba(20,20,20,.08); }}
+    .reference-card {{ border-radius: 8px; opacity: .92; }}
     img {{ width: 100%; height: auto; display: block; }}
-    figcaption {{ font-size: 12px; color: #666; margin-top: 8px; overflow-wrap: anywhere; }}
-    table {{ width: 100%; border-collapse: collapse; background: white; }}
-    td, th {{ border-bottom: 1px solid #e0e0e0; padding: 8px; text-align: left; }}
+    figcaption {{ font-size: 12px; color: var(--muted); padding: 10px 12px; overflow-wrap: anywhere; border-top: 1px solid var(--line); }}
+    .appendix {{ border-top: 1px solid var(--line); margin-top: 36px; padding-top: 8px; }}
+    table {{ width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); font-size: 13px; }}
+    td, th {{ border-bottom: 1px solid #e8e2d8; padding: 9px 10px; text-align: left; overflow-wrap: anywhere; }}
+    th {{ color: var(--muted); font-weight: 700; }}
   </style>
 </head>
 <body>
-  <h1>Atelier Design Package</h1>
-  <p class="brief"><strong>Run:</strong> {_esc(run_id)}<br><strong>Brief:</strong> {_esc(brief)}</p>
-  <section class="grid">{cards}</section>
-  <h2>Files</h2>
-  <table><thead><tr><th>File</th><th>Bytes</th><th>SHA-256</th></tr></thead><tbody>{file_rows}</tbody></table>
+  <main>
+    <header>
+      <p class="eyebrow">Atelier Design Package</p>
+      <h1>{_esc(run_id)}</h1>
+      <p class="brief"><strong>Brief:</strong> {_esc(brief)}</p>
+    </header>
+    <section>
+      <div class="section-heading">
+        <p class="eyebrow">Final Deliverables</p>
+        <h2>Generated Design Set</h2>
+        <p>Curated outputs produced for presentation. Research references are not mixed into this section.</p>
+      </div>
+      <div class="grid">{cards}</div>
+    </section>
+{reference_section}
+{other_section}
+    <section class="appendix">
+      <div class="section-heading">
+        <p class="eyebrow">Package Manifest</p>
+        <h2>Files</h2>
+      </div>
+      <table><thead><tr><th>File</th><th>Bytes</th><th>SHA-256</th></tr></thead><tbody>{file_rows}</tbody></table>
+    </section>
+  </main>
 </body>
 </html>
 """

@@ -5,6 +5,14 @@ from pathlib import Path
 
 import pytest
 
+from harness.agents import load_agent_profile
+from harness.config import HarnessConfig
+from harness.factory import build_engine
+from harness.storage.backends.memory import (
+    InMemoryMemoryStore,
+    InMemoryPlanStore,
+    MemorySessionStore,
+)
 from harness.tools.builtin.design_image import image_edit_tool, image_generate_tool
 from harness.tools.builtin.design_run import (
     design_bus_post_tool,
@@ -18,6 +26,31 @@ from harness.tools.builtin.design_research import (
     research_fetch_tool,
 )
 from harness.tools.builtin.design_artifacts import artifact_lint_tool, export_package_tool
+
+
+def test_design_designer_engine_has_image_and_lint_tools():
+    cfg = HarnessConfig.from_yaml("config.yaml")
+    profile = load_agent_profile("design-designer")
+    provider = cfg.providers[cfg.default_provider]
+
+    engine = build_engine(
+        session_id="test-design-designer-tools",
+        provider_cfg=provider,
+        harness_cfg=cfg,
+        session_store=MemorySessionStore(),
+        system_prompt=profile.system_prompt,
+        allowed_tools=profile.allowed_tools,
+        provider_name="design-designer",
+        agent_id="design-designer",
+        memory_store=InMemoryMemoryStore(),
+        plan_store=InMemoryPlanStore(),
+    )
+
+    tool_names = {schema.name for schema in engine.tool_schemas}
+    assert {"image_generate", "image_edit", "artifact_lint"}.issubset(tool_names)
+    assert "image_generate" in engine._config.system_prompt
+    assert "image_edit" in engine._config.system_prompt
+    assert "artifact_lint" in engine._config.system_prompt
 
 
 @pytest.mark.asyncio
@@ -208,13 +241,16 @@ async def test_research_asset_fetch_and_validate(monkeypatch, tmp_path):
 async def test_artifact_lint_and_export_package(tmp_path):
     run_dir = tmp_path / "run"
     artifacts = run_dir / "artifacts"
+    research_assets = run_dir / "research" / "assets"
     artifacts.mkdir(parents=True)
+    research_assets.mkdir(parents=True)
     (run_dir / "brief.json").write_text(
         json.dumps({"brief": "Design a poster."}),
         encoding="utf-8",
     )
     (run_dir / "bus.jsonl").write_text("", encoding="utf-8")
     (artifacts / "poster.png").write_bytes(_png_bytes(width=128, height=128))
+    (research_assets / "reference.png").write_bytes(_png_bytes(width=64, height=64))
     (artifacts / "00-gallery.html").write_text(
         "<!doctype html><html><head><title>Gallery</title></head><body><img src='poster.png'></body></html>",
         encoding="utf-8",
@@ -239,7 +275,15 @@ async def test_artifact_lint_and_export_package(tmp_path):
     )
     assert exported["ok"] is True
     assert (tmp_path / "final/package-manifest.json").exists()
-    assert (tmp_path / "final/00-index.html").exists()
+    index = tmp_path / "final/00-index.html"
+    assert index.exists()
+    html = index.read_text(encoding="utf-8")
+    assert "Final Deliverables" in html
+    assert "Reference Library" in html
+    assert "artifacts/poster.png" in html
+    assert "research/assets/reference.png" in html
+    assert html.index("Final Deliverables") < html.index("artifacts/poster.png")
+    assert html.index("Reference Library") < html.index("research/assets/reference.png")
 
 
 def _png_bytes(width: int = 1, height: int = 1) -> bytes:

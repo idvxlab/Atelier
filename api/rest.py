@@ -203,6 +203,20 @@ async def _build_session_engine(
     question_mode: str,
     approval_mode: str = "ask",
 ) -> tuple[AgentEngine, list]:
+    if persona_name and (not system_prompt or allowed_tools is None):
+        try:
+            persona = load_persona(persona_name)
+            if not system_prompt:
+                system_prompt = persona.get("system_prompt", system_prompt)
+            if allowed_tools is None:
+                allowed_tools = persona.get("allowed_tools") or allowed_tools
+            if persona.get("provider"):
+                provider_name = persona["provider"]
+        except ValueError:
+            # Keep the restore path tolerant: stale persona names should not
+            # make an otherwise persisted session unreadable.
+            pass
+
     if provider_name not in cfg.providers:
         # Paranoid guard: caller should have already validated/fallen back,
         # but if we get here with an unknown provider, log it and use the
@@ -600,14 +614,30 @@ async def get_state(session_id: str) -> dict[str, Any]:
         rec = await _session_store.load(session_id)
         if rec and isinstance(rec.metadata, dict):
             store_meta = rec.metadata
+            # Durable identity fields should come from the session record.
+            # Sub-agent engines are created from spawn_agent and may already be
+            # live in _engines before _engine_meta has been populated for that
+            # child. If we only trust _engine_meta, the UI can show the parent
+            # persona (for example design-primary) while the child prompt is
+            # actually design-research/design-designer.
+            for key in (
+                "persona",
+                "provider",
+                "spawn_depth",
+                "parent_session_id",
+                "question_mode",
+                "approval_mode",
+            ):
+                if key in store_meta and store_meta.get(key) not in (None, ""):
+                    meta[key] = store_meta.get(key)
             if not meta.get("title"):
                 meta["title"] = store_meta.get("title", "")
             if not meta.get("display_name"):
                 meta["display_name"] = store_meta.get("display_name", "")
-            if not meta.get("parent_session_id"):
-                meta["parent_session_id"] = store_meta.get("parent_session_id", "")
     except Exception:
         pass
+    if meta:
+        _engine_meta[session_id] = {**_engine_meta.get(session_id, {}), **meta}
     snapshot["meta"] = meta
     return snapshot
 

@@ -100,8 +100,34 @@ class TestRunToCompletion:
         """Engine that returns empty text → fallback string."""
         engine = _build_engine("")
         result = await engine.run_to_completion("ping")
-        # empty TextBlock text → falls through to fallback
-        assert result == "(no response)"
+        assert "模型连续返回空内容" in result
+
+    @pytest.mark.asyncio
+    async def test_recoverable_error_auto_recovers_inline(self):
+        """Sub-agent run_to_completion recovers without opening the child session."""
+        engine = _build_engine("unused")
+        calls = 0
+
+        async def fake_guarded():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                engine._last_error = "Connection error."
+                async with engine._state_lock:
+                    engine._sm.transition(EngineState.ERROR)
+                return
+            engine._messages.append(
+                Message(role="assistant", content=[TextBlock(text="Recovered.")])
+            )
+            async with engine._state_lock:
+                engine._sm.transition(EngineState.COMPLETED)
+
+        engine._run_loop_guarded = fake_guarded
+
+        result = await engine.run_to_completion("ping")
+
+        assert result == "Recovered."
+        assert calls == 2
 
     @pytest.mark.asyncio
     async def test_can_reuse_after_completion(self):
@@ -289,6 +315,53 @@ class TestSpawnAgentTool:
         assert captured["approval_mode"] == "auto"
 
     @pytest.mark.asyncio
+    async def test_registered_profile_tools_are_not_truncated_by_parent_tools(self, monkeypatch):
+        captured: dict = {}
+
+        def capture_build_engine(**kwargs):
+            captured.update(kwargs)
+            return _build_engine(reply_text="ok", session_id=kwargs["session_id"])
+
+        def fake_load_profile(agent_id: str) -> AgentProfile:
+            if agent_id == "design-designer":
+                return AgentProfile(
+                    agent_id="design-designer",
+                    name="design-designer",
+                    allowed_tools=[
+                        "read_file",
+                        "write_file",
+                        "image_generate",
+                        "image_edit",
+                        "artifact_lint",
+                    ],
+                )
+            return AgentProfile(agent_id=agent_id, name=agent_id)
+
+        monkeypatch.setattr("harness.factory.build_engine", capture_build_engine)
+        monkeypatch.setattr("harness.agents.load_agent_profile", fake_load_profile)
+        tool = make_spawn_agent_tool(
+            harness_cfg=_FakeHarnessCfg(),
+            provider_cfg=_FakeProviderCfg(),
+            session_store=MemorySessionStore(),
+            spawn_depth=0,
+        )
+
+        result = await tool(
+            task="Create artifacts",
+            agent="design-designer",
+            tools=["read_file", "write_file"],
+        )
+
+        assert "ok" in result
+        assert captured["allowed_tools"] == [
+            "read_file",
+            "write_file",
+            "image_generate",
+            "image_edit",
+            "artifact_lint",
+        ]
+
+    @pytest.mark.asyncio
     async def test_spawn_agent_binds_parent_plan_item(self, monkeypatch):
         monkeypatch.setattr(
             "harness.factory.build_engine",
@@ -430,3 +503,48 @@ class TestSpawnAgentsTool:
         )
         result = await tool(agents=[{"task": "A"}, {"task": "B"}])
         assert "---" in result
+
+    @pytest.mark.asyncio
+    async def test_registered_profile_tools_are_not_truncated_in_parallel_spawn(self, monkeypatch):
+        captured: list[dict] = []
+
+        async def _fake_run(self_engine, task, **kwargs):
+            return f"answer:{task}"
+
+        def capture_build_engine(**kwargs):
+            captured.append(dict(kwargs))
+            return _build_engine(reply_text="ignored", session_id=kwargs["session_id"])
+
+        def fake_load_profile(agent_id: str) -> AgentProfile:
+            if agent_id == "design-designer":
+                return AgentProfile(
+                    agent_id="design-designer",
+                    name="design-designer",
+                    allowed_tools=["read_file", "image_generate", "artifact_lint"],
+                )
+            return AgentProfile(agent_id=agent_id, name=agent_id)
+
+        monkeypatch.setattr(AgentEngine, "run_to_completion", _fake_run)
+        monkeypatch.setattr("harness.factory.build_engine", capture_build_engine)
+        monkeypatch.setattr("harness.agents.load_agent_profile", fake_load_profile)
+        tool = make_spawn_agents_tool(
+            harness_cfg=_FakeHarnessCfg(),
+            provider_cfg=_FakeProviderCfg(),
+            session_store=MemorySessionStore(),
+            spawn_depth=0,
+        )
+
+        result = await tool(agents=[
+            {
+                "task": "design",
+                "agent": "design-designer",
+                "tools": ["read_file"],
+            }
+        ])
+
+        assert "answer:design" in result
+        assert captured[0]["allowed_tools"] == [
+            "read_file",
+            "image_generate",
+            "artifact_lint",
+        ]

@@ -226,8 +226,12 @@ def make_spawn_agent_tool(
                     return f"[Sub-agent {sub_id} | {display_name}]\nError: {exc}"
                 if not child_system_prompt:
                     child_system_prompt = profile.system_prompt
-                if child_tools is None:
-                    child_tools = profile.allowed_tools
+                # A registered profile owns its executable tool contract.
+                # Parent-provided `tools` is easy for the model to misuse as a
+                # partial list, which can silently remove required tools from a
+                # specialised child such as design-designer. For registered
+                # agents, always use the profile allowlist.
+                child_tools = profile.allowed_tools
                 if profile.provider and profile.provider in harness_cfg.providers:
                     child_provider_cfg = harness_cfg.providers[profile.provider]
                 if profile.default_approval_mode:
@@ -351,8 +355,12 @@ def make_spawn_agents_tool(
                     return f"[Sub-agent {sub_id} | {display_name}]\nError: {exc}"
                 if not child_system_prompt:
                     child_system_prompt = profile.system_prompt
-                if child_tools is None:
-                    child_tools = profile.allowed_tools
+                # A registered profile owns its executable tool contract.
+                # Parent-provided `tools` is easy for the model to misuse as a
+                # partial list, which can silently remove required tools from a
+                # specialised child such as design-designer. For registered
+                # agents, always use the profile allowlist.
+                child_tools = profile.allowed_tools
                 if profile.provider and profile.provider in harness_cfg.providers:
                     child_provider_cfg = harness_cfg.providers[profile.provider]
                 if profile.default_approval_mode:

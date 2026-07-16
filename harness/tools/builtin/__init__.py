@@ -6,6 +6,7 @@ from harness.tools.builtin.glob_tool import glob_tool, GLOB_SCHEMA
 from harness.tools.builtin.grep_tool import grep_tool, GREP_SCHEMA
 from harness.tools.builtin.powershell_tool import powershell_tool, POWERSHELL_SCHEMA
 from harness.tools.builtin.write_file import write_file_tool, WRITE_FILE_SCHEMA
+from harness.tools.builtin.write_json import write_json_tool, WRITE_JSON_SCHEMA
 from harness.tools.builtin.create_directory import create_directory_tool, CREATE_DIRECTORY_SCHEMA
 from harness.tools.builtin.list_dir import list_dir_tool, LIST_DIR_SCHEMA
 from harness.tools.builtin.edit_file import edit_file_tool, EDIT_FILE_SCHEMA
@@ -55,6 +56,7 @@ __all__ = [
     "grep_tool", "GREP_SCHEMA",
     "powershell_tool", "POWERSHELL_SCHEMA",
     "write_file_tool", "WRITE_FILE_SCHEMA",
+    "write_json_tool", "WRITE_JSON_SCHEMA",
     "create_directory_tool", "CREATE_DIRECTORY_SCHEMA",
     "list_dir_tool", "LIST_DIR_SCHEMA",
     "edit_file_tool", "EDIT_FILE_SCHEMA",

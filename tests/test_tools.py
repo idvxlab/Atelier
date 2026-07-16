@@ -5,6 +5,7 @@ import sys
 import subprocess
 import importlib
 import asyncio
+import json
 
 import pytest
 
@@ -15,6 +16,7 @@ from harness.tools.builtin.shell import SHELL_SCHEMA, shell_tool
 from harness.tools.builtin.read_file import read_file_tool
 from harness.tools.builtin.glob_tool import glob_tool
 from harness.tools.builtin.write_file import write_file_tool
+from harness.tools.builtin.write_json import WRITE_JSON_SCHEMA, write_json_tool
 from harness.tools.builtin.edit_file import edit_file_tool
 from harness.tools.builtin.web_fetch import web_fetch_tool
 from harness.tools.builtin.web_search import web_search_tool
@@ -71,6 +73,15 @@ def test_openai_tool_schema_includes_array_items():
     command_schema = tool["function"]["parameters"]["properties"]["command"]
     assert command_schema["type"] == "array"
     assert command_schema["items"] == {"type": "string"}
+
+
+def test_openai_tool_schema_includes_object_param():
+    provider = OpenAIProvider(LLMConfig(model="gpt-4o", api_key="sk-test"))
+
+    tool = provider._to_openai_tool(WRITE_JSON_SCHEMA)
+
+    data_schema = tool["function"]["parameters"]["properties"]["data"]
+    assert data_schema["type"] == "object"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -727,3 +738,24 @@ async def test_create_directory_and_list_dir(tmp_path):
 
     assert "Created directory" in created
     assert "demo/static" in listed.replace("\\", "/")
+
+
+@pytest.mark.asyncio
+async def test_write_json_tool_writes_nested_unicode_object(tmp_path):
+    f = tmp_path / "plan" / "design_plan.json"
+    payload = {
+        "runId": "zhujiajiao-merchandise-system",
+        "target_audience": {
+            "primary": "古镇游客与文化消费人群",
+            "tone_keywords": ["地域文化感", "收藏感"],
+        },
+        "deliverables": [
+            {"id": "poster", "file": "artifacts/generated-images/poster.png"},
+        ],
+    }
+
+    result = await write_json_tool(path=str(f), data=payload)
+
+    assert "Written JSON object" in result
+    assert json.loads(f.read_text(encoding="utf-8")) == payload
+    assert "古镇游客" in f.read_text(encoding="utf-8")

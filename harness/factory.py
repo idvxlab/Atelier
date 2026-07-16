@@ -39,6 +39,7 @@ from harness.tools.builtin import (
     GREP_SCHEMA, grep_tool,
     POWERSHELL_SCHEMA, powershell_tool,
     WRITE_FILE_SCHEMA, write_file_tool,
+    WRITE_JSON_SCHEMA, write_json_tool,
     CREATE_DIRECTORY_SCHEMA, create_directory_tool,
     LIST_DIR_SCHEMA, list_dir_tool,
     EDIT_FILE_SCHEMA, edit_file_tool,
@@ -155,6 +156,7 @@ NOQUESTION_INSTRUCTIONS = (
 ALL_TOOLS: dict[str, tuple] = {
     "read_file":   (READ_FILE_SCHEMA,   read_file_tool),
     "write_file":  (WRITE_FILE_SCHEMA,  write_file_tool),
+    "write_json":  (WRITE_JSON_SCHEMA,  write_json_tool),
     "edit_file":   (EDIT_FILE_SCHEMA,   edit_file_tool),
     "search":      (SEARCH_SCHEMA,      search_tool),
     "shell":       (SHELL_SCHEMA,       shell_tool),

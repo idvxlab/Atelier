@@ -123,6 +123,7 @@ tools:
   enabled:
     - read_file
     - write_file
+    - write_json
     - edit_file
     - search
     - shell
@@ -155,6 +156,7 @@ tools:
 
   limits:
     read_file: 20000
+    write_json: 12000
     search: 10000
     shell: 15000
     web_fetch: 8000
