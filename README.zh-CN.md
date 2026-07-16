@@ -2,132 +2,93 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Atelier 是我们实验室独立开发的轻量级智能体脚手架，目标是为专业设计场景构建可扩展的设计智能体运行底座。它兼顾 Web UI 和 CLI，提供未来设计工作流需要的基础能力：项目会话、工具执行、任务规划、记忆、技能、多智能体、人机审批和实时执行过程可视化。
+Atelier 是一个面向专业设计智能体的轻量级 Agent Harness。它不是单纯的大模型聊天页面，而是一套可控制、可观察、可审批、可持久化、可扩展的智能体运行底座：智能体可以在同一个会话中理解需求、规划任务、调用工具、保存上下文、请求人工确认、生成子智能体，并通过 WebSocket 把执行过程实时呈现给用户。
 
-当前仓库重点完成的是通用 harness 层，具体的设计领域工具和设计工作流会在后续继续加入。换句话说，它不是简单的大模型聊天壳，而是面向设计智能体的运行时基础设施：智能体可以推理、行动、澄清需求、调用工具、持久化上下文、从错误中恢复，并通过子智能体协作推进复杂任务。
+当前版本聚焦通用运行时能力，适合作为设计智能体、研究型工作台、本地自动化助手，以及需要稳定执行、工具治理、持久化会话和可观察长任务的多智能体系统基础。
 
-## 核心特性
+![Atelier 运行时架构](docs/assets/atelier-runtime.svg)
 
-- **设计智能体脚手架**：为后续专业设计流程提供轻量基础，包括调研、规划、迭代、评审和面向产物的工具调用。
-- **Web 与 CLI 双入口**：既可以用浏览器工作台，也可以直接运行 `cli.py`。
-- **OpenAI-compatible 与 Anthropic 模型提供商**：通过 `config.yaml` 和环境变量配置模型。
-- **工具注册与执行系统**：支持文件操作、Shell / PowerShell、网页搜索、网页抓取、思考、记忆、计划、后台任务和子智能体。
-- **审批模式**：危险工具可请求人工确认，也可按会话切换自动执行或全权限模式。
-- **会话持久化**：使用 SQLite 保存会话、元数据、checkpoint、可见计划和 memory。
-- **实时执行过程**：通过 REST + WebSocket 展示消息、工具调用、工具结果、计划更新、审批和恢复事件。
-- **Skill 与 Agent Profile**：从 `.myharness/` 扫描项目内智能体、技能和命令，并注入到 prompt 上下文。
-- **多智能体支持**：主会话可以生成子会话，并保留父子关系。
-- **上下文管理**：支持自动压缩和 prompt cache，让长会话可以继续运行。
+## 核心亮点
 
-## 这个 Harness 提供什么
+- **Web、CLI 与 API 多入口**：既可以使用浏览器工作台，也可以运行本地交互式 CLI，或通过 REST / WebSocket API 接入自定义前端。
+- **长任务智能体运行时**：采用 ReAct 风格循环，支持多轮模型调用、工具执行、中途取消、状态恢复和最终回复生成。
+- **模型 Provider 抽象**：支持 OpenAI-compatible 与 Anthropic 风格接口，模型、Base URL 和密钥都通过 `config.yaml` 与环境变量配置。
+- **可扩展工具系统**：内置文件操作、搜索、Shell / PowerShell、网页搜索、网页抓取、图片生成/编辑、计划、记忆、后台任务和子智能体创建。
+- **会话持久化**：使用 SQLite 保存消息、元数据、计划、记忆、checkpoint 和父子会话关系。
+- **审批与权限控制**：高风险工具可要求人工确认，persona 也可以限制会话可用工具。
+- **Personas、Skills 与 Commands**：角色、流程知识和项目命令从 `.myharness/` 加载，便于复用和管理。
+- **上下文管理**：prompt cache 与自动压缩让长会话在上下文增长后仍能继续运行。
+- **多智能体协作**：父会话可以创建子智能体，用于调研、规划、实现、评审、文档等专业角色分工。
+- **运行时可观察性**：前端可以展示模型轮次、工具调用、工具结果、计划变化、审批请求、恢复事件和流式状态更新。
 
-Atelier 可以理解为一组可复用的智能体运行时层，后续可以在这些层之上构建设计场景中的专业智能体产品。
+## 适用场景
 
-### 入口层
+Atelier 面向需要“可执行智能体”而不只是“单轮聊天助手”的团队与研究者：
 
-项目支持三类入口：
+- 构建设计调研、视觉产物生成、方案评审、原型迭代和面向产物工作流的专业设计智能体。
+- 搭建可本地运行的 AI 工作台，让智能体在可控权限下读取和修改项目文件。
+- 研究多智能体协作、可中断执行、人机审批、上下文压缩和可恢复长任务。
+- 将现有模型网关、MCP 服务、内部工具或设计领域服务接入统一工具注册体系。
+- 在 Web 工作台、CLI 和自定义产品界面之间复用同一套后端智能体能力。
 
-- **Web UI**：由 `static/index.html` 提供，后端使用 FastAPI。
-- **CLI**：通过 `cli.py` 直接本地交互。
-- **REST / WebSocket API**：由 `api/rest.py` 和 `api/ws.py` 提供，便于接入其他界面。
+## 产品架构
 
-这样设计可以让智能体运行时不绑定某一个前端。后续如果要做真正的设计工作台，可以复用同一个后端，再扩展新的界面。
+Atelier 可以分为五个运行时层级：
 
-### 会话层
+| 层级 | 职责 |
+| --- | --- |
+| 入口层 | Web UI、CLI、REST API、WebSocket 流式事件 |
+| 会话层 | 会话创建、恢复、改名、置顶/归档、父子关系、运行状态 |
+| 智能体运行层 | prompt 组装、模型调用、工具调用、审批门禁、状态机、取消和恢复 |
+| 扩展层 | tools、skills、personas、commands、MCP bridge |
+| 存储层 | SQLite 或内存后端，保存消息、计划、记忆和会话元数据 |
 
-Session 是一次工作的持久化单位。每个 session 保存消息、元数据、标题、当前智能体、provider、审批模式、提问模式、计划状态，以及子智能体的父子关系。
+## 运行流程
 
-Web UI 可以列出、恢复、重命名、置顶、归档和删除会话。后端会从 SQLite 恢复会话状态，因此长程设计任务可以跨浏览器刷新或服务重启继续。
+![Atelier 工作流](docs/assets/atelier-workflow.svg)
 
-### 智能体运行层
+一次典型任务的执行过程如下：
 
-核心运行时是 ReAct 风格循环：
-
-```text
-组装 prompt -> 调用模型 -> 解析工具调用 -> 执行工具 -> 保存结果 -> 继续推理或返回回答
-```
-
-它不是单轮聊天，而是为长任务设计的执行循环。工具执行后可以继续推理，中途可以展示进度，也可以等待审批、主动提问或从部分中断状态恢复。
-
-### 模型层
-
-Provider registry 支持 OpenAI-compatible chat-completion 接口和 Anthropic 风格接口。模型配置写在 `config.yaml`，密钥保存在 `.env`。
-
-这样可以在不同模型供应商、本地代理和中转服务之间切换，而不需要改智能体主循环。
-
-### Prompt 与智能体配置层
-
-智能体配置位于 `.myharness/personas/`。每个 profile 可以定义角色、系统提示词、默认 provider、默认审批模式和可用工具。
-
-当前已有 builder、planner、reviewer、debugger、researcher、docs-writer 等通用角色。后续可以用同样格式添加更设计化的角色，例如 design-researcher、layout-critic、prototype-builder、visual-spec-writer。
-
-### 工具层
-
-工具由中心 ToolRegistry 注册，并由 ToolExecutor 执行。内置工具覆盖文件编辑、搜索、命令执行、网页访问、记忆、计划、后台任务和子智能体创建。
-
-MCP 工具也可以桥接进同一个注册系统，但 harness 保留了自己的核心工具，因此本地工作流不会完全依赖外部 MCP 行为。
-
-### Skill 层
-
-Skill 是可复用的流程知识。系统会扫描项目 skill，把短描述注入 prompt；只有当智能体显式调用 skill 工具时，才加载完整 skill 内容。
-
-这种两阶段加载可以避免 prompt 一开始就被大量资料占满，同时保留按需调用专业流程的能力。后续设计方法、评审标准、调研流程都可以沉淀为 skill。
-
-### Context 与 Memory 层
-
-系统保存对话消息、持久化 memory、可见 plan、checkpoint 和压缩摘要。上下文变长时会触发压缩：保留最近消息，同时总结更早的上下文。
-
-在设计场景中，这一层可以用来保留项目决策、用户偏好、约束条件、评审意见和跨会话可复用的信息。
-
-### 安全与审批层
-
-Shell、PowerShell 等危险工具可以要求人工确认。审批模式可以按 session 切换，智能体 profile 也可以限制可用工具。
-
-这对设计智能体很重要，因为后续它可能会编辑文件、生成产物、运行命令或调用外部服务。
-
-### 人机协作层
-
-智能体可以用结构化问题向用户澄清需求，而不是在需求不明确时直接猜测。用户回答后，引擎会从原任务继续运行。
-
-这适合“先问清楚设计目标，再做计划或实现”的工作流。
-
-### 多智能体层
-
-运行时支持通过 `spawn_agent` 和 `spawn_agents` 创建子智能体。子智能体拥有独立上下文，同时保留和父会话的关系。
-
-这让设计任务可以拆成调研、规划、实现、评审、文档等多个角色协作完成。
-
-### 运行时可视化层
-
-Web UI 通过 WebSocket 接收运行事件，可以展示模型轮次、工具调用、工具结果、计划更新、审批请求、恢复提示和中间思考/工具轨迹。
-
-可观察性是这个项目的重要目标：用户应该能看见设计智能体正在做什么，而不是只能等待最后结果。
+1. 用户从 Web UI、CLI 或 API 发送请求。
+2. 引擎组装系统提示、persona、skill 描述、memory、plan 状态和历史消息。
+3. 模型决定直接回复，或请求一个/多个工具调用。
+4. 工具调用在执行前经过当前审批模式处理。
+5. 工具结果写回会话，并通过 WebSocket 实时推送给前端。
+6. 如果还需要继续工作，引擎进入下一轮模型调用；否则返回最终回答。
 
 ## 仓库结构
 
 ```text
 .
 |-- api/                    # FastAPI REST 与 WebSocket 服务
-|-- harness/                # 智能体运行时、工具、存储、模型提供商
+|-- harness/                # Agent runtime、工具、存储、LLM providers
 |   |-- engine/             # 主循环、状态机、压缩、prompt cache
-|   |-- tools/              # 内置工具与执行层
-|   |-- storage/            # SQLite / memory 后端、plan 与 memory store
-|   |-- llm/                # 模型提供商抽象与实现
-|   |-- mcp/                # MCP bridge 与 transport
+|   |-- tools/              # 内置工具和执行层
+|   |-- storage/            # SQLite 与内存存储后端
+|   |-- llm/                # Provider 抽象和实现
+|   |-- mcp/                # MCP bridge 与 transports
 |   `-- commands/           # 内置命令与项目命令系统
 |-- static/                 # 浏览器前端
-|-- .myharness/             # 项目智能体、技能、命令、transcript
-|-- tests/                  # 单元测试与集成测试
-|-- cli.py                  # CLI 入口
+|-- .myharness/             # Personas、skills、commands、transcripts
+|-- tests/                  # 单元测试和集成测试
+|-- cli.py                  # 交互式 CLI 入口
 |-- config.yaml             # 运行时配置
-`-- pyproject.toml          # Python 包配置
+|-- pyproject.toml          # Python 包配置
+`-- README.md
 ```
+
+## 环境要求
+
+- Python 3.11 或更新版本
+- 一个可用的模型服务：
+  - OpenAI-compatible Chat Completions API，或
+  - Anthropic-compatible Provider
+- 可选：Serper 或 Brave Search API Key，用于完整网页搜索
+- 可选：图片生成/编辑接口，用于 `image_generate` 和 `image_edit`
 
 ## 快速开始
 
-### 1. 安装
-
-需要 Python 3.11 或更新版本。
+### 1. 安装依赖
 
 ```bash
 pip install -e ".[dev]"
@@ -135,38 +96,40 @@ pip install -e ".[dev]"
 
 ### 2. 配置环境变量
 
-从 `.env.example` 创建 `.env`，然后填写你需要使用的模型提供商。
+创建本地环境文件：
 
-默认 OpenAI-compatible 通路示例：
+```bash
+cp .env.example .env
+```
+
+填写你要使用的模型服务。默认 OpenAI-compatible 通路示例：
 
 ```env
 OPENAI_HUB_API_KEY=your-api-key
-OPENAI_HUB_BASE_URL=https://api.openai-hub.com/v1
+OPENAI_HUB_BASE_URL=https://your-openai-compatible-endpoint/v1
 OPENAI_HUB_MODEL=gpt-4o
 HARNESS_DEFAULT_PROVIDER=openai-hub
 ```
 
-如果需要真实网页搜索，推荐配置 Serper：
+如需完整网页搜索：
 
 ```env
 SERPER_API_KEY=your-serper-key
+BRAVE_SEARCH_API_KEY=your-brave-key
 ```
 
-如果没有搜索 key，`web_search` 会降级到能力有限的 DuckDuckGo instant-answer fallback。
-
-如果要使用设计图片生成和图片编辑工具，请配置 `image_generate` 与 `image_edit` 使用的图片接口：
+如需图片生成与编辑：
 
 ```env
 DESIGN_IMAGE_API_KEY=your-image-api-key
-DESIGN_IMAGE_BASE_URL=https://api.openai-hub.com/v1
+DESIGN_IMAGE_BASE_URL=https://your-image-endpoint/v1
 DESIGN_IMAGE_MODEL=gpt-image-2
-DESIGN_IMAGE_ENDPOINT=https://api.openai-hub.com/v1/images/generations
-DESIGN_IMAGE_EDIT_ENDPOINT=https://api.openai-hub.com/v1/images/edits
+DESIGN_IMAGE_ENDPOINT=https://your-image-endpoint/v1/images/generations
+DESIGN_IMAGE_EDIT_ENDPOINT=https://your-image-endpoint/v1/images/edits
+DESIGN_IMAGE_DEFAULT_SIZE=1024x1024
 ```
 
-如果没有单独设置 `DESIGN_IMAGE_API_KEY` 或 `DESIGN_IMAGE_BASE_URL`，图片工具会回退使用 `OPENAI_HUB_API_KEY` 和 `OPENAI_HUB_BASE_URL`。也可以设置 `DESIGN_IMAGE_DEFAULT_SIZE`，例如 `1024x1024`。
-
-### 3. 启动 Web UI
+### 3. 启动 Web Workspace
 
 ```bash
 uvicorn api.rest:app --port 8000
@@ -178,7 +141,7 @@ uvicorn api.rest:app --port 8000
 http://localhost:8000
 ```
 
-执行长任务时不建议加 `--reload`。智能体写文件可能触发服务重启，导致当前会话被中断。
+长任务或会写文件的智能体任务不建议使用 `--reload`。文件变化可能触发服务重启，从而中断当前会话。
 
 ### 4. 使用 CLI
 
@@ -186,118 +149,168 @@ http://localhost:8000
 python cli.py
 python cli.py --persona builder
 python cli.py --provider openai-hub
+python cli.py --question-mode question
 ```
+
+CLI 常用命令：
+
+| 命令 | 说明 |
+| --- | --- |
+| `/exit` 或 `/quit` | 退出 CLI |
+| `/reset` | 开启新会话 |
+| `/tools` | 查看当前会话可用工具 |
+| `/skills` | 查看可用 skills |
+| `/personas` | 查看可用 personas |
+| `/state` | 查看当前引擎状态 |
+| `/<skill-name>` | 手动触发某个 skill |
 
 ## 配置说明
 
-主要配置文件是 `config.yaml`。
+核心运行时配置位于 `config.yaml`。
 
-常用配置项：
+| 配置项 | 说明 |
+| --- | --- |
+| `default_provider` | 新会话默认模型 Provider |
+| `providers` | OpenAI-compatible 与 Anthropic 风格 Provider 定义 |
+| `engine.max_rounds` | 单次任务最大模型/工具循环轮数 |
+| `compression` | 上下文窗口、触发比例、近期消息保留数和摘要 Provider |
+| `storage` | SQLite 或内存存储后端 |
+| `tools.enabled` | 全局启用工具列表 |
+| `tools.confirm_tools` | 需要人工确认的工具 |
+| `tools.limits` | 单个工具的输出和执行限制 |
+| `mcp_servers` | 可选 MCP 服务定义 |
 
-- `default_provider`：新会话默认使用的模型提供商。
-- `providers`：OpenAI-compatible 和 Anthropic provider 定义。
-- `engine.max_rounds`：一次任务最多执行多少轮模型循环。
-- `compression`：上下文窗口、压缩触发比例、保留最近消息数量、摘要模型。
-- `storage`：SQLite 或内存存储后端。
-- `tools.enabled`：全局启用的工具列表。
-- `tools.confirm_tools`：需要人工确认的工具。
-- `tools.limits`：每个工具的输出限制和执行限制。
-- `mcp_servers`：可选 MCP 服务配置。
-
-`config.yaml` 支持从环境变量展开配置，因此 API Key 等敏感信息应该放在 `.env`，不要提交到仓库。
+`config.yaml` 支持环境变量展开。API Key 和其他敏感信息应放在 `.env`，不要提交到源码仓库。
 
 ## 内置工具
-
-常见内置工具：
 
 | 工具 | 用途 |
 | --- | --- |
 | `read_file`, `write_file`, `edit_file`, `create_directory`, `list_dir` | 文件系统操作 |
-| `write_json` | 结构化 JSON 文件写入 |
-| `grep`, `glob`, `search` | 代码和文本搜索 |
+| `write_json` | 结构化 JSON 写入 |
+| `search`, `grep`, `glob` | 代码和文本搜索 |
 | `shell`, `powershell` | 本地命令执行 |
-| `web_search`, `web_fetch` | 网页搜索与网页读取 |
+| `web_search`, `web_fetch` | 网页搜索与网页正文抓取 |
 | `image_generate`, `image_edit` | 设计图片生成与编辑 |
 | `todo_write` | 创建和更新可见计划 |
 | `memory` | 持久化记忆读写 |
-| `think` | 显式思考过程，前端可展示为执行轨迹 |
+| `think` | 用于运行轨迹展示的显式推理记录 |
 | `background_task` | 后台长任务 |
 | `spawn_agent`, `spawn_agents` | 创建子智能体 |
-| `use_skill` | 按需加载完整 skill 内容 |
+| `use_skill` | 按需加载完整 skill 指令 |
 
-工具通过 harness 的 ToolRegistry 注册，并以可调用函数的形式暴露给模型。MCP 工具也可以桥接到同一个工具注册系统里。
+## Personas、Skills 与 Commands
 
-## Agent、Skill 与 Command
-
-项目本地行为主要放在 `.myharness/` 下。
+项目本地行为配置集中在 `.myharness/`：
 
 ```text
 .myharness/
-├── personas/       # builder、planner、reviewer 等智能体配置
-├── skills/         # 可复用技能描述和完整技能内容
-├── commands/       # 项目命令
-└── transcripts/    # 运行时 transcript
+|-- personas/       # builder、planner、reviewer 等智能体角色
+|-- skills/         # 可复用流程知识，每个 skill 包含 SKILL.md
+|-- commands/       # 项目命令
+`-- transcripts/    # 运行过程 transcript
 ```
 
-Agent profile 会控制系统提示词、默认 provider、默认审批模式和工具权限。Skill 采用两阶段加载：短描述会被注入 prompt；完整内容只有在智能体调用 skill 工具时才加载，避免上下文被过早占满。
+### Personas
 
-## 运行时流程
+Persona 定义智能体身份、系统提示词、默认 Provider、审批模式和可用工具。典型角色包括：
 
-每个 session 的核心流程大致是：
+- `builder`：实现与交付
+- `planner`：任务拆解与计划
+- `reviewer`：质量审查与风险识别
+- `researcher`：资料收集与综合分析
+- `docs-writer`：文档编写
 
-```text
-用户输入
-  -> 组装 prompt
-  -> 注入 memory / plan / skill 上下文
-  -> 必要时压缩上下文
-  -> 调用模型
-  -> 执行工具
-  -> 持久化工具结果
-  -> 进入下一轮模型推理或返回最终回复
+### Skills
+
+Skill 用来沉淀可复用流程。会话启动时，引擎会把 skill 名称和描述注入 prompt；完整内容只有在智能体调用 `use_skill` 时才加载。这样既能保持 prompt 轻量，又能支持专业流程。
+
+### Commands
+
+Command 用于定义项目级快捷动作。它们可以通过 CLI 或 Web UI 暴露出来，作为常见任务模板复用。
+
+## Web UI 能力
+
+Web Workspace 由 FastAPI 后端和 WebSocket 事件驱动，主要支持：
+
+- 创建、恢复、切换、重命名、置顶、归档和删除会话。
+- 选择 Provider、Persona、审批模式和提问模式。
+- 实时查看消息、工具调用、工具结果、状态变化和运行错误。
+- 展开工具调用详情，观察智能体实际执行了什么。
+- 编辑历史用户消息，并从该位置重新生成。
+- 查看和编辑项目 skills、personas 与运行配置。
+
+## 提问模式
+
+Atelier 支持两种会话级提问模式：
+
+| 模式 | 行为 | 适用场景 |
+| --- | --- | --- |
+| `noquestion` | 默认直接执行，必要时在最终回复中说明关键假设 | 需求清晰、希望快速完成 |
+| `question` | 允许智能体在关键信息缺失时主动提出结构化澄清问题 | 复杂任务、设计目标不明确或决策成本较高 |
+
+CLI 示例：
+
+```bash
+python cli.py --persona builder --question-mode question
 ```
 
-Engine 会保存消息和会话元数据，发出运行时事件，并通过 WebSocket 推送给前端。因此用户可以看到中间执行过程，而不是只能等待最终回答。
+REST 示例：
 
-## 安全与权限
-
-Atelier 包含几层安全控制：
-
-- 危险工具可以要求用户确认。
-- 审批模式可以按会话切换。
-- Agent profile 可以限制可用工具。
-- 工具输出有上限，避免上下文溢出。
-- Shell 执行尽量使用明确参数，降低命令注入风险。
-- 状态切换由状态机检查，避免非法运行状态。
-
-它仍然是本地研究型 harness。在暴露给不可信用户或运行在敏感机器之前，请先审查 `config.yaml`。
+```bash
+curl -X PATCH http://localhost:8000/sessions/{session_id}/mode \
+  -H "Content-Type: application/json" \
+  -d '{"question_mode": "question"}'
+```
 
 ## REST 与 WebSocket API
 
-Web UI 通过 FastAPI 后端通信。
+常用 REST 端点：
 
-常用接口：
-
-| 接口 | 用途 |
+| Endpoint | 用途 |
 | --- | --- |
 | `POST /sessions` | 创建或恢复会话 |
-| `POST /sessions/{id}/messages` | 发送用户消息 |
+| `GET /sessions` | 获取会话列表 |
 | `GET /sessions/{id}/state` | 获取完整会话快照 |
+| `POST /sessions/{id}/messages` | 发送用户消息 |
+| `PATCH /sessions/{id}/messages/{message_id}` | 编辑历史消息，可选择重新生成 |
 | `POST /sessions/{id}/continue` | 从可恢复状态继续 |
-| `POST /sessions/{id}/cancel` | 取消运行中的会话 |
-| `POST /sessions/{id}/confirm` / `deny` | 处理审批请求 |
+| `POST /sessions/{id}/cancel` | 取消运行中任务 |
+| `POST /sessions/{id}/confirm` | 确认待审批工具调用 |
+| `POST /sessions/{id}/deny` | 拒绝待审批工具调用 |
 | `PATCH /sessions/{id}/approval-mode` | 切换审批模式 |
-| `GET /config/agents` | 列出智能体配置 |
+| `PATCH /sessions/{id}/mode` | 切换提问模式 |
+| `GET /config/agents` | 列出 Agent profiles |
 | `GET /memory` / `POST /memory` | 管理 memory |
 | `GET /commands` | 列出项目命令 |
 | `WS /ws/{session_id}` | 推送运行时事件 |
 
-## 相关文档
+WebSocket 事件包括 token、message、state、tool result、question asked/resolved 等。前端应始终以后端状态为准。
 
-- [网页版开发者文档](developer-docs/index.html)
+## 安全与权限
 
-## 开发
+Atelier 是本地研究型 Agent Harness。它已经包含实用的安全控制，但生产部署或多用户场景仍需要额外审查。
 
-运行测试：
+已有控制包括：
+
+- Shell / PowerShell 等高风险工具可要求人工确认。
+- Persona 可以限制单个会话可用工具。
+- 工具输出有长度上限，降低上下文溢出风险。
+- 敏感配置通过环境变量注入。
+- `web_fetch` 工具包含基础 SSRF 防护。
+- 运行状态由显式状态机控制。
+
+在暴露给不可信用户之前，建议：
+
+- 使用最小权限 persona。
+- 禁用不需要的 shell 类工具。
+- 将服务运行在受控网络内。
+- 增加鉴权、限流和审计日志。
+- 检查 `.env`、SQLite 数据库和生成产物目录的访问权限。
+
+## 开发与测试
+
+运行完整测试：
 
 ```bash
 pytest
@@ -310,11 +323,60 @@ pytest tests/test_engine.py
 pytest tests/test_tools.py
 pytest tests/test_storage.py
 pytest tests/test_streaming.py
+pytest tests/test_question_mode.py
 ```
+
+统计代码量：
+
+```bash
+python scripts/loc.py
+```
+
+## 发布检查清单
+
+- [ ] `.env.example` 已覆盖必要配置，真实 `.env` 未提交。
+- [ ] `config.yaml` 默认 Provider 与文档中的环境变量一致。
+- [ ] 高风险工具已列入 `tools.confirm_tools`。
+- [ ] Web UI 可通过 `uvicorn api.rest:app --port 8000` 启动。
+- [ ] CLI 可通过 `python cli.py --persona builder` 启动。
+- [ ] 核心测试通过。
+- [ ] README 图片链接、命令和接口说明与当前代码一致。
+- [ ] License 文件存在且符合发布要求。
+
+## 路线图
+
+- 设计领域工具：素材调研、视觉分析、版式评审、品牌系统生成。
+- 更完整的产物工作流：brief、设计批次、评审记录和最终导出包。
+- 更细粒度权限：按目录、工具、Provider 和会话限制能力。
+- 更完整的 Web UI：运行轨迹、文件预览、产物画廊和子智能体视图。
+- 更强的记忆管理：项目偏好、长期约束和可编辑 memory。
+- 生产部署支持：鉴权、多用户隔离、队列、审计日志和监控。
+
+## 常见问题
+
+**为什么启动时报 Provider 不存在？**
+
+检查 `config.yaml` 中的 provider 名称，并确认 `.env` 里的 `HARNESS_DEFAULT_PROVIDER` 指向其中一个名称。
+
+**为什么网页搜索没有有效结果？**
+
+如果没有配置 `SERPER_API_KEY` 或 `BRAVE_SEARCH_API_KEY`，`web_search` 会降级到能力有限的 DuckDuckGo instant-answer fallback。完整网页搜索建议配置 Serper 或 Brave。
+
+**为什么不建议使用 `uvicorn --reload`？**
+
+智能体执行任务时可能会写文件。`--reload` 会监听文件变化并重启服务，从而中断当前会话。
+
+**Skill 没有自动触发怎么办？**
+
+检查 `.myharness/skills/<skill-name>/SKILL.md` 中的 description 是否清晰说明使用场景。也可以通过 `/<skill-name>` 手动调用。
+
+**如何让智能体会话更安全？**
+
+在 persona 中设置 `allowed_tools`，并在 `config.yaml` 中禁用不必要工具。Shell 类工具建议保持审批模式。
 
 ## 项目状态
 
-这是一个仍在迭代的学术 / 研究型 harness，也是面向专业设计智能体脚手架的基础版本。核心运行时能力已经实现，但设计领域工具、产物工作流、权限加固、UI 体验、memory 管理和生产部署仍需要继续完善。
+Atelier 是一个持续迭代中的研究型产品底座。通用智能体运行时、工具系统、持久化会话、Web/CLI 入口和基础多智能体能力已经实现；设计领域工具、产物管理、权限加固和生产部署能力仍在持续开发中。
 
 ## License
 
