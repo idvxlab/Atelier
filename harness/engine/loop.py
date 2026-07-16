@@ -131,20 +131,33 @@ class ReactLoop:
                 )
 
             # ── 2. Context compression ─────────────────────────────────────
-            compressed = await self._compressor.maybe_compress(messages, round_idx)
-            if compressed is not messages:
-                # Replace contents in-place so the engine's reference stays valid
-                messages[:] = compressed
+            # Compression is a model-input concern, not a visible-history
+            # concern. Work on a shallow list copy so micro/auto compression can
+            # reduce the prompt without writing placeholders such as
+            # "[cleared by micro-compression]" back into the engine's persisted
+            # message history or the frontend snapshot.
+            model_messages = list(messages)
+            compressed = await self._compressor.maybe_compress(model_messages, round_idx)
+            if compressed is not model_messages:
+                model_messages = compressed
                 self._emitter.emit(
                     "compression_applied", "triggered-executed",
-                    detail={"round": round_idx, "msg_count": len(messages)},
+                    detail={
+                        "round": round_idx,
+                        "msg_count": len(model_messages),
+                        "visible_msg_count": len(messages),
+                    },
                 )
-            repaired = repair_message_sequence(messages)
-            if repaired is not messages and repaired != messages:
-                messages[:] = repaired
+            repaired = repair_message_sequence(model_messages)
+            if repaired is not model_messages and repaired != model_messages:
+                model_messages = repaired
                 self._emitter.emit(
                     "message_sequence_repaired", "triggered-intercepted",
-                    detail={"round": round_idx, "msg_count": len(messages)},
+                    detail={
+                        "round": round_idx,
+                        "msg_count": len(model_messages),
+                        "visible_msg_count": len(messages),
+                    },
                 )
 
             # ── 3. Load tool schemas (from cache or fresh) ────────────────
@@ -164,7 +177,7 @@ class ReactLoop:
             # ── 4. LLM call (races against cancel_event) ───────────────────
             self._emitter.emit(
                 "llm_call", "triggered-executed",
-                detail={"round": round_idx, "msg_count": len(messages)},
+                detail={"round": round_idx, "msg_count": len(model_messages)},
             )
             if on_event is not None:
                 await on_event(
@@ -173,7 +186,7 @@ class ReactLoop:
                         "data": {
                             "phase": "llm_started",
                             "round": round_idx,
-                            "message_count": len(messages),
+                            "message_count": len(model_messages),
                             "tool_count": len(tools),
                         },
                     }
@@ -185,7 +198,7 @@ class ReactLoop:
                         session_id=self._session_id,
                         round_index=round_idx,
                         payload={
-                            "message_count": len(messages),
+                            "message_count": len(model_messages),
                             "tool_count": len(tools),
                         },
                     )
@@ -195,7 +208,7 @@ class ReactLoop:
                         "Blocked by hook before_llm_call: "
                         f"{hook_result.reason or 'no reason provided'}"
                     )
-            reply: Message = await self._chat_or_cancel(messages, tools, cancel_event, on_token)
+            reply: Message = await self._chat_or_cancel(model_messages, tools, cancel_event, on_token)
             reply.round_index = round_idx
             if on_event is not None:
                 await on_event(
