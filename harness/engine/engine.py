@@ -190,6 +190,7 @@ class AgentEngine:
         self._messages: list[Message] = []
         self._state_lock = asyncio.Lock()
         self._cancel_event = asyncio.Event()
+        self._user_cancelled: bool = False
         self._intervention_queue: asyncio.Queue[Message] = asyncio.Queue()
         self._last_error: str = ""
         self._message_listeners: list[MessageListener] = []
@@ -373,6 +374,7 @@ class AgentEngine:
                     self._sm.state == EngineState.WAITING_INPUT
                     and bool(visible_messages)
                     and visible_messages[-1].role == "tool"
+                    and not self._user_cancelled
                 ),
                 "recoverable_error": (
                     self._sm.state == EngineState.ERROR
@@ -469,6 +471,8 @@ class AgentEngine:
             state = self._sm.state
             if state not in (EngineState.WAITING_INPUT, EngineState.COMPLETED):
                 return {"status": "ignored", "reason": state.name}
+            if self._user_cancelled:
+                return {"status": "ignored", "reason": "user_cancelled"}
             if not self._last_visible_message_is_tool():
                 return {"status": "ignored", "reason": "no_tool_tail"}
             if state == EngineState.COMPLETED:
@@ -709,6 +713,7 @@ class AgentEngine:
                 self._sm.transition(EngineState.WAITING_INPUT)
             self._last_error = ""
             self._auto_recovery_attempts = 0
+            self._user_cancelled = False
             if reminder_msg is not None:
                 self._messages.append(reminder_msg)
             self._messages.append(user_msg)
@@ -806,6 +811,22 @@ class AgentEngine:
         # Expire any pending QuestionRequests so the WS event channel pushes
         # question.resolved events and any paused loop wakes up.
         await self.expire_pending_questions()
+        # If we were parked on an ask_user interrupt, drop the partial round
+        # and go back to waiting for input instead of staying paused.
+        async with self._state_lock:
+            if self._sm.state == EngineState.WAITING_INTERRUPT:
+                self._sm.transition(EngineState.WAITING_INPUT)
+        self._user_cancelled = True
+        # Propagate cancel to all sub-agents so the parent is not blocked
+        # waiting for spawn_agent / run_to_completion to return.
+        try:
+            from api import rest as rest_module
+            for ps in list(self._pending_spawns):
+                sub = rest_module._engines.get(ps.sub_id) if hasattr(rest_module, "_engines") else None
+                if sub is not None:
+                    await sub.cancel()
+        except Exception:
+            pass
         self._emitter.emit("cancel_requested", "triggered-executed", detail={})
 
     async def confirm(self) -> None:

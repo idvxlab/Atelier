@@ -2804,6 +2804,8 @@
         if (!currentSessionId) return;
         try {
           await api(`/sessions/${currentSessionId}/cancel`, "POST");
+          // 阻止 cancel 后的 autoContinueIfNeeded 立即重启引擎
+          autoContinuationKeys.add(`${currentSessionId}:cancel`);
           toast("已发送停止信号");
         } catch (e) {
           toast("停止失败: " + e.message, true);
@@ -4170,6 +4172,11 @@
       async function autoContinueIfNeeded(snap) {
         const sid = snap.session_id || currentSessionId;
         if (!sid || snap.is_running || !snap.needs_continuation) return;
+        // 用户主动取消后跳过自动继续（一次性标记）
+        if (autoContinuationKeys.has(`${sid}:cancel`)) {
+          autoContinuationKeys.delete(`${sid}:cancel`);
+          return;
+        }
         const key = `${sid}:${snap.session_version ?? "unknown"}`;
         if (autoContinuationKeys.has(key)) return;
         autoContinuationKeys.add(key);
