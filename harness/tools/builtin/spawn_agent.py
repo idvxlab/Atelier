@@ -177,6 +177,32 @@ def _check_spawn_permission(parent_agent_id: str, target_agent: str) -> str:
     return ""
 
 
+def _augment_task_with_extra_context(task: str, extra: dict) -> str:
+    """Move accidental top-level spawn parameters into the child task text."""
+    if not extra:
+        return task
+    labels = {
+        "runDir": "Run dir",
+        "runId": "Run id",
+        "finalDir": "Final dir",
+        "run_dir": "Run dir",
+        "run_id": "Run id",
+        "final_dir": "Final dir",
+    }
+    lines: list[str] = []
+    for key, label in labels.items():
+        value = extra.get(key)
+        if value not in (None, ""):
+            lines.append(f"{label}: {value}")
+    for key, value in extra.items():
+        if key in labels or value in (None, ""):
+            continue
+        lines.append(f"{key}: {value}")
+    if not lines:
+        return task
+    return "\n".join(lines + ["", task])
+
+
 def make_spawn_agent_tool(
     harness_cfg: "HarnessConfig",
     provider_cfg: "ProviderConfig",
@@ -197,6 +223,7 @@ def make_spawn_agent_tool(
         plan_item_id: str = "",
         system_prompt: str = "",
         tools: list[str] | None = None,
+        **extra,
     ) -> str:
         # Lazy import breaks the spawn_agent.py ↔ factory.py circular dependency
         from harness.factory import build_engine  # noqa: PLC0415
@@ -213,6 +240,7 @@ def make_spawn_agent_tool(
 
         sub_id = f"sub_{uuid.uuid4().hex[:8]}"
         display_name = _make_display_name(task)
+        child_task = _augment_task_with_extra_context(task, extra)
         try:
             profile_name = (agent or "").strip()
             child_provider_cfg = provider_cfg
@@ -292,12 +320,12 @@ def make_spawn_agent_tool(
             if parent is not None:
                 try:
                     spawn_index = await parent.register_pending_spawn(
-                        task=task, sub_id=sub_id, display_name=display_name,
+                        task=child_task, sub_id=sub_id, display_name=display_name,
                     )
                 except Exception:
                     pass
             try:
-                result = await sub_engine.run_to_completion(task, parent_engine=parent)
+                result = await sub_engine.run_to_completion(child_task, parent_engine=parent)
             except Exception as exc:
                 result = f"Error: {exc}"
             return f"[Sub-agent {sub_id} | {display_name}]\n{result}"
@@ -341,6 +369,11 @@ def make_spawn_agents_tool(
         async def run_one(cfg: dict) -> str:
             sub_id = f"sub_{uuid.uuid4().hex[:8]}"
             task = cfg.get("task", "")
+            extra = {
+                k: v for k, v in cfg.items()
+                if k not in {"task", "agent", "plan_item_id", "system_prompt", "tools"}
+            }
+            child_task = _augment_task_with_extra_context(task, extra)
             plan_item_id = str(cfg.get("plan_item_id", "") or "").strip()
             display_name = _make_display_name(task)
             profile_name = str(cfg.get("agent", "") or "").strip()
@@ -420,12 +453,12 @@ def make_spawn_agents_tool(
             if parent is not None:
                 try:
                     spawn_index = await parent.register_pending_spawn(
-                        task=task, sub_id=sub_id, display_name=display_name,
+                        task=child_task, sub_id=sub_id, display_name=display_name,
                     )
                 except Exception:
                     pass
             try:
-                result = await sub_engine.run_to_completion(task, parent_engine=parent)
+                result = await sub_engine.run_to_completion(child_task, parent_engine=parent)
             except Exception as exc:
                 result = f"Error: {exc}"
             return f"[Sub-agent {sub_id} | {display_name}]\n{result}"

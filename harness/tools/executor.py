@@ -26,6 +26,56 @@ LIMITS: dict[str, int] = {
 DEFAULT_LIMIT = 8_000
 
 
+def _move_extra_spawn_context_into_task(args: dict[str, Any]) -> dict[str, Any]:
+    """Keep spawn tools tolerant when the model sends run context as extra args."""
+    allowed = {"task", "agent", "plan_item_id", "system_prompt", "tools"}
+    extra = {k: v for k, v in args.items() if k not in allowed and v not in (None, "")}
+    if not extra:
+        return args
+
+    labels = {
+        "runDir": "Run dir",
+        "runId": "Run id",
+        "finalDir": "Final dir",
+        "run_dir": "Run dir",
+        "run_id": "Run id",
+        "final_dir": "Final dir",
+    }
+    lines: list[str] = []
+    for key, label in labels.items():
+        value = extra.pop(key, None)
+        if value not in (None, ""):
+            lines.append(f"{label}: {value}")
+    for key, value in extra.items():
+        lines.append(f"{key}: {value}")
+
+    normalized = {k: v for k, v in args.items() if k in allowed}
+    task = str(normalized.get("task") or "")
+    normalized["task"] = "\n".join(lines + ["", task]) if lines else task
+    return normalized
+
+
+def _normalize_spawn_agents_context(args: dict[str, Any]) -> dict[str, Any]:
+    agents = args.get("agents")
+    if not isinstance(agents, list):
+        return args
+    normalized_agents: list[Any] = []
+    for item in agents:
+        if isinstance(item, dict):
+            normalized_agents.append(_move_extra_spawn_context_into_task(item))
+        else:
+            normalized_agents.append(item)
+    return {**args, "agents": normalized_agents}
+
+
+def _normalize_tool_input(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    if tool_name == "spawn_agent":
+        return _move_extra_spawn_context_into_task(args)
+    if tool_name == "spawn_agents":
+        return _normalize_spawn_agents_context(args)
+    return args
+
+
 def _accepts_tool_call_id(handler: Callable[..., Any]) -> bool:
     """
     True iff the handler signature accepts a `_tool_call_id` keyword argument.
@@ -91,6 +141,8 @@ class ToolExecutor:
         round_idx: int,
         on_event: Callable[[dict], Awaitable[None]] | None = None,
     ) -> ToolResultBlock:
+        call.tool_input = _normalize_tool_input(call.tool_name, call.tool_input)
+
         if call.tool_input.get("_invalid_tool_arguments"):
             detail = call.tool_input.get("_error") or "invalid JSON arguments"
             raw = str(call.tool_input.get("_raw") or "")

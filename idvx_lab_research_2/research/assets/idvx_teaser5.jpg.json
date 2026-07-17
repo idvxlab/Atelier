@@ -1,0 +1,18 @@
+{
+  "id": "idvx_teaser5",
+  "file": "idvx_teaser5.jpg",
+  "source_url": "https://idvxlab.com/images/teaser5.jpg",
+  "source_domain": "idvxlab.com",
+  "kind": "other",
+  "do_not_replace": false,
+  "allowed_for_edit": true,
+  "license_note": "",
+  "description": "IDVX Lab teaser image 5",
+  "retrieved_at": "2026-07-17T03:10:16Z",
+  "sha256": "71a446bc5d2482de7e7bcdda7af35827c92017d18b514cb87474dc428c92d9c2",
+  "bytes": 63054,
+  "mime": "image/jpeg",
+  "width": 980,
+  "height": 350,
+  "aspect_ratio": 2.8
+}

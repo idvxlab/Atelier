@@ -1,0 +1,24 @@
+{
+  "runId": "atelier-toolchain-test",
+  "artifacts": [
+    {
+      "type": "gallery",
+      "path": ".design-harness\\runs\\atelier-toolchain-test\\artifacts\\00-gallery.html"
+    },
+    {
+      "type": "generated_image",
+      "id": "atelier-reference-icon",
+      "path": ".design-harness\\runs\\atelier-toolchain-test\\artifacts\\generated-images\\atelier-reference-icon.png",
+      "sidecar": ".design-harness\\runs\\atelier-toolchain-test\\artifacts\\generated-images\\atelier-reference-icon.png.json"
+    },
+    {
+      "type": "edited_image",
+      "id": "atelier-edited-icon",
+      "path": ".design-harness\\runs\\atelier-toolchain-test\\artifacts\\edits\\atelier-edited-icon.png",
+      "sidecar": ".design-harness\\runs\\atelier-toolchain-test\\artifacts\\edits\\atelier-edited-icon.png.json",
+      "references": [
+        ".design-harness\\runs\\atelier-toolchain-test\\artifacts\\generated-images\\atelier-reference-icon.png"
+      ]
+    }
+  ]
+}

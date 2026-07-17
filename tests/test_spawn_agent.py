@@ -362,6 +362,40 @@ class TestSpawnAgentTool:
         ]
 
     @pytest.mark.asyncio
+    async def test_spawn_agent_moves_extra_run_context_into_task(self, monkeypatch):
+        seen: dict = {}
+
+        async def fake_run_to_completion(self_engine, task, **kwargs):
+            seen["task"] = task
+            return "ok"
+
+        monkeypatch.setattr(AgentEngine, "run_to_completion", fake_run_to_completion)
+        monkeypatch.setattr(
+            "harness.factory.build_engine",
+            _make_mock_build_engine("ignored"),
+        )
+        tool = make_spawn_agent_tool(
+            harness_cfg=_FakeHarnessCfg(),
+            provider_cfg=_FakeProviderCfg(),
+            session_store=MemorySessionStore(),
+            spawn_depth=0,
+        )
+
+        result = await tool(
+            task="Do the research",
+            agent="planner",
+            runDir=".design-harness/runs/test",
+            runId="test",
+            finalDir="outputs/runs/test/final",
+        )
+
+        assert "ok" in result
+        assert "Run dir: .design-harness/runs/test" in seen["task"]
+        assert "Run id: test" in seen["task"]
+        assert "Final dir: outputs/runs/test/final" in seen["task"]
+        assert seen["task"].endswith("Do the research")
+
+    @pytest.mark.asyncio
     async def test_spawn_agent_binds_parent_plan_item(self, monkeypatch):
         monkeypatch.setattr(
             "harness.factory.build_engine",

@@ -161,6 +161,44 @@ async def test_executor_returns_error_for_invalid_tool_arguments_without_calling
 
 
 @pytest.mark.asyncio
+async def test_executor_moves_extra_spawn_agent_context_into_task():
+    reg = ToolRegistry()
+    schema = ToolSchema(name="spawn_agent", description="Spawn", params=[])
+    seen = {}
+
+    async def handler(task: str, agent: str = "") -> str:
+        seen["task"] = task
+        seen["agent"] = agent
+        return "spawned"
+
+    reg.register(schema, handler)
+    emitter = EventEmitter("test")
+    overflow = OverflowStore()
+    executor = ToolExecutor(registry=reg, overflow=overflow, emitter=emitter)
+
+    calls = [
+        ToolCallBlock(
+            tool_call_id="c1",
+            tool_name="spawn_agent",
+            tool_input={
+                "task": "Research references",
+                "agent": "design-research",
+                "runDir": ".design-harness/runs/zhujiajiao",
+                "runId": "zhujiajiao",
+            },
+        )
+    ]
+    results = await executor.execute_all(calls, round_idx=0)
+
+    assert not results[0].is_error
+    assert results[0].content == "spawned"
+    assert seen["agent"] == "design-research"
+    assert "Run dir: .design-harness/runs/zhujiajiao" in seen["task"]
+    assert "Run id: zhujiajiao" in seen["task"]
+    assert seen["task"].endswith("Research references")
+
+
+@pytest.mark.asyncio
 async def test_executor_overflow():
     reg = ToolRegistry()
     schema = ToolSchema(name="big_output", description="Big", params=[])

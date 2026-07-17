@@ -1,0 +1,26 @@
+{
+  "runId": "atelier-toolchain-test",
+  "validated_at": "2026-07-15T10:24:33Z",
+  "manifest_path": ".design-harness\\runs\\atelier-toolchain-test\\research\\assets\\manifest.json",
+  "ready": true,
+  "ready_reasons": [],
+  "summary": {
+    "total_assets": 1,
+    "usable_assets": 1,
+    "flagged_assets": 0,
+    "missing_files": 0,
+    "sha_mismatches": 0,
+    "duplicates": 0,
+    "logo_count": 0,
+    "protected_count": 0,
+    "with_dimensions": 1,
+    "by_kind": {
+      "application": 0,
+      "campus": 0,
+      "logo": 0,
+      "other": 1,
+      "peer": 0
+    }
+  },
+  "issues": []
+}

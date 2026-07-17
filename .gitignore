@@ -29,3 +29,5 @@ build/
 # Runtime design harness outputs
 .design-harness/
 outputs/
+
+ai-design-harness-folder

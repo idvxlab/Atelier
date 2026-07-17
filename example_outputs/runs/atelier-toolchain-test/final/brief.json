@@ -1,0 +1,25 @@
+{
+  "runId": "atelier-toolchain-test",
+  "createdAt": "2026-07-15T14:46:12Z",
+  "brief": "为 Atelier AI Design Harness 生成一次工具链测试用设计视觉包",
+  "resolvedScope": {
+    "language": "zh+en",
+    "deliverable": "poster+icon+gallery",
+    "style": "professional design lab",
+    "run_name": "atelier-toolchain-test",
+    "human_title": "Atelier AI Design Harness Toolchain Test"
+  },
+  "paths": {
+    "runDir": ".design-harness\\runs\\atelier-toolchain-test",
+    "outputDir": "outputs\\runs\\atelier-toolchain-test",
+    "researchDir": ".design-harness\\runs\\atelier-toolchain-test\\research",
+    "researchAssetsDir": ".design-harness\\runs\\atelier-toolchain-test\\research\\assets",
+    "planDir": ".design-harness\\runs\\atelier-toolchain-test\\plan",
+    "artifactsDir": ".design-harness\\runs\\atelier-toolchain-test\\artifacts",
+    "generatedImagesDir": ".design-harness\\runs\\atelier-toolchain-test\\artifacts\\generated-images",
+    "editsDir": ".design-harness\\runs\\atelier-toolchain-test\\artifacts\\edits",
+    "reviewDir": ".design-harness\\runs\\atelier-toolchain-test\\review",
+    "finalDir": "outputs\\runs\\atelier-toolchain-test\\final",
+    "bus": ".design-harness\\runs\\atelier-toolchain-test\\bus.jsonl"
+  }
+}

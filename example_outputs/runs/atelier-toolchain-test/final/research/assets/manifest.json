@@ -1,0 +1,25 @@
+{
+  "runId": "atelier-toolchain-test",
+  "updated_at": "2026-07-15T10:24:18Z",
+  "assets": [
+    {
+      "id": "tongji-reference-image",
+      "file": "tongji-reference-image.png",
+      "source_url": "https://www.tongji.edu.cn/images/logo.png",
+      "source_page_url": "https://www.tongji.edu.cn/",
+      "source_domain": "www.tongji.edu.cn",
+      "kind": "other",
+      "do_not_replace": false,
+      "allowed_for_edit": true,
+      "license_note": "",
+      "description": "Reference image discovered from Tongji official website",
+      "retrieved_at": "2026-07-15T10:24:18Z",
+      "sha256": "77283ce33bd34c02efc7e38b84f974a5393af840eb716c7b22aefd86ac3ee7da",
+      "bytes": 11590,
+      "mime": "image/png",
+      "width": 258,
+      "height": 86,
+      "aspect_ratio": 3.0
+    }
+  ]
+}
