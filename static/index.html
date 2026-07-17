@@ -2980,7 +2980,19 @@
 
       async function deleteSessionFromMenu(session) {
         closeSessionMenu();
-        const mode = await showDeleteConfirm(getSessionLabel(session));
+        const hasChildren = allSessions.some(
+          (s) => s.parent_session_id === session.session_id
+        );
+        let mode;
+        if (hasChildren) {
+          mode = await showDeleteConfirm(getSessionLabel(session));
+        } else {
+          const ok = await showConfirm(
+            "删除会话",
+            `确认删除会话「${getSessionLabel(session)}」？此操作不可恢复。`,
+          );
+          mode = ok ? "keep_children" : "cancel";
+        }
         if (mode === "cancel") return;
         const cascade = mode === "cascade";
         try {
