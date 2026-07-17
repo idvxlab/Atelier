@@ -937,14 +937,45 @@ async def update_session(session_id: str, req: UpdateSessionRequest) -> dict[str
 
 
 @app.delete("/sessions/{session_id}", status_code=204)
-async def delete_session(session_id: str):
+async def delete_session(session_id: str, cascade: bool = False):
     engine = _engines.pop(session_id, None)
     if engine is not None:
         await engine.cancel()
         _engine_meta.pop(session_id, None)
     await _close_session_mcp_clients(session_id)
+
+    if cascade:
+        # Recursively delete all descendant sessions
+        all_records = await _session_store.list_sessions()
+        children = _find_descendants(session_id, all_records)
+        for child_id in children:
+            child_engine = _engines.pop(child_id, None)
+            if child_engine is not None:
+                await child_engine.cancel()
+                _engine_meta.pop(child_id, None)
+            await _close_session_mcp_clients(child_id)
+            await _session_store.delete(child_id)
+
     # Always delete from persistent store
     await _session_store.delete(session_id)
+
+
+def _find_descendants(root_id: str, records: list) -> set[str]:
+    """Recursively find all descendant session IDs given a root parent."""
+    by_parent: dict[str, list[str]] = {}
+    for r in records:
+        pid = (r.metadata or {}).get("parent_session_id", "")
+        if pid:
+            by_parent.setdefault(pid, []).append(r.session_id)
+    result: set[str] = set()
+    stack = [root_id]
+    while stack:
+        pid = stack.pop()
+        for child_id in by_parent.get(pid, []):
+            if child_id not in result:
+                result.add(child_id)
+                stack.append(child_id)
+    return result
 
 
 # ── Config overview ────────────────────────────────────────────────────

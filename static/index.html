@@ -2248,7 +2248,7 @@
             line-height: 1.6;
           "
         ></p>
-        <div class="modal-actions">
+        <div class="modal-actions" id="confirm-actions">
           <button class="btn" id="confirm-cancel-btn">取消</button>
           <button class="btn btn-danger" id="confirm-ok-btn">确认</button>
         </div>
@@ -2980,15 +2980,11 @@
 
       async function deleteSessionFromMenu(session) {
         closeSessionMenu();
-        if (
-          !(await showConfirm(
-            "删除会话",
-            `确认删除会话「${getSessionLabel(session)}」？此操作不可恢复。`,
-          ))
-        )
-          return;
+        const mode = await showDeleteConfirm(getSessionLabel(session));
+        if (mode === "cancel") return;
+        const cascade = mode === "cascade";
         try {
-          await api(`/sessions/${session.session_id}`, "DELETE");
+          await api(`/sessions/${session.session_id}?cascade=${cascade}`, "DELETE");
           if (session.session_id === currentSessionId) {
             stopPolling();
             disconnectWS();
@@ -3004,7 +3000,7 @@
             document.getElementById("cancel-btn").classList.add("hidden");
           }
           await refreshSessions();
-          toast("已删除");
+          toast(cascade ? "已删除全部会话" : "已删除");
         } catch (e) {
           toast("删除失败: " + e.message, true);
         }
@@ -5465,6 +5461,11 @@
         return new Promise((resolve) => {
           document.getElementById("confirm-title").textContent = title;
           document.getElementById("confirm-message").textContent = message;
+          const actions = document.getElementById("confirm-actions");
+          actions.innerHTML = `
+            <button class="btn" id="confirm-cancel-btn">取消</button>
+            <button class="btn btn-danger" id="confirm-ok-btn">确认</button>
+          `;
           const overlay = document.getElementById("confirm-overlay");
           overlay.classList.remove("hidden");
           const cleanup = (result) => {
@@ -5477,6 +5478,36 @@
             cleanup(false);
           overlay.onclick = (e) => {
             if (e.target === overlay) cleanup(false);
+          };
+        });
+      }
+
+      // Returns: "cancel" | "keep_children" | "cascade"
+      function showDeleteConfirm(sessionLabel) {
+        return new Promise((resolve) => {
+          document.getElementById("confirm-title").textContent = "删除会话";
+          document.getElementById("confirm-message").textContent =
+            `确认删除会话「${sessionLabel}」？此操作不可恢复。`;
+          const actions = document.getElementById("confirm-actions");
+          actions.innerHTML = `
+            <button class="btn" id="confirm-cancel-btn">取消</button>
+            <button class="btn" id="confirm-keep-btn" style="background:var(--warning-bg);color:var(--warning-text)">仅删除此会话</button>
+            <button class="btn btn-danger" id="confirm-ok-btn">删除全部（含子会话）</button>
+          `;
+          const overlay = document.getElementById("confirm-overlay");
+          overlay.classList.remove("hidden");
+          const cleanup = (result) => {
+            overlay.classList.add("hidden");
+            resolve(result);
+          };
+          document.getElementById("confirm-ok-btn").onclick = () =>
+            cleanup("cascade");
+          document.getElementById("confirm-keep-btn").onclick = () =>
+            cleanup("keep_children");
+          document.getElementById("confirm-cancel-btn").onclick = () =>
+            cleanup("cancel");
+          overlay.onclick = (e) => {
+            if (e.target === overlay) cleanup("cancel");
           };
         });
       }
