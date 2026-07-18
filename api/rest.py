@@ -306,26 +306,63 @@ _TOOL_QUERY_PATTERNS = [
     re.compile(r"available tools?", re.IGNORECASE),
 ]
 
+# Strict Chinese patterns for tool inventory queries.
+# These must form a complete phrase at the START of the text.
+# No partial matches like "工具链" or "工具调用".
 _TOOL_QUERY_KEYWORDS_ZH = [
-    ("\u5de5\u5177", "\u5217\u51fa"),
-    ("\u5de5\u5177", "\u663e\u793a"),
-    ("\u5de5\u5177", "\u67e5\u770b"),
-    ("\u5de5\u5177", "\u770b\u770b"),
-    ("\u5de5\u5177", "\u5f53\u524d"),
-    ("\u5de5\u5177", "\u73b0\u5728"),
-    ("\u5de5\u5177", "\u53ef\u7528"),
+    # 列出工具 / 列出可用工具 / 列出所有工具 / 列出功能
+    re.compile(r"^(?:列出|列出所有|列出可用|列出功能|列出所有工具|列出可用工具|出工具|出可用工具|出所有工具|出功能)"),
+    # 有哪些工具 / 有哪些可用工具 / 有哪些功能
+    re.compile(r"^(?:有|有哪些|有什么|有哪些工具|有哪些可用工具|哪些|哪些工具|哪些可用工具|哪些可用|哪些工具)"),
+    # 当前工具 / 当前可用工具 / 现在工具
+    re.compile(r"^(?:当前|当前工具|当前可用|当前可用工具|现在|现在工具|现在可用|现在可用工具)"),
+    # 显示工具 / 查看工具列表 / 看看工具
+    re.compile(r"^(?:显示|显示工具|显示可用|显示可用工具|查看|查看工具|查看工具列表|看看|看看工具)"),
+    # 工具列表 / 功能清单 (standalone phrase only)
+    re.compile(r"^(?:工具列表|功能清单|工具清单|功能列表)"),
+]
+
+# Keywords that signal the user wants to execute a task (not just query tools).
+_TASK_EXECUTION_KEYWORDS = [
+    "执行", "测试", "验收", "运行", "创建", "生成", "调用", "完成",
+    "实施", "开始", "构建", "设计", "开发", "实现", "处理", "操作",
+    "制作", "编写", "调试", "修复", "优化", "分析", "检查",
+    "验证", "导出", "导入", "上传", "下载", "部署", "启动", "停止",
 ]
 
 
 def _is_tool_inventory_query(text: str) -> bool:
+    """Check if the user is explicitly asking for a tool inventory list.
+
+    Must be a direct query about available tools, NOT a task that happens
+    to mention tools (e.g. "执行工具链测试" is a task, not a query).
+    """
     cleaned = (text or "").strip()
     if not cleaned:
         return False
+    # Skip commands (starting with /)
     if cleaned.startswith("/"):
         return False
+    # Check English patterns first
     if any(p.search(cleaned) for p in _TOOL_QUERY_PATTERNS):
         return True
-    return any(all(token in cleaned for token in pair) for pair in _TOOL_QUERY_KEYWORDS_ZH)
+    # Check strict Chinese patterns (must start with the phrase)
+    return any(p.search(cleaned) for p in _TOOL_QUERY_KEYWORDS_ZH)
+
+
+def _is_task_execution_request(text: str) -> bool:
+    """Check if the user is requesting task execution (vs pure information query).
+
+    Tasks that should always enter the Agent Loop include requests that:
+    - Create something
+    - Execute operations
+    - Run tests or validations
+    - Build or generate outputs
+    """
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return False
+    return any(keyword in cleaned for keyword in _TASK_EXECUTION_KEYWORDS)
 
 
 def _render_tool_inventory(engine: AgentEngine) -> str:
@@ -479,7 +516,15 @@ async def create_session(req: CreateSessionRequest) -> dict[str, Any]:
 @app.post("/sessions/{session_id}/messages")
 async def send_message(session_id: str, req: SendMessageRequest) -> dict[str, Any]:
     engine = _get_engine(session_id)
-    if _is_tool_inventory_query(req.text):
+
+    # Route decision:
+    # - If the user is explicitly querying the tool inventory (not executing a task),
+    #   respond locally without entering the agent loop.
+    # - Tasks always enter the Agent Loop, even if they mention tools.
+    is_tool_query = _is_tool_inventory_query(req.text)
+    is_task_request = _is_task_execution_request(req.text)
+
+    if is_tool_query and not is_task_request:
         snap = await engine.get_snapshot()
         if not snap.get("is_running"):
             await _respond_with_local_text(
@@ -489,6 +534,7 @@ async def send_message(session_id: str, req: SendMessageRequest) -> dict[str, An
                 assistant_text=_render_tool_inventory(engine),
             )
             return {"status": "completed-locally"}
+
     result = await engine.send_message(req.text)
     # result == {"status": "started"|"queued", "queued": bool,
     #            "index": int|None, "text": str,

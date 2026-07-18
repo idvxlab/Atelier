@@ -327,6 +327,41 @@
         flex-direction: column;
         min-height: 0;
         min-width: 0;
+        position: relative;
+      }
+
+      .scroll-to-bottom-btn {
+        position: absolute;
+        right: 24px;
+        bottom: 18px;
+        z-index: 20;
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        background: var(--surface2);
+        color: var(--text);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+      }
+      .scroll-to-bottom-btn:hover {
+        background: var(--surface);
+        border-color: var(--accent);
+      }
+      .scroll-to-bottom-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .scroll-to-bottom-btn:active {
+        transform: scale(0.96);
+      }
+      .scroll-to-bottom-btn.hidden {
+        display: none;
       }
 
       #session-header {
@@ -363,7 +398,10 @@
         font-weight: 500;
         cursor: pointer;
         user-select: none;
-        transition: color 0.12s, border-color 0.12s, background 0.12s;
+        transition:
+          color 0.12s,
+          border-color 0.12s,
+          background 0.12s;
         line-height: 1.2;
       }
       .approval-pill:hover {
@@ -379,13 +417,28 @@
         flex: 0 0 auto;
         transition: background 0.12s;
       }
-      .approval-pill[data-mode="ask"]  .dot { background: #f0b400; }
-      .approval-pill[data-mode="auto"] .dot { background: #58a6ff; }
-      .approval-pill[data-mode="full"] .dot { background: #56d364; }
-      .approval-pill[data-mode="ask"]  { color: var(--text-muted); }
-      .approval-pill[data-mode="auto"] { color: var(--accent); }
-      .approval-pill[data-mode="full"] { color: var(--text); border-color: #56d36444; }
-      .approval-pill .label { white-space: nowrap; }
+      .approval-pill[data-mode="ask"] .dot {
+        background: #f0b400;
+      }
+      .approval-pill[data-mode="auto"] .dot {
+        background: #58a6ff;
+      }
+      .approval-pill[data-mode="full"] .dot {
+        background: #56d364;
+      }
+      .approval-pill[data-mode="ask"] {
+        color: var(--text-muted);
+      }
+      .approval-pill[data-mode="auto"] {
+        color: var(--accent);
+      }
+      .approval-pill[data-mode="full"] {
+        color: var(--text);
+        border-color: #56d36444;
+      }
+      .approval-pill .label {
+        white-space: nowrap;
+      }
 
       #messages {
         flex: 1;
@@ -451,7 +504,7 @@
       #composer-persona-trigger .chevron {
         font-size: 10px;
         color: var(--text-muted);
-        transition: transform .15s;
+        transition: transform 0.15s;
         margin-left: auto;
       }
 
@@ -468,7 +521,9 @@
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .04);
+        box-shadow:
+          0 8px 24px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(255, 255, 255, 0.04);
         padding: 4px;
         z-index: 50;
         display: none;
@@ -488,7 +543,7 @@
         cursor: pointer;
         font-size: 13px;
         color: var(--text);
-        transition: background .1s;
+        transition: background 0.1s;
       }
 
       .persona-option:hover {
@@ -1942,7 +1997,6 @@
                 </div>
               </div>
             </div>
-
           </div>
 
           <!-- Sidebar bottom -->
@@ -2012,6 +2066,16 @@
               </button>
             </div>
             <div id="messages" class="hidden"></div>
+            <button
+              id="scroll-to-bottom-btn"
+              type="button"
+              class="scroll-to-bottom-btn hidden"
+              aria-label="跳转到最新消息"
+              title="跳转到最新消息"
+              onclick="onScrollToBottomClicked()"
+            >
+              &#x2193;
+            </button>
           </div>
 
           <!-- Approval panel (shown when WAITING_CONFIRMATION) -->
@@ -2100,7 +2164,11 @@
             <div id="composer-persona-wrap">
               <label>智能体</label>
               <div id="composer-persona">
-                <button id="composer-persona-trigger" onclick="togglePersonaDropdown(event)" aria-label="选择智能体">
+                <button
+                  id="composer-persona-trigger"
+                  onclick="togglePersonaDropdown(event)"
+                  aria-label="选择智能体"
+                >
                   <span id="composer-persona-text">builder</span>
                   <span class="chevron">▾</span>
                 </button>
@@ -2140,7 +2208,10 @@
                   type="text"
                   placeholder="新增长期记忆..."
                 />
-                <button class="btn btn-primary btn-sm" onclick="addMemoryFromPanel()">
+                <button
+                  class="btn btn-primary btn-sm"
+                  onclick="addMemoryFromPanel()"
+                >
                   新增
                 </button>
                 <button class="btn btn-sm" onclick="refreshMemoryList()">
@@ -2198,8 +2269,7 @@
         </div>
         <div class="form-group">
           <label>智能体（身份与权限）</label>
-          <select id="sel-persona">
-          </select>
+          <select id="sel-persona"></select>
           <div
             id="persona-desc"
             style="
@@ -2296,11 +2366,127 @@
       let currentQuestionMode = "question";
       let selectedCmdIndex = -1; // index in filteredCommands
       let menuSessionId = null; // which session's menu is open
-      let composerPersonaDraft = 'builder';
+      let composerPersonaDraft = "builder";
       const LAST_SESSION_KEY = "myharness:last-session-id";
       // Poll deduplication: at most one doPoll in-flight + one queued
       let doPollInFlight = false;
       let doPollQueued = false;
+
+      // ── Chat Auto-Scroll State ─────────────────────────────────────────────
+      // Core state: whether new content should auto-follow to bottom
+      let chatAutoFollow = true;
+      // Track if we're mid-snapshot-render (prevents scroll listener from mis-firing)
+      let isRenderingSnapshot = false;
+      // Pending scroll RAF handle (only one at a time)
+      let chatScrollRaf = null;
+      // Scroll listener initialized flag
+      let chatScrollListenerInitialized = false;
+      // Threshold for "near bottom" detection (pixels)
+      const CHAT_BOTTOM_THRESHOLD = 80;
+
+      function isChatNearBottom(container) {
+        if (!container) return true;
+        const distanceFromBottom =
+          container.scrollHeight - container.scrollTop - container.clientHeight;
+        return distanceFromBottom <= CHAT_BOTTOM_THRESHOLD;
+      }
+
+      function updateScrollToBottomButton() {
+        const btn = document.getElementById("scroll-to-bottom-btn");
+        const container = document.getElementById("messages");
+        if (!btn || !container) return;
+
+        // Hide button when:
+        // - messages container is hidden or empty
+        // - user is near bottom
+        // - no active session
+        const messagesHidden = container.classList.contains("hidden");
+        const emptyMessages = !container.children.length;
+        const nearBottom = isChatNearBottom(container);
+        const noSession = !currentSessionId;
+
+        if (messagesHidden || emptyMessages || nearBottom || noSession) {
+          btn.classList.add("hidden");
+        } else {
+          btn.classList.remove("hidden");
+        }
+      }
+
+      function scheduleChatScrollToBottom(options = {}) {
+        const { force = false, behavior = "auto" } = options;
+
+        // Force: unconditionally scroll and re-enable follow mode
+        if (force) {
+          chatAutoFollow = true;
+        }
+
+        // If not forcing and user has scrolled away, just update button state
+        if (!force && !chatAutoFollow) {
+          updateScrollToBottomButton();
+          return;
+        }
+
+        // Cancel any pending scroll
+        if (chatScrollRaf !== null) {
+          cancelAnimationFrame(chatScrollRaf);
+          chatScrollRaf = null;
+        }
+
+        chatScrollRaf = requestAnimationFrame(() => {
+          chatScrollRaf = null;
+
+          // Re-check: user might have scrolled away before RAF executed
+          if (!force && !chatAutoFollow) {
+            updateScrollToBottomButton();
+            return;
+          }
+
+          const container = document.getElementById("messages");
+          if (!container) return;
+
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: behavior,
+          });
+
+          updateScrollToBottomButton();
+        });
+      }
+
+      function initChatScrollListener() {
+        if (chatScrollListenerInitialized) return;
+
+        const container = document.getElementById("messages");
+        if (!container) return;
+
+        container.addEventListener("scroll", () => {
+          // Don't update state while rendering snapshot
+          if (isRenderingSnapshot) return;
+
+          chatAutoFollow = isChatNearBottom(container);
+          updateScrollToBottomButton();
+        });
+
+        chatScrollListenerInitialized = true;
+      }
+
+      function resetChatScrollState() {
+        // Called when switching sessions - reset follow mode for new session
+        chatAutoFollow = true;
+        updateScrollToBottomButton();
+      }
+
+      function onUserSentMessage() {
+        // User主动发送消息：强制滚动到底部并恢复跟随
+        chatAutoFollow = true;
+        scheduleChatScrollToBottom({ force: true, behavior: "auto" });
+      }
+
+      function onScrollToBottomClicked() {
+        // 用户点击跳转按钮：平滑滚动到底部并恢复跟随
+        chatAutoFollow = true;
+        scheduleChatScrollToBottom({ force: true, behavior: "smooth" });
+      }
 
       // ── Boot ─────────────────────────────────────────────────────────────
       async function boot() {
@@ -2308,6 +2494,7 @@
         await refreshSessions();
         await restoreLastSession();
         fetchCommands();
+        initChatScrollListener();
       }
 
       async function restoreLastSession() {
@@ -2538,7 +2725,9 @@
 
         const persSel = document.getElementById("sel-persona");
         const selectablePersonas = getSelectablePersonas();
-        const modalDefaultPersona = selectablePersonas.some((p) => p.name === composerPersonaDraft)
+        const modalDefaultPersona = selectablePersonas.some(
+          (p) => p.name === composerPersonaDraft,
+        )
           ? composerPersonaDraft
           : "builder";
         persSel.innerHTML = "";
@@ -2559,7 +2748,9 @@
           const descEl = document.getElementById("persona-desc");
           if (descEl)
             descEl.textContent = selected ? selected.dataset.desc || "" : "";
-          const persona = overview.personas.find((p) => p.name === persSel.value);
+          const persona = overview.personas.find(
+            (p) => p.name === persSel.value,
+          );
           const approvalSel = document.getElementById("sel-approval-mode");
           if (approvalSel && persona && persona.default_approval_mode) {
             approvalSel.value = persona.default_approval_mode;
@@ -2582,11 +2773,15 @@
 
         const selectablePersonas = getSelectablePersonas();
         const names = selectablePersonas.map((p) => p.name);
-        const current = allSessions.find((s) => s.session_id === currentSessionId);
+        const current = allSessions.find(
+          (s) => s.session_id === currentSessionId,
+        );
         const previousValue = currentSessionId
-          ? ((current && current.persona) || composerPersonaDraft || "builder")
-          : (composerPersonaDraft || "builder");
-        const activePersona = names.includes(previousValue) ? previousValue : "builder";
+          ? (current && current.persona) || composerPersonaDraft || "builder"
+          : composerPersonaDraft || "builder";
+        const activePersona = names.includes(previousValue)
+          ? previousValue
+          : "builder";
 
         triggerText.textContent = activePersona;
         composerPersonaDraft = activePersona;
@@ -2594,10 +2789,14 @@
         dropdown.innerHTML = "";
         selectablePersonas.forEach((p) => {
           const opt = document.createElement("div");
-          opt.className = "persona-option" + (p.name === activePersona ? " selected" : "");
+          opt.className =
+            "persona-option" + (p.name === activePersona ? " selected" : "");
           opt.innerHTML = "<span>" + escHtml(p.name) + "</span>";
           opt.title = p.description || p.name;
-          opt.onclick = (e) => { e.stopPropagation(); selectPersona(p.name); };
+          opt.onclick = (e) => {
+            e.stopPropagation();
+            selectPersona(p.name);
+          };
           dropdown.appendChild(opt);
         });
       }
@@ -2606,10 +2805,16 @@
         const triggerText = document.getElementById("composer-persona-text");
         if (!triggerText) return;
         const names = getSelectablePersonas().map((p) => p.name);
-        const fallback = names.includes("builder") ? "builder" : (names[0] || "builder");
+        const fallback = names.includes("builder")
+          ? "builder"
+          : names[0] || "builder";
         const activePersona = currentSessionId
-          ? (names.includes(persona) ? persona : fallback)
-          : (names.includes(composerPersonaDraft) ? composerPersonaDraft : fallback);
+          ? names.includes(persona)
+            ? persona
+            : fallback
+          : names.includes(composerPersonaDraft)
+            ? composerPersonaDraft
+            : fallback;
         triggerText.textContent = activePersona;
         composerPersonaDraft = activePersona;
         const trigger = document.getElementById("composer-persona-trigger");
@@ -2631,7 +2836,13 @@
         } else {
           dropdown.classList.add("open");
           trigger.classList.add("open");
-          setTimeout(() => document.addEventListener("click", closePersonaDropdown, { once: true }), 0);
+          setTimeout(
+            () =>
+              document.addEventListener("click", closePersonaDropdown, {
+                once: true,
+              }),
+            0,
+          );
         }
       }
 
@@ -2644,17 +2855,29 @@
 
       async function selectPersona(name) {
         const names = getSelectablePersonas().map((p) => p.name);
-        const nextPersona = names.includes(name) ? name : (names.includes("builder") ? "builder" : (names[0] || "builder"));
+        const nextPersona = names.includes(name)
+          ? name
+          : names.includes("builder")
+            ? "builder"
+            : names[0] || "builder";
         composerPersonaDraft = nextPersona;
         closePersonaDropdown();
         populateComposerPersona();
         if (currentSessionId) {
           try {
-            const r = await api("/sessions/" + currentSessionId, "PATCH", { persona: nextPersona });
-            toast("\u5df2\u5207\u6362\u667a\u80fd\u4f53: " + (r.persona || nextPersona));
+            const r = await api("/sessions/" + currentSessionId, "PATCH", {
+              persona: nextPersona,
+            });
+            toast(
+              "\u5df2\u5207\u6362\u667a\u80fd\u4f53: " +
+                (r.persona || nextPersona),
+            );
             await refreshSessions();
           } catch (e) {
-            toast("\u5207\u6362\u667a\u80fd\u4f53\u5931\u8d25: " + e.message, true);
+            toast(
+              "\u5207\u6362\u667a\u80fd\u4f53\u5931\u8d25: " + e.message,
+              true,
+            );
           }
         }
       }
@@ -2663,7 +2886,11 @@
         const select = document.getElementById("sel-persona");
         const names = getSelectablePersonas().map((p) => p.name);
         const desired = prePersona || composerPersonaDraft || "builder";
-        const nextPersona = names.includes(desired) ? desired : (names.includes("builder") ? "builder" : (names[0] || ""));
+        const nextPersona = names.includes(desired)
+          ? desired
+          : names.includes("builder")
+            ? "builder"
+            : names[0] || "";
         if (select && nextPersona) {
           select.value = nextPersona;
           select.dispatchEvent(new Event("change"));
@@ -2708,7 +2935,9 @@
         const names = getSelectablePersonas().map((p) => p.name);
         const persona = names.includes(composerPersonaDraft)
           ? composerPersonaDraft
-          : (names.includes("builder") ? "builder" : (names[0] || "builder"));
+          : names.includes("builder")
+            ? "builder"
+            : names[0] || "builder";
         const body = { persona };
         const r = await api("/sessions", "POST", body);
         await refreshSessions();
@@ -2730,6 +2959,7 @@
         doPollInFlight = false;
         doPollQueued = false;
         renderSessionsList();
+        resetChatScrollState();
         showChatArea();
 
         // Load initial state
@@ -2814,7 +3044,7 @@
 
       // ── Approval mode (per-session permission policy) ───────────────────────
       const APPROVAL_LABELS = {
-        ask:  "询问给权限",
+        ask: "询问给权限",
         auto: "自动审批",
         full: "完全授权",
       };
@@ -2839,11 +3069,9 @@
         // Optimistic update — don't wait for the server round-trip.
         renderApprovalModePill(next);
         try {
-          await api(
-            `/sessions/${currentSessionId}/approval-mode`,
-            "PATCH",
-            { approval_mode: next },
-          );
+          await api(`/sessions/${currentSessionId}/approval-mode`, "PATCH", {
+            approval_mode: next,
+          });
           toast(`权限模式已切换：${APPROVAL_LABELS[next]}`);
         } catch (e) {
           // Revert on failure.
@@ -2981,7 +3209,7 @@
       async function deleteSessionFromMenu(session) {
         closeSessionMenu();
         const hasChildren = allSessions.some(
-          (s) => s.parent_session_id === session.session_id
+          (s) => s.parent_session_id === session.session_id,
         );
         let mode;
         if (hasChildren) {
@@ -2996,7 +3224,10 @@
         if (mode === "cancel") return;
         const cascade = mode === "cascade";
         try {
-          await api(`/sessions/${session.session_id}?cascade=${cascade}`, "DELETE");
+          await api(
+            `/sessions/${session.session_id}?cascade=${cascade}`,
+            "DELETE",
+          );
           if (session.session_id === currentSessionId) {
             stopPolling();
             disconnectWS();
@@ -3141,7 +3372,8 @@
             customSubmit.type = "button";
             customSubmit.className = "btn btn-primary btn-sm";
             customSubmit.textContent = "提交";
-            customSubmit.onclick = () => submitClarification(req.request_id, prompts);
+            customSubmit.onclick = () =>
+              submitClarification(req.request_id, prompts);
             customRow.appendChild(custom);
             customRow.appendChild(customSubmit);
             block.appendChild(customRow);
@@ -3297,7 +3529,8 @@
 
       function appendRuntimeEvent(evt) {
         if (!evt || !evt.phase) return;
-        if (evt.seq && runtimeEvents.some((item) => item.seq === evt.seq)) return;
+        if (evt.seq && runtimeEvents.some((item) => item.seq === evt.seq))
+          return;
         runtimeEvents.push({
           ...evt,
           at: evt.at
@@ -3330,7 +3563,9 @@
               ? new Date(evt.at).toLocaleTimeString()
               : new Date().toLocaleTimeString(),
           };
-          const key = normalized.seq ? "seq:" + normalized.seq : JSON.stringify(normalized);
+          const key = normalized.seq
+            ? "seq:" + normalized.seq
+            : JSON.stringify(normalized);
           keyed.set(key, normalized);
         }
         runtimeEvents = Array.from(keyed.values()).slice(-40);
@@ -3356,7 +3591,8 @@
 
       function runtimeEventText(evt) {
         const round = Number.isInteger(evt.round) ? `R${evt.round + 1} ` : "";
-        if (evt.phase === "round_started") return `${round}\u5f00\u59cb\u65b0\u4e00\u8f6e\u6267\u884c`;
+        if (evt.phase === "round_started")
+          return `${round}\u5f00\u59cb\u65b0\u4e00\u8f6e\u6267\u884c`;
         if (evt.phase === "llm_started") {
           return `${round}\u6b63\u5728\u8bf7\u6c42\u6a21\u578b\uff0c\u4e0a\u4e0b\u6587\u6d88\u606f ${evt.message_count || 0} \u6761\uff0c\u53ef\u7528\u5de5\u5177 ${evt.tool_count || 0} \u4e2a`;
         }
@@ -3375,7 +3611,9 @@
           return `${round}${evt.tool || "tool"} \u6267\u884c\u5931\u8d25: ${evt.error || ""}`;
         }
         if (evt.phase === "continuation_required") {
-          const next = Number.isInteger(evt.next_round) ? `R${evt.next_round + 1}` : "\u4e0b\u4e00\u8f6e";
+          const next = Number.isInteger(evt.next_round)
+            ? `R${evt.next_round + 1}`
+            : "\u4e0b\u4e00\u8f6e";
           return `${round}\u5de5\u5177\u7ed3\u679c\u5df2\u5199\u5165\uff0c\u51c6\u5907\u8fdb\u5165 ${next} \u7ee7\u7eed\u63a8\u7406`;
         }
         if (evt.phase === "empty_reply_retry") {
@@ -3429,7 +3667,8 @@
         if (!arr.length) {
           const empty = document.createElement("div");
           empty.className = "plan-empty";
-          empty.textContent = "\u5f53\u524d\u4f1a\u8bdd\u8fd8\u6ca1\u6709\u53ef\u89c1\u8ba1\u5212\u3002\u590d\u6742\u4efb\u52a1\u5f00\u59cb\u540e\uff0c\u667a\u80fd\u4f53\u4f1a\u5728\u8fd9\u91cc\u663e\u793a\u6267\u884c\u6b65\u9aa4\u3002";
+          empty.textContent =
+            "\u5f53\u524d\u4f1a\u8bdd\u8fd8\u6ca1\u6709\u53ef\u89c1\u8ba1\u5212\u3002\u590d\u6742\u4efb\u52a1\u5f00\u59cb\u540e\uff0c\u667a\u80fd\u4f53\u4f1a\u5728\u8fd9\u91cc\u663e\u793a\u6267\u884c\u6b65\u9aa4\u3002";
           list.appendChild(empty);
           return;
         }
@@ -3454,7 +3693,7 @@
                 ? "进行中"
                 : status === "queued"
                   ? "排队"
-                : "待办";
+                  : "待办";
           row.appendChild(statusEl);
 
           const textEl = document.createElement("div");
@@ -3754,7 +3993,7 @@
           }
           thinkBody.textContent = streamThinkingText;
           thinkBody.scrollTop = thinkBody.scrollHeight;
-          container.scrollTop = container.scrollHeight;
+          scheduleChatScrollToBottom({ force: false, behavior: "auto" });
         } else if (frame.type === "token") {
           if (streamIsThinking) {
             streamIsThinking = false;
@@ -3764,7 +4003,7 @@
           ensureStreamEl(container);
           streamText += frame.data;
           streamEl.querySelector(".msg-bubble").textContent = streamText;
-          container.scrollTop = container.scrollHeight;
+          scheduleChatScrollToBottom({ force: false, behavior: "auto" });
         } else if (frame.type === "message") {
           // A message completed (tool call or tool result). Trigger an incremental
           // snapshot fetch so renderSnapshot() is the single source of truth.
@@ -3867,8 +4106,7 @@
         if (streamEl) return;
         streamEl = document.createElement("div");
         streamEl.className = "msg assistant";
-        streamEl.innerHTML =
-          `<div class="msg-role">${assistantRoleLabel()}</div><div class="msg-bubble"></div>`;
+        streamEl.innerHTML = `<div class="msg-role">${assistantRoleLabel()}</div><div class="msg-bubble"></div>`;
         const dots = document.getElementById("typing-dots");
         if (dots) container.insertBefore(streamEl, dots);
         else container.appendChild(streamEl);
@@ -3942,7 +4180,8 @@
 
         if (meta.display_name) next.display_name = meta.display_name;
         if (meta.title) next.title = meta.title;
-        if (Object.prototype.hasOwnProperty.call(meta, "persona")) next.persona = meta.persona;
+        if (Object.prototype.hasOwnProperty.call(meta, "persona"))
+          next.persona = meta.persona;
         if (meta.provider) next.provider = meta.provider;
         if (typeof meta.spawn_depth === "number")
           next.spawn_depth = meta.spawn_depth;
@@ -4014,7 +4253,8 @@
         const headerInfo = { ...sessionInfo, session_id: currentSessionId };
         if (meta.display_name) headerInfo.display_name = meta.display_name;
         if (meta.title) headerInfo.title = meta.title;
-        if (Object.prototype.hasOwnProperty.call(meta, "persona")) headerInfo.persona = meta.persona;
+        if (Object.prototype.hasOwnProperty.call(meta, "persona"))
+          headerInfo.persona = meta.persona;
         syncComposerPersonaControl(headerInfo.persona || "");
         titleEl.textContent = getSessionLabel(headerInfo);
         const parts = [];
@@ -4043,7 +4283,8 @@
             "⚠ 引擎出错：" + (snap.last_error || "").split("\n").slice(-1)[0];
           const detail = (snap.last_error || "").split("\n").slice(-1)[0];
           errBanner.textContent = snap.recoverable_error
-            ? "\u672c\u8f6e\u6267\u884c\u4e2d\u65ad\uff0c\u6b63\u5728\u5c1d\u8bd5\u4ece\u5f53\u524d\u8fdb\u5ea6\u6062\u590d\uff1a" + detail
+            ? "\u672c\u8f6e\u6267\u884c\u4e2d\u65ad\uff0c\u6b63\u5728\u5c1d\u8bd5\u4ece\u5f53\u524d\u8fdb\u5ea6\u6062\u590d\uff1a" +
+              detail
             : "\u672c\u8f6e\u6267\u884c\u4e2d\u65ad\uff1a" + detail;
           if (snap.recoverable_error) autoRecoverIfNeeded(snap);
         } else {
@@ -4056,13 +4297,13 @@
         if (
           snap.pending_approval?.length &&
           (snap.state === "WAITING_CONFIRMATION" ||
-           snap.pending_approval.some((t) => t.subagent_session_id))
+            snap.pending_approval.some((t) => t.subagent_session_id))
         ) {
           confirmInfo.innerHTML = snap.pending_approval
             .map((t) => {
               const inputStr = JSON.stringify(t.input, null, 2);
               const label = t.subagent_session_id
-                ? `<span style="color:#8b949e;font-size:11px">子Agent: ${escHtml(t.subagent_display_name || t.subagent_session_id.slice(0,8))}</span><br>`
+                ? `<span style="color:#8b949e;font-size:11px">子Agent: ${escHtml(t.subagent_display_name || t.subagent_session_id.slice(0, 8))}</span><br>`
                 : "";
               return `<div class="confirm-tool">${label}<strong>${escHtml(t.name)}</strong><pre>${escHtml(inputStr)}</pre></div>`;
             })
@@ -4077,6 +4318,12 @@
 
         // Render only new messages
         const container = document.getElementById("messages");
+
+        // Save scroll state before DOM mutation
+        const shouldFollow = chatAutoFollow;
+        const previousScrollTop = container.scrollTop;
+        isRenderingSnapshot = true;
+
         const prevCount = lastMsgCount;
         lastMsgCount = msgs.length;
 
@@ -4168,13 +4415,27 @@
         if (snap.needs_continuation) {
           appendRuntimeEvent({
             phase: "interrupted_after_tool",
-            seq: "needs-continuation-" + (snap.session_id || currentSessionId || ""),
+            seq:
+              "needs-continuation-" +
+              (snap.session_id || currentSessionId || ""),
           });
           autoContinueIfNeeded(snap);
         }
 
-        // Scroll to bottom
-        container.scrollTop = container.scrollHeight;
+        // Restore scroll state after DOM mutation
+        if (shouldFollow) {
+          // User was at bottom: follow new content
+          scheduleChatScrollToBottom({ force: false, behavior: "auto" });
+        } else {
+          // User was reading history: restore position
+          requestAnimationFrame(() => {
+            container.scrollTop = previousScrollTop;
+          });
+        }
+
+        isRenderingSnapshot = false;
+        chatAutoFollow = isChatNearBottom(container);
+        updateScrollToBottomButton();
       }
 
       async function autoContinueIfNeeded(snap) {
@@ -4736,7 +4997,8 @@
             const parent = thinkingGroupForMessage
               ? thinkingGroupForMessage.content
               : container;
-            if (thinkingGroupForMessage) lastToolResultsBelongToThinkingGroup = true;
+            if (thinkingGroupForMessage)
+              lastToolResultsBelongToThinkingGroup = true;
             parent.appendChild(
               renderToolCall(
                 tc,
@@ -4772,9 +5034,7 @@
               resultParent.appendChild(
                 renderToolResult(
                   tr,
-                  compactResults
-                    ? { compact: true }
-                    : { defaultOpen: false },
+                  compactResults ? { compact: true } : { defaultOpen: false },
                 ),
               );
             });
@@ -4968,7 +5228,7 @@
         const dots = document.getElementById("typing-dots");
         if (dots) container.insertBefore(el, dots);
         else container.appendChild(el);
-        container.scrollTop = container.scrollHeight;
+        scheduleChatScrollToBottom({ force: true, behavior: "auto" });
         pendingUserEchoes.push(text);
       }
 
@@ -5244,9 +5504,10 @@
 
             const meta = document.createElement("div");
             meta.className = "memory-meta";
-            const tags = Array.isArray(memory.tags) && memory.tags.length
-              ? ` · ${memory.tags.join(", ")}`
-              : "";
+            const tags =
+              Array.isArray(memory.tags) && memory.tags.length
+                ? ` · ${memory.tags.join(", ")}`
+                : "";
             meta.textContent = `${memory.entry_id || ""} · ${memory.scope || "global"}${tags}`;
             body.appendChild(meta);
             row.appendChild(body);
@@ -5284,7 +5545,8 @@
 
       async function deleteMemoryFromPanel(entryId) {
         if (!entryId) return;
-        if (!(await showConfirm("删除记忆", `确认删除「${entryId}」？`))) return;
+        if (!(await showConfirm("删除记忆", `确认删除「${entryId}」？`)))
+          return;
         try {
           await api(`/memory/${entryId}`, "DELETE");
           toast("长期记忆已删除");
@@ -5352,7 +5614,8 @@
           currentConfigFile.type === "yaml" ||
           currentConfigFile.type === "memory" ||
           currentConfigFile.editable === false
-        ) return;
+        )
+          return;
         confirmDeleteConfig(currentConfigFile.type, currentConfigFile.name);
       }
 
@@ -5726,7 +5989,7 @@
           "padding:10px 16px;color:var(--text-muted);font-size:13px;white-space:pre-wrap;font-family:var(--mono)";
         div.textContent = text;
         container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
+        scheduleChatScrollToBottom({ force: false, behavior: "auto" });
       }
 
       // ── Start ──────────────────────────────────────────────────────────────
