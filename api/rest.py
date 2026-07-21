@@ -8,6 +8,7 @@ Switching sessions: call /state to get last_messages + is_running.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -38,7 +39,7 @@ from pydantic import BaseModel
 from harness.commands import CommandSystem
 from harness.commands.models import CommandContext, CommandResult, substitute_args
 from harness.agents import list_agent_profiles
-from harness.config import HarnessConfig
+from harness.config import HarnessConfig, ProviderConfig
 from harness.engine.engine import AgentEngine
 from harness.factory import build_engine, build_engine_with_mcp
 from harness.skills import (
@@ -62,6 +63,7 @@ from harness.storage.backends.sqlite import (
 from harness.types.messages import Message, TextBlock
 
 app = FastAPI(title="MyHarnessPy", version="0.1.0")
+api_logger = logging.getLogger("harness.api")
 
 # Active engines: session_id -> AgentEngine
 _engines: dict[str, AgentEngine] = {}
@@ -75,16 +77,317 @@ _memory_store = InMemoryMemoryStore()
 _plan_store = InMemoryPlanStore()
 _cmd_system: CommandSystem | None = None
 
+ENV_SETTINGS_FILE = Path(__file__).resolve().parent.parent / ".env"
+ATELIER_SETTINGS_FILE = Path(__file__).resolve().parent.parent / ".atelier" / "settings.json"
+MANAGED_ENV_KEYS = [
+    "ATELIER_ACTIVE_PROFILE",
+    "ATELIER_PROVIDER_NAME",
+    "ATELIER_PROVIDER_TYPE",
+    "ATELIER_API_KEY",
+    "ATELIER_BASE_URL",
+    "ATELIER_MODEL",
+    "ATELIER_IMAGE_API_KEY",
+    "ATELIER_IMAGE_BASE_URL",
+    "ATELIER_IMAGE_MODEL",
+    "ATELIER_IMAGE_GENERATION_ENDPOINT",
+    "ATELIER_IMAGE_EDIT_ENDPOINT",
+    "ATELIER_IMAGE_BACKEND",
+    "ATELIER_IMAGE_DEFAULT_SIZE",
+    "HARNESS_DEFAULT_PROVIDER",
+    "OPENAI_HUB_API_KEY",
+    "OPENAI_HUB_BASE_URL",
+    "OPENAI_HUB_MODEL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENAI_MODEL",
+    "THREE_SIX_ONE_API_KEY",
+    "THREE_SIX_ONE_BASE_URL",
+    "THREE_SIX_ONE_MODEL",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_MODEL",
+    "SERPER_API_KEY",
+    "BRAVE_SEARCH_API_KEY",
+    "DESIGN_IMAGE_API_KEY",
+    "DESIGN_IMAGE_BASE_URL",
+    "DESIGN_IMAGE_MODEL",
+    "DESIGN_IMAGE_ENDPOINT",
+    "DESIGN_IMAGE_EDIT_ENDPOINT",
+    "DESIGN_IMAGE_BACKEND",
+    "DESIGN_IMAGE_DEFAULT_SIZE",
+    "OPENAI_HUB_IMAGE_MODEL",
+]
+
+PROFILE_PROVIDER_TYPES = {"openai-compatible", "openai", "anthropic"}
+
+
+def _settings_default() -> dict[str, Any]:
+    return {"active_profile_id": "", "profiles": []}
+
+
+def _safe_profile_id(value: str) -> str:
+    value = re.sub(r"[^A-Za-z0-9._-]+", "-", (value or "").strip()).strip("-._")
+    return (value or f"profile-{uuid.uuid4().hex[:8]}")[:80]
+
+
+def _load_atelier_settings() -> dict[str, Any]:
+    if not ATELIER_SETTINGS_FILE.exists():
+        return _settings_default()
+    try:
+        data = json.loads(ATELIER_SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return _settings_default()
+    profiles = data.get("profiles", [])
+    if not isinstance(profiles, list):
+        profiles = []
+    return {
+        "active_profile_id": str(data.get("active_profile_id") or ""),
+        "profiles": [p for p in profiles if isinstance(p, dict)],
+    }
+
+
+def _save_atelier_settings(settings: dict[str, Any]) -> None:
+    ATELIER_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ATELIER_SETTINGS_FILE.write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _normalize_profile(raw: dict[str, Any]) -> dict[str, Any]:
+    name = str(raw.get("name") or raw.get("id") or "Custom Provider").strip()
+    provider_type = str(raw.get("provider_type") or "openai-compatible").strip()
+    if provider_type not in PROFILE_PROVIDER_TYPES:
+        provider_type = "openai-compatible"
+    profile_id = _safe_profile_id(str(raw.get("id") or name))
+    base_url = str(raw.get("base_url") or "").strip()
+    image_base_url = str(raw.get("image_base_url") or base_url).strip()
+    image_generation_endpoint = str(raw.get("image_generation_endpoint") or "").strip()
+    image_edit_endpoint = str(raw.get("image_edit_endpoint") or "").strip()
+    if image_base_url:
+        image_base = image_base_url.rstrip("/")
+        if not image_generation_endpoint:
+            image_generation_endpoint = f"{image_base}/images/generations"
+        if not image_edit_endpoint:
+            image_edit_endpoint = f"{image_base}/images/edits"
+    return {
+        "id": profile_id,
+        "name": name or profile_id,
+        "provider_type": provider_type,
+        "api_key": str(raw.get("api_key") or "").strip(),
+        "base_url": base_url,
+        "model": str(raw.get("model") or "gpt-4o").strip(),
+        "image_api_key": str(raw.get("image_api_key") or raw.get("api_key") or "").strip(),
+        "image_base_url": image_base_url,
+        "image_model": str(raw.get("image_model") or "gpt-image-2").strip(),
+        "image_generation_endpoint": image_generation_endpoint,
+        "image_edit_endpoint": image_edit_endpoint,
+        "image_default_size": str(raw.get("image_default_size") or "1024x1024").strip(),
+    }
+
+
+def _profile_public(profile: dict[str, Any]) -> dict[str, Any]:
+    return dict(profile)
+
+
+def _active_profile(settings: dict[str, Any]) -> dict[str, Any] | None:
+    active_id = str(settings.get("active_profile_id") or "")
+    if not active_id:
+        return None
+    for profile in settings.get("profiles", []):
+        if str(profile.get("id") or "") == active_id:
+            return _normalize_profile(profile)
+    return None
+
+
+def _profile_to_env_values(profile: dict[str, Any]) -> dict[str, str]:
+    image_base = profile.get("image_base_url") or profile.get("base_url") or ""
+    return {
+        "ATELIER_ACTIVE_PROFILE": profile["id"],
+        "ATELIER_PROVIDER_NAME": profile["id"],
+        "ATELIER_PROVIDER_TYPE": profile["provider_type"],
+        "ATELIER_API_KEY": profile["api_key"],
+        "ATELIER_BASE_URL": profile["base_url"],
+        "ATELIER_MODEL": profile["model"],
+        "ATELIER_IMAGE_API_KEY": profile.get("image_api_key") or profile["api_key"],
+        "ATELIER_IMAGE_BASE_URL": image_base,
+        "ATELIER_IMAGE_MODEL": profile.get("image_model", ""),
+        "ATELIER_IMAGE_GENERATION_ENDPOINT": profile.get("image_generation_endpoint", ""),
+        "ATELIER_IMAGE_EDIT_ENDPOINT": profile.get("image_edit_endpoint", ""),
+        "ATELIER_IMAGE_DEFAULT_SIZE": profile.get("image_default_size", ""),
+    }
+
+
+def _profile_from_atelier_env() -> dict[str, Any] | None:
+    values = _read_managed_env_values()
+    if not values.get("ATELIER_API_KEY") and not values.get("ATELIER_MODEL"):
+        return None
+    return _normalize_profile({
+        "id": values.get("ATELIER_ACTIVE_PROFILE") or values.get("ATELIER_PROVIDER_NAME") or "atelier-env",
+        "name": values.get("ATELIER_PROVIDER_NAME") or "Atelier Env",
+        "provider_type": values.get("ATELIER_PROVIDER_TYPE") or "openai-compatible",
+        "api_key": values.get("ATELIER_API_KEY", ""),
+        "base_url": values.get("ATELIER_BASE_URL", ""),
+        "model": values.get("ATELIER_MODEL", "gpt-4o"),
+        "image_api_key": values.get("ATELIER_IMAGE_API_KEY", ""),
+        "image_base_url": values.get("ATELIER_IMAGE_BASE_URL", ""),
+        "image_model": values.get("ATELIER_IMAGE_MODEL", ""),
+        "image_generation_endpoint": values.get("ATELIER_IMAGE_GENERATION_ENDPOINT", ""),
+        "image_edit_endpoint": values.get("ATELIER_IMAGE_EDIT_ENDPOINT", ""),
+        "image_default_size": values.get("ATELIER_IMAGE_DEFAULT_SIZE", ""),
+    })
+
+
+def _parse_env_content(content: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if (
+            (value.startswith('"') and value.endswith('"'))
+            or (value.startswith("'") and value.endswith("'"))
+        ):
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def _quote_env_value(value: str) -> str:
+    value = str(value or "")
+    if not value:
+        return ""
+    if any(ch.isspace() for ch in value) or "#" in value or '"' in value:
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return value
+
+
+def _read_managed_env_values() -> dict[str, str]:
+    file_values: dict[str, str] = {}
+    if ENV_SETTINGS_FILE.exists():
+        file_values = _parse_env_content(ENV_SETTINGS_FILE.read_text(encoding="utf-8"))
+    return {key: file_values.get(key, os.environ.get(key, "")) for key in MANAGED_ENV_KEYS}
+
+
+def _write_managed_env_values(values: dict[str, str]) -> None:
+    existing_lines: list[str] = []
+    if ENV_SETTINGS_FILE.exists():
+        existing_lines = ENV_SETTINGS_FILE.read_text(encoding="utf-8").splitlines()
+
+    managed = {key: str(values.get(key, "") or "") for key in MANAGED_ENV_KEYS}
+    preserved: list[str] = []
+    seen_managed: set[str] = set()
+    for line in existing_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            preserved.append(line)
+            continue
+        key = stripped.split("=", 1)[0].strip()
+        if key in managed:
+            seen_managed.add(key)
+            continue
+        preserved.append(line)
+
+    output = preserved[:]
+    if output and output[-1].strip():
+        output.append("")
+    output.append("# Atelier runtime settings")
+    for key in MANAGED_ENV_KEYS:
+        output.append(f"{key}={_quote_env_value(managed.get(key, ''))}")
+
+    ENV_SETTINGS_FILE.write_text("\n".join(output).rstrip() + "\n", encoding="utf-8")
+
+
+def _derive_env_defaults(values: dict[str, str]) -> dict[str, str]:
+    next_values = {key: str(values.get(key, "") or "") for key in MANAGED_ENV_KEYS}
+    if not next_values["HARNESS_DEFAULT_PROVIDER"]:
+        next_values["HARNESS_DEFAULT_PROVIDER"] = "openai-hub"
+    if not next_values["OPENAI_HUB_BASE_URL"]:
+        next_values["OPENAI_HUB_BASE_URL"] = "https://api.openai-hub.com/v1"
+    if not next_values["OPENAI_HUB_MODEL"]:
+        next_values["OPENAI_HUB_MODEL"] = "gpt-4o"
+    if not next_values["DESIGN_IMAGE_BASE_URL"]:
+        next_values["DESIGN_IMAGE_BASE_URL"] = next_values["OPENAI_HUB_BASE_URL"]
+    if not next_values["DESIGN_IMAGE_MODEL"]:
+        next_values["DESIGN_IMAGE_MODEL"] = (
+            next_values["OPENAI_HUB_IMAGE_MODEL"] or "gpt-image-2"
+        )
+    image_base = next_values["DESIGN_IMAGE_BASE_URL"].rstrip("/")
+    if image_base:
+        if not next_values["DESIGN_IMAGE_ENDPOINT"]:
+            next_values["DESIGN_IMAGE_ENDPOINT"] = f"{image_base}/images/generations"
+        if not next_values["DESIGN_IMAGE_EDIT_ENDPOINT"]:
+            next_values["DESIGN_IMAGE_EDIT_ENDPOINT"] = f"{image_base}/images/edits"
+    if not next_values["DESIGN_IMAGE_API_KEY"]:
+        next_values["DESIGN_IMAGE_API_KEY"] = next_values["OPENAI_HUB_API_KEY"]
+    return next_values
+
+
+def _apply_runtime_env(values: dict[str, str]) -> None:
+    for key in MANAGED_ENV_KEYS:
+        value = str(values.get(key, "") or "")
+        if value:
+            os.environ[key] = value
+        else:
+            os.environ.pop(key, None)
+
+
+def _profile_to_provider_config(profile: dict[str, Any]) -> ProviderConfig:
+    return ProviderConfig(
+        name=profile["provider_type"],
+        model=profile["model"],
+        api_key=profile["api_key"],
+        base_url=profile["base_url"],
+        max_tokens=4096,
+        temperature=0.0,
+    )
+
+
+def _apply_model_profiles_to_config(cfg: HarnessConfig) -> None:
+    settings = _load_atelier_settings()
+    profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
+    env_profile = _profile_from_atelier_env()
+    if env_profile and all(p["id"] != env_profile["id"] for p in profiles):
+        profiles.append(env_profile)
+
+    if not profiles:
+        return
+
+    for profile in profiles:
+        cfg.providers[profile["id"]] = _profile_to_provider_config(profile)
+
+    if cfg.default_provider not in cfg.providers:
+        cfg.default_provider = profiles[0]["id"]
+    if cfg.compression.summary_provider and cfg.compression.summary_provider not in cfg.providers:
+        cfg.compression.summary_provider = ""
+
+
+def _model_profile_provider_names() -> list[str]:
+    settings = _load_atelier_settings()
+    profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
+    env_profile = _profile_from_atelier_env()
+    if env_profile and all(p["id"] != env_profile["id"] for p in profiles):
+        profiles.append(env_profile)
+    return [p["id"] for p in profiles]
+
+
+def _reload_runtime_config() -> None:
+    global _config
+    try:
+        _config = HarnessConfig.from_yaml("config.yaml")
+    except FileNotFoundError:
+        _config = HarnessConfig.from_env()
+    _apply_model_profiles_to_config(_config)
+
 
 # ── Startup ────────────────────────────────────────────────────────────
 
 @app.on_event("startup")
 async def _startup() -> None:
     global _config, _session_store, _memory_store, _plan_store, _cmd_system
-    try:
-        _config = HarnessConfig.from_yaml("config.yaml")
-    except FileNotFoundError:
-        _config = HarnessConfig.from_env()
+    _reload_runtime_config()
 
     if _config.storage.backend == "sqlite":
         _session_store = SQLiteSessionStore(_config.storage.path)
@@ -153,6 +456,7 @@ class UpdateSessionRequest(BaseModel):
     pinned: bool | None = None
     archived: bool | None = None
     persona: str | None = None
+    provider: str | None = None
 
 
 class RewriteMessageRequest(BaseModel):
@@ -193,6 +497,23 @@ class CreateFileRequest(BaseModel):
     content: str
 
 
+class RuntimeEnvSettingsRequest(BaseModel):
+    values: dict[str, str] = {}
+
+
+class RuntimeEnvImportRequest(BaseModel):
+    content: str
+
+
+class ModelProfileRequest(BaseModel):
+    profile: dict[str, Any]
+    activate: bool = False
+
+
+class ActivateProfileRequest(BaseModel):
+    profile_id: str = ""
+
+
 async def _build_session_engine(
     session_id: str,
     provider_name: str,
@@ -210,7 +531,7 @@ async def _build_session_engine(
                 system_prompt = persona.get("system_prompt", system_prompt)
             if allowed_tools is None:
                 allowed_tools = persona.get("allowed_tools") or allowed_tools
-            if persona.get("provider"):
+            if persona.get("provider") and not provider_name:
                 provider_name = persona["provider"]
         except ValueError:
             # Keep the restore path tolerant: stale persona names should not
@@ -958,6 +1279,51 @@ async def update_session(session_id: str, req: UpdateSessionRequest) -> dict[str
         kwargs["pinned"] = req.pinned
     if req.archived is not None:
         kwargs["archived"] = req.archived
+    if req.provider is not None:
+        cfg = _require_config()
+        provider = str(req.provider or "").strip()
+        if provider not in cfg.providers:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Provider '{provider}' not found. Available: {list(cfg.providers.keys())}",
+            )
+        engine = _engines.get(session_id)
+        if engine is None:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+        snap = await engine.get_snapshot()
+        if snap.get("is_running"):
+            raise HTTPException(status_code=409, detail="Cannot switch provider while the session is running")
+
+        meta = dict(_engine_meta.get(session_id, {}))
+        try:
+            rec = await _session_store.load(session_id)
+            if rec and isinstance(rec.metadata, dict):
+                meta = {**rec.metadata, **meta}
+        except Exception:
+            pass
+        persona_name = str(meta.get("persona", ""))
+        question_mode = str(meta.get("question_mode", "question") or "question")
+        approval_mode = str(meta.get("approval_mode", "ask") or "ask")
+        if approval_mode not in ("ask", "auto", "full"):
+            approval_mode = "ask"
+
+        await _close_session_mcp_clients(session_id)
+        new_engine, mcp_clients = await _build_session_engine(
+            session_id=session_id,
+            provider_name=provider,
+            cfg=cfg,
+            system_prompt="",
+            allowed_tools=None,
+            persona_name=persona_name,
+            question_mode=question_mode,
+            approval_mode=approval_mode,
+        )
+        await new_engine.restore_from_store()
+        _attach_engine_meta_sync(session_id, new_engine)
+        _engines[session_id] = new_engine
+        _engine_mcp_clients[session_id] = mcp_clients
+        _engine_meta[session_id] = {**meta, "provider": provider}
+        kwargs["provider"] = provider
     if req.persona is not None:
         engine = _engines.get(session_id)
         if engine is None:
@@ -979,6 +1345,8 @@ async def update_session(session_id: str, req: UpdateSessionRequest) -> dict[str
     result: dict[str, Any] = {"status": "updated", "session_id": session_id}
     if req.persona is not None:
         result["persona"] = req.persona
+    if req.provider is not None:
+        result["provider"] = req.provider
     return result
 
 
@@ -1030,16 +1398,218 @@ def _find_descendants(root_id: str, records: list) -> set[str]:
 async def config_overview() -> dict[str, Any]:
     """All config data needed to render the frontend sidebar."""
     cfg = _require_config()
+    profile_providers = _model_profile_provider_names()
+    providers = profile_providers or list(cfg.providers.keys())
     return {
         "skills":           list_skills(),
         "personas":         list_personas(),      # [{name, description}]
-        "providers":        list(cfg.providers.keys()),
-        "default_provider": cfg.default_provider,
+        "providers":        providers,
+        "default_provider": cfg.default_provider if cfg.default_provider in providers else (providers[0] if providers else ""),
         "tools_enabled":    cfg.tools.enabled,
     }
 
 
 # ── Skills CRUD (folder-based) ─────────────────────────────────────────
+
+@app.get("/settings/runtime-env")
+async def api_get_runtime_env_settings() -> dict[str, Any]:
+    cfg = _require_config()
+    values = _derive_env_defaults(_read_managed_env_values())
+    masked = dict(values)
+    for key in list(masked):
+        if "API_KEY" in key and masked[key]:
+            masked[key] = "********" + masked[key][-4:]
+    return {
+        "keys": MANAGED_ENV_KEYS,
+        "values": values,
+        "masked": masked,
+        "providers": list(cfg.providers.keys()),
+        "default_provider": cfg.default_provider,
+        "env_path": str(ENV_SETTINGS_FILE.as_posix()),
+    }
+
+
+@app.get("/settings/model-profiles")
+async def api_get_model_profiles() -> dict[str, Any]:
+    api_logger.info("settings model profiles requested")
+    settings = _load_atelier_settings()
+    profiles = [_profile_public(_normalize_profile(p)) for p in settings.get("profiles", [])]
+    return {
+        "profiles": profiles,
+        "active_profile_id": "",
+        "settings_path": str(ATELIER_SETTINGS_FILE.as_posix()),
+    }
+
+
+@app.post("/settings/model-profiles")
+async def api_save_model_profile(req: ModelProfileRequest) -> dict[str, Any]:
+    api_logger.info("settings model profile save requested activate=%s", req.activate)
+    settings = _load_atelier_settings()
+    profile = _normalize_profile(req.profile)
+    profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
+    replaced = False
+    for idx, existing in enumerate(profiles):
+        if existing["id"] == profile["id"]:
+            profiles[idx] = profile
+            replaced = True
+            break
+    if not replaced:
+        profiles.append(profile)
+    settings["profiles"] = profiles
+    _save_atelier_settings(settings)
+    _reload_runtime_config()
+    cfg = _require_config()
+    return {
+        "status": "saved",
+        "profile": _profile_public(profile),
+        "active_profile_id": "",
+        "providers": list(cfg.providers.keys()),
+        "default_provider": cfg.default_provider,
+    }
+
+
+@app.post("/settings/model-profiles/activate")
+async def api_activate_model_profile(req: ActivateProfileRequest) -> dict[str, Any]:
+    api_logger.info("settings model profile activate requested profile_id=%s", req.profile_id)
+    settings = _load_atelier_settings()
+    profile_id = str(req.profile_id or "").strip()
+    if profile_id:
+        profile = None
+        for item in settings.get("profiles", []):
+            normalized = _normalize_profile(item)
+            if normalized["id"] == profile_id:
+                profile = normalized
+                break
+        if profile is None:
+            raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+        settings["active_profile_id"] = profile_id
+        _write_managed_env_values({**_read_managed_env_values(), **_profile_to_env_values(profile)})
+    else:
+        settings["active_profile_id"] = ""
+    _save_atelier_settings(settings)
+    _reload_runtime_config()
+    cfg = _require_config()
+    return {
+        "status": "activated" if profile_id else "cleared",
+        "active_profile_id": settings.get("active_profile_id", ""),
+        "providers": list(cfg.providers.keys()),
+        "default_provider": cfg.default_provider,
+    }
+
+
+@app.delete("/settings/model-profiles/{profile_id}", status_code=204)
+async def api_delete_model_profile(profile_id: str):
+    api_logger.info("settings model profile delete requested profile_id=%s", profile_id)
+    settings = _load_atelier_settings()
+    profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
+    next_profiles = [p for p in profiles if p["id"] != profile_id]
+    if len(next_profiles) == len(profiles):
+        raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+    settings["profiles"] = next_profiles
+    if settings.get("active_profile_id") == profile_id:
+        settings["active_profile_id"] = ""
+    _save_atelier_settings(settings)
+    _reload_runtime_config()
+
+
+@app.post("/settings/model-profiles/import-env")
+async def api_import_model_profile_from_env(req: RuntimeEnvImportRequest) -> dict[str, Any]:
+    api_logger.info("settings model profile env import requested chars=%s", len(req.content or ""))
+    parsed = _parse_env_content(req.content)
+    name = parsed.get("ATELIER_PROVIDER_NAME") or parsed.get("HARNESS_DEFAULT_PROVIDER") or "Imported Provider"
+    profile = _normalize_profile({
+        "id": parsed.get("ATELIER_ACTIVE_PROFILE") or name,
+        "name": name,
+        "provider_type": parsed.get("ATELIER_PROVIDER_TYPE") or "openai-compatible",
+        "api_key": (
+            parsed.get("ATELIER_API_KEY")
+            or parsed.get("OPENAI_HUB_API_KEY")
+            or parsed.get("OPENAI_API_KEY")
+            or parsed.get("THREE_SIX_ONE_API_KEY")
+            or parsed.get("ANTHROPIC_API_KEY")
+            or ""
+        ),
+        "base_url": (
+            parsed.get("ATELIER_BASE_URL")
+            or parsed.get("OPENAI_HUB_BASE_URL")
+            or parsed.get("OPENAI_BASE_URL")
+            or parsed.get("THREE_SIX_ONE_BASE_URL")
+            or ""
+        ),
+        "model": (
+            parsed.get("ATELIER_MODEL")
+            or parsed.get("OPENAI_HUB_MODEL")
+            or parsed.get("OPENAI_MODEL")
+            or parsed.get("THREE_SIX_ONE_MODEL")
+            or parsed.get("ANTHROPIC_MODEL")
+            or "gpt-4o"
+        ),
+        "image_api_key": parsed.get("ATELIER_IMAGE_API_KEY") or parsed.get("DESIGN_IMAGE_API_KEY") or "",
+        "image_base_url": parsed.get("ATELIER_IMAGE_BASE_URL") or parsed.get("DESIGN_IMAGE_BASE_URL") or "",
+        "image_model": parsed.get("ATELIER_IMAGE_MODEL") or parsed.get("DESIGN_IMAGE_MODEL") or "",
+        "image_generation_endpoint": (
+            parsed.get("ATELIER_IMAGE_GENERATION_ENDPOINT")
+            or parsed.get("DESIGN_IMAGE_ENDPOINT")
+            or ""
+        ),
+        "image_edit_endpoint": (
+            parsed.get("ATELIER_IMAGE_EDIT_ENDPOINT")
+            or parsed.get("DESIGN_IMAGE_EDIT_ENDPOINT")
+            or ""
+        ),
+        "image_default_size": parsed.get("ATELIER_IMAGE_DEFAULT_SIZE") or parsed.get("DESIGN_IMAGE_DEFAULT_SIZE") or "",
+    })
+    settings = _load_atelier_settings()
+    profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
+    profiles = [p for p in profiles if p["id"] != profile["id"]] + [profile]
+    settings["profiles"] = profiles
+    _save_atelier_settings(settings)
+    return {
+        "status": "imported",
+        "profile": _profile_public(profile),
+        "ignored_keys": sorted(k for k in parsed.keys() if k not in MANAGED_ENV_KEYS),
+    }
+
+
+@app.put("/settings/runtime-env")
+async def api_save_runtime_env_settings(req: RuntimeEnvSettingsRequest) -> dict[str, Any]:
+    current = _read_managed_env_values()
+    incoming = {
+        key: str(req.values.get(key, current.get(key, "")) or "")
+        for key in MANAGED_ENV_KEYS
+    }
+    values = _derive_env_defaults(incoming)
+    _write_managed_env_values(values)
+    _apply_runtime_env(values)
+    _reload_runtime_config()
+    cfg = _require_config()
+    return {
+        "status": "saved",
+        "providers": list(cfg.providers.keys()),
+        "default_provider": cfg.default_provider,
+        "env_path": str(ENV_SETTINGS_FILE.as_posix()),
+    }
+
+
+@app.post("/settings/runtime-env/import")
+async def api_import_runtime_env_settings(req: RuntimeEnvImportRequest) -> dict[str, Any]:
+    parsed = _parse_env_content(req.content)
+    current = _read_managed_env_values()
+    imported = {key: parsed[key] for key in MANAGED_ENV_KEYS if key in parsed}
+    values = _derive_env_defaults({**current, **imported})
+    _write_managed_env_values(values)
+    _apply_runtime_env(values)
+    _reload_runtime_config()
+    cfg = _require_config()
+    return {
+        "status": "imported",
+        "imported_keys": sorted(imported.keys()),
+        "ignored_keys": sorted(k for k in parsed.keys() if k not in MANAGED_ENV_KEYS),
+        "providers": list(cfg.providers.keys()),
+        "default_provider": cfg.default_provider,
+        "env_path": str(ENV_SETTINGS_FILE.as_posix()),
+    }
+
 
 @app.get("/config/skills")
 async def api_list_skills() -> dict[str, Any]:
@@ -1368,7 +1938,7 @@ def _resolve_session_config(
             raise HTTPException(status_code=404, detail=str(e))
         system_prompt = persona.get("system_prompt", system_prompt)
         allowed_tools = persona.get("allowed_tools") or allowed_tools
-        if persona.get("provider"):
+        if persona.get("provider") and not req.provider:
             provider = persona["provider"]
 
     return provider, system_prompt, allowed_tools

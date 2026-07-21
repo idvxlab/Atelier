@@ -112,13 +112,21 @@ def _sha256(data: bytes) -> str:
 
 def _api_key() -> str:
     _load_project_env_once()
-    return os.getenv("DESIGN_IMAGE_API_KEY") or os.getenv("OPENAI_HUB_API_KEY") or ""
+    return (
+        os.getenv("ATELIER_IMAGE_API_KEY")
+        or os.getenv("ATELIER_API_KEY")
+        or os.getenv("DESIGN_IMAGE_API_KEY")
+        or os.getenv("OPENAI_HUB_API_KEY")
+        or ""
+    )
 
 
 def _base_url() -> str:
     _load_project_env_once()
     return (
-        os.getenv("DESIGN_IMAGE_BASE_URL")
+        os.getenv("ATELIER_IMAGE_BASE_URL")
+        or os.getenv("ATELIER_BASE_URL")
+        or os.getenv("DESIGN_IMAGE_BASE_URL")
         or os.getenv("OPENAI_HUB_BASE_URL")
         or "https://api.openai.com/v1"
     ).rstrip("/")
@@ -126,22 +134,36 @@ def _base_url() -> str:
 
 def _generation_endpoint() -> str:
     _load_project_env_once()
-    return os.getenv("DESIGN_IMAGE_ENDPOINT") or f"{_base_url()}/images/generations"
+    return (
+        os.getenv("ATELIER_IMAGE_GENERATION_ENDPOINT")
+        or os.getenv("DESIGN_IMAGE_ENDPOINT")
+        or f"{_base_url()}/images/generations"
+    )
 
 
 def _edit_endpoint() -> str:
     _load_project_env_once()
-    return os.getenv("DESIGN_IMAGE_EDIT_ENDPOINT") or f"{_base_url()}/images/edits"
+    return (
+        os.getenv("ATELIER_IMAGE_EDIT_ENDPOINT")
+        or os.getenv("DESIGN_IMAGE_EDIT_ENDPOINT")
+        or f"{_base_url()}/images/edits"
+    )
 
 
 def _model(model: str | None) -> str:
     _load_project_env_once()
-    return model or os.getenv("DESIGN_IMAGE_MODEL") or os.getenv("OPENAI_HUB_IMAGE_MODEL") or "gpt-image-2"
+    return (
+        model
+        or os.getenv("ATELIER_IMAGE_MODEL")
+        or os.getenv("DESIGN_IMAGE_MODEL")
+        or os.getenv("OPENAI_HUB_IMAGE_MODEL")
+        or "gpt-image-2"
+    )
 
 
 def _backend() -> str:
     _load_project_env_once()
-    return (os.getenv("DESIGN_IMAGE_BACKEND") or "codex").lower()
+    return (os.getenv("ATELIER_IMAGE_BACKEND") or os.getenv("DESIGN_IMAGE_BACKEND") or "codex").lower()
 
 
 def _coerce_count(value: int | None) -> int:
@@ -153,7 +175,12 @@ def _coerce_count(value: int | None) -> int:
 
 
 def _coerce_size(value: str | None) -> str:
-    size = (value or os.getenv("DESIGN_IMAGE_DEFAULT_SIZE") or "1024x1024").strip()
+    size = (
+        value
+        or os.getenv("ATELIER_IMAGE_DEFAULT_SIZE")
+        or os.getenv("DESIGN_IMAGE_DEFAULT_SIZE")
+        or "1024x1024"
+    ).strip()
     if size not in VALID_SIZES:
         raise ValueError(f"Invalid size {size!r}. Use one of: {', '.join(sorted(VALID_SIZES))}")
     return size

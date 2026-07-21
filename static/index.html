@@ -811,6 +811,211 @@
         flex-shrink: 0;
       }
 
+      #settings-panel {
+        width: 430px;
+        min-width: 430px;
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      #settings-panel.open {
+        display: flex;
+      }
+
+      #settings-panel-header {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      #settings-body {
+        padding: 14px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .settings-section {
+        border: 1px solid var(--border);
+        background: var(--bg);
+        border-radius: 6px;
+        padding: 12px;
+      }
+
+      .settings-section h3 {
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+
+      .settings-help {
+        font-size: 12px;
+        color: var(--text-muted);
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .settings-field label {
+        display: block;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        font-family: var(--mono);
+      }
+
+      .settings-field input,
+      .settings-field select,
+      .settings-field textarea {
+        width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        color: var(--text);
+        padding: 7px 9px;
+        font-family: var(--mono);
+        font-size: 12px;
+        outline: none;
+      }
+
+      .settings-field textarea {
+        min-height: 130px;
+        resize: vertical;
+        line-height: 1.5;
+      }
+
+      .settings-field input:focus,
+      .settings-field select:focus,
+      .settings-field textarea:focus {
+        border-color: var(--accent);
+      }
+
+      .settings-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      #settings-status {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .model-profile-item {
+        border: 1px solid transparent;
+        background: transparent;
+        border-radius: 6px;
+        padding: 10px 11px;
+        cursor: pointer;
+      }
+
+      .model-profile-item:hover {
+        background: var(--surface);
+        border-color: var(--border);
+      }
+
+      .model-profile-item.active {
+        border-color: var(--accent);
+        background: rgba(88, 166, 255, 0.08);
+      }
+
+      #model-profile-list {
+        border: 1px solid var(--border);
+        background: rgba(13, 17, 23, 0.35);
+        border-radius: 7px;
+        padding: 5px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .model-profile-head {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        justify-content: space-between;
+      }
+
+      .model-profile-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .model-profile-pill {
+        border: 1px solid rgba(88, 166, 255, 0.35);
+        border-radius: 999px;
+        color: var(--accent);
+        font-size: 10px;
+        padding: 1px 7px;
+        flex-shrink: 0;
+      }
+
+      .model-profile-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-top: 9px;
+      }
+
+      .model-profile-delete {
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        padding: 4px 2px;
+      }
+
+      .model-profile-delete:hover {
+        color: var(--red);
+        background: transparent;
+      }
+
+      .inline-provider-select {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--text-muted);
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 2px 7px;
+        outline: none;
+        max-width: 220px;
+      }
+
+      .inline-provider-select:focus {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+
+      .model-profile-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 4px;
+        font-family: var(--mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       /* ── Message Bubbles ──────────────────────────────────────────────── */
       .msg {
         display: flex;
@@ -2003,17 +2208,10 @@
           <div id="sidebar-bottom">
             <button
               class="btn btn-sm"
-              style="width: 100%; margin-bottom: 6px"
-              onclick="openMemoryPanel()"
-            >
-              &#35760;&#24518;
-            </button>
-            <button
-              class="btn btn-sm"
               style="width: 100%"
-              onclick="toggleConfig()"
+              onclick="toggleSettings()"
             >
-              ⚙ 配置文件
+              Settings
             </button>
           </div>
         </div>
@@ -2254,10 +2452,152 @@
             </div>
           </div>
         </div>
+
+        <!-- Settings panel -->
+        <div id="settings-panel">
+          <div id="settings-panel-header">
+            <span>Settings</span>
+            <button class="btn-icon btn" onclick="toggleSettings()" title="Close">
+              X
+            </button>
+          </div>
+          <div id="settings-body">
+            <div class="settings-section">
+              <h3>Models & API</h3>
+              <div class="settings-help">
+                Manage saved model provider profiles for new and existing sessions.
+              </div>
+              <div class="settings-actions">
+                <button class="btn btn-primary btn-sm" onclick="openModelSettingsModal()">
+                  Open Models & API
+                </button>
+                <span id="settings-status"></span>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h3>Memory</h3>
+              <div class="settings-help">
+                Manage long-term memory entries.
+              </div>
+              <div class="settings-actions">
+                <button class="btn btn-sm" onclick="openMemoryPanel()">
+                  Open Memory
+                </button>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h3>Config Files</h3>
+              <div class="settings-help">
+                Edit skills, agents, and config.yaml.
+              </div>
+              <div class="settings-actions">
+                <button class="btn btn-sm" onclick="toggleConfig()">
+                  Open Config Files
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <!-- #main -->
     </div>
     <!-- #app -->
+
+    <!-- Models & API Settings Modal -->
+    <div id="model-settings-overlay" class="overlay hidden">
+      <div class="modal" style="width: min(920px, 92vw); height: min(760px, 88vh); overflow: hidden; display:flex; flex-direction:column">
+        <h2>Models & API</h2>
+        <div style="display:grid;grid-template-columns:280px minmax(0,1fr);gap:14px;min-height:0;flex:1;overflow:hidden">
+          <div style="border-right:1px solid var(--border);padding-right:12px;overflow:auto">
+            <div class="settings-help">Saved profiles</div>
+            <div id="model-profile-list"></div>
+            <div class="settings-actions" style="margin-top:12px">
+              <button class="btn btn-primary btn-sm" onclick="startNewModelProfile()">
+                Add custom profile
+              </button>
+            </div>
+          </div>
+          <div style="overflow-y:auto;overflow-x:hidden;padding-right:6px;min-height:0">
+            <div id="model-profile-empty" class="settings-help">
+              Select a saved profile or add a custom provider profile.
+            </div>
+            <div id="model-profile-form" class="hidden">
+              <div class="settings-section" style="margin-bottom:12px">
+                <h3>Import .env</h3>
+                <div class="settings-help">
+                  Upload an .env file to prefill this profile.
+                </div>
+                <div class="settings-field">
+                  <label>.env file</label>
+                  <input id="model-profile-file" type="file" accept=".env,text/plain" onchange="loadModelProfileEnvFile(event)" />
+                </div>
+                <div class="settings-actions" style="margin-top:8px">
+                  <button class="btn btn-sm" onclick="recognizeModelProfileEnvFile()">
+                    Recognize .env
+                  </button>
+                  <span id="model-profile-file-status" style="font-size:12px;color:var(--text-muted)"></span>
+                </div>
+              </div>
+              <div class="settings-grid">
+                <div class="settings-field">
+                  <label>Profile name</label>
+                  <input id="profile-name" type="text" placeholder="OpenAI Hub" />
+                </div>
+                <div class="settings-field">
+                  <label>Provider type</label>
+                  <select id="profile-provider-type">
+                    <option value="openai-compatible">OpenAI compatible</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                  </select>
+                </div>
+                <div class="settings-field">
+                  <label>API key</label>
+                  <input id="profile-api-key" type="password" autocomplete="off" />
+                </div>
+                <div class="settings-field">
+                  <label>Base URL</label>
+                  <input id="profile-base-url" type="text" placeholder="https://api.openai-hub.com/v1" />
+                </div>
+                <div class="settings-field">
+                  <label>Model</label>
+                  <input id="profile-model" type="text" placeholder="gpt-4o" />
+                </div>
+                <div class="settings-field">
+                  <label>Image API key</label>
+                  <input id="profile-image-api-key" type="password" autocomplete="off" />
+                </div>
+                <div class="settings-field">
+                  <label>Image base URL</label>
+                  <input id="profile-image-base-url" type="text" />
+                </div>
+                <div class="settings-field">
+                  <label>Image model</label>
+                  <input id="profile-image-model" type="text" placeholder="gpt-image-2" />
+                </div>
+                <div class="settings-field">
+                  <label>Image generation endpoint</label>
+                  <input id="profile-image-generation-endpoint" type="text" />
+                </div>
+                <div class="settings-field">
+                  <label>Image edit endpoint</label>
+                  <input id="profile-image-edit-endpoint" type="text" />
+                </div>
+                <div class="settings-field">
+                  <label>Default image size</label>
+                  <input id="profile-image-default-size" type="text" placeholder="1024x1024" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <span id="model-profile-status" style="font-size:12px;color:var(--text-muted);margin-right:auto"></span>
+          <button class="btn" onclick="closeModelSettingsModal()">Close</button>
+          <button class="btn hidden" id="model-profile-save-btn" onclick="saveModelProfile(false)">Save</button>
+        </div>
+      </div>
+    </div>
 
     <!-- New Session Modal -->
     <div id="modal-overlay" class="overlay hidden">
@@ -2371,6 +2711,9 @@
       // Poll deduplication: at most one doPoll in-flight + one queued
       let doPollInFlight = false;
       let doPollQueued = false;
+      let modelProfilesState = { profiles: [], active_profile_id: "" };
+      let editingModelProfileId = "";
+      let pendingModelProfileEnvText = "";
 
       // ── Chat Auto-Scroll State ─────────────────────────────────────────────
       // Core state: whether new content should auto-follow to bottom
@@ -2519,6 +2862,7 @@
         try {
           const r = await api("/config/overview");
           overview = r;
+          await loadModelProfiles({ silent: true });
           renderSidebar();
           populateModal();
           populateComposerPersona();
@@ -2715,11 +3059,20 @@
       function populateModal() {
         const provSel = document.getElementById("sel-provider");
         provSel.innerHTML = "";
-        overview.providers.forEach((p) => {
+        const providerOptions = getProviderOptions();
+        if (!providerOptions.length) {
           const opt = document.createElement("option");
-          opt.value = p;
-          opt.textContent = p;
-          if (p === overview.default_provider) opt.selected = true;
+          opt.value = "";
+          opt.textContent = "No provider profiles";
+          opt.disabled = true;
+          opt.selected = true;
+          provSel.appendChild(opt);
+        }
+        providerOptions.forEach((profile) => {
+          const opt = document.createElement("option");
+          opt.value = profile.id;
+          opt.textContent = profile.label;
+          if (profile.id === overview.default_provider) opt.selected = true;
           provSel.appendChild(opt);
         });
 
@@ -2913,6 +3266,12 @@
         const persona = document.getElementById("sel-persona").value;
         const provider = document.getElementById("sel-provider").value;
         const approvalMode = document.getElementById("sel-approval-mode").value;
+        if (!provider) {
+          toast("Please add a provider profile in Settings first.", true);
+          btn.disabled = false;
+          btn.textContent = "创建";
+          return;
+        }
 
         const body = { provider, approval_mode: approvalMode };
         if (persona) body.persona = persona;
@@ -4255,16 +4614,18 @@
         if (meta.title) headerInfo.title = meta.title;
         if (Object.prototype.hasOwnProperty.call(meta, "persona"))
           headerInfo.persona = meta.persona;
+        if (meta.provider) headerInfo.provider = meta.provider;
         syncComposerPersonaControl(headerInfo.persona || "");
         titleEl.textContent = getSessionLabel(headerInfo);
         const parts = [];
         if (meta.skill) parts.push(`Skill: <strong>${meta.skill}</strong>`);
         if (meta.persona)
           parts.push(`\u667a\u80fd\u4f53: <strong>${meta.persona}</strong>`);
-        if (meta.provider) parts.push(meta.provider);
+        if (headerInfo.provider) parts.push(renderProviderSelector(headerInfo.provider, snap.is_running));
         if (parts.length) {
           metaEl.innerHTML = parts.join(" &nbsp;·&nbsp; ");
           metaEl.classList.remove("hidden");
+          bindSessionProviderSelector();
         }
 
         // Running indicator (hide during confirmation — user sees the approval panel instead)
@@ -5277,14 +5638,448 @@
       }
 
       // ── Config Panel ──────────────────────────────────────────────────────
+      function toggleSettings() {
+        const panel = document.getElementById("settings-panel");
+        const configPanel = document.getElementById("config-panel");
+        panel.classList.toggle("open");
+        if (panel.classList.contains("open")) {
+          configPanel?.classList.remove("open");
+          setSettingsStatus("");
+        }
+      }
+
+      function getProviderOptions() {
+        const profiles = modelProfilesState.profiles || [];
+        if (profiles.length) {
+          return profiles.map((p) => ({
+            id: p.id,
+            label: `${p.name || p.id} · ${p.model || ""}`,
+          }));
+        }
+        return (overview.providers || []).map((id) => ({ id, label: id }));
+      }
+
+      function renderProviderSelector(currentProvider, isRunning = false) {
+        const options = getProviderOptions();
+        if (!options.length) return escHtml(currentProvider || "");
+        const optionHtml = options
+          .map((p) => {
+            const selected = p.id === currentProvider ? " selected" : "";
+            return `<option value="${escHtml(p.id)}"${selected}>${escHtml(p.label)}</option>`;
+          })
+          .join("");
+        return (
+          `<span>Provider: </span>` +
+          `<select id="session-provider-select" class="inline-provider-select" ${isRunning ? "disabled" : ""}>` +
+          optionHtml +
+          `</select>`
+        );
+      }
+
+      function bindSessionProviderSelector() {
+        const sel = document.getElementById("session-provider-select");
+        if (!sel) return;
+        sel.onchange = () => switchSessionProvider(sel.value);
+      }
+
+      async function switchSessionProvider(provider) {
+        if (!currentSessionId || !provider) return;
+        const current = allSessions.find((s) => s.session_id === currentSessionId);
+        if (current?.provider === provider) return;
+        const sel = document.getElementById("session-provider-select");
+        if (sel) sel.disabled = true;
+        try {
+          const r = await api("/sessions/" + currentSessionId, "PATCH", { provider });
+          toast("Provider switched: " + (r.provider || provider));
+          await refreshSessions();
+          triggerPoll();
+        } catch (e) {
+          toast("Provider switch failed: " + e.message, true);
+          if (sel && current?.provider) sel.value = current.provider;
+        } finally {
+          if (sel) sel.disabled = false;
+        }
+      }
+
+      function setSettingsStatus(text, isError = false) {
+        const el = document.getElementById("settings-status");
+        if (!el) return;
+        el.textContent = text || "";
+        el.style.color = isError ? "var(--red)" : "var(--text-muted)";
+      }
+
+      function setModelProfileStatus(text, isError = false) {
+        const el = document.getElementById("model-profile-status");
+        if (!el) return;
+        el.textContent = text || "";
+        el.style.color = isError ? "var(--red)" : "var(--text-muted)";
+      }
+
+      async function openModelSettingsModal() {
+        document.getElementById("model-settings-overlay")?.classList.remove("hidden");
+        hideModelProfileForm();
+        await loadModelProfiles();
+      }
+
+      function closeModelSettingsModal() {
+        document.getElementById("model-settings-overlay")?.classList.add("hidden");
+      }
+
+      function hideModelProfileForm() {
+        document.getElementById("model-profile-empty")?.classList.remove("hidden");
+        document.getElementById("model-profile-form")?.classList.add("hidden");
+        document.getElementById("model-profile-save-btn")?.classList.add("hidden");
+        setModelProfileStatus("");
+      }
+
+      async function loadModelProfiles(options = {}) {
+        const silent = !!options.silent;
+        if (!silent) setModelProfileStatus("Loading...");
+        try {
+          const r = await api("/settings/model-profiles");
+          modelProfilesState = r || { profiles: [], active_profile_id: "" };
+          renderModelProfileList();
+          populateModal();
+          if (!silent) setModelProfileStatus("");
+        } catch (e) {
+          console.warn("[model-profile] failed to load profiles", e);
+          if (!silent) {
+            setModelProfileStatus(
+              "Backend settings API is unavailable. Restart the backend from D:\\GitHub\\Atelier, then reload this panel.",
+              true,
+            );
+            toast("Model settings load failed: " + e.message, true);
+          }
+        }
+      }
+
+      function renderModelProfileList() {
+        const list = document.getElementById("model-profile-list");
+        if (!list) return;
+        list.innerHTML = "";
+        const profiles = modelProfilesState.profiles || [];
+        if (!profiles.length) {
+          const empty = div("settings-help", "No saved profiles yet.");
+          list.appendChild(empty);
+          return;
+        }
+        profiles.forEach((profile) => {
+          const item = document.createElement("div");
+          item.className = "model-profile-item";
+          item.onclick = () => editModelProfile(profile.id);
+          item.innerHTML =
+            `<div class="model-profile-head">` +
+            `<div class="model-profile-title">${escHtml(profile.name || profile.id)}</div>` +
+            `</div>` +
+            `<div class="model-profile-meta">${escHtml(profile.provider_type || "")} · ${escHtml(profile.model || "")}</div>` +
+            `<div class="model-profile-meta">${escHtml(profile.base_url || "")}</div>` +
+            `<div class="model-profile-actions">` +
+            `<span class="model-profile-meta" style="margin-top:0">Click to edit</span>` +
+            `<button class="btn btn-sm model-profile-delete" onclick="event.stopPropagation(); deleteModelProfile('${escHtml(profile.id)}')">Delete</button>` +
+            `</div>`;
+          list.appendChild(item);
+        });
+      }
+
+      function startNewModelProfile() {
+        editingModelProfileId = "";
+        showModelProfileForm({
+          id: "",
+          name: "",
+          provider_type: "openai-compatible",
+          api_key: "",
+          base_url: "",
+          model: "gpt-4o",
+          image_api_key: "",
+          image_base_url: "",
+          image_model: "gpt-image-2",
+          image_generation_endpoint: "",
+          image_edit_endpoint: "",
+          image_default_size: "1024x1024",
+        });
+      }
+
+      function editModelProfile(profileId) {
+        const profile = (modelProfilesState.profiles || []).find((p) => p.id === profileId);
+        if (!profile) return;
+        editingModelProfileId = profile.id;
+        showModelProfileForm(profile);
+      }
+
+      function showModelProfileForm(profile) {
+        document.getElementById("model-profile-empty")?.classList.add("hidden");
+        document.getElementById("model-profile-form")?.classList.remove("hidden");
+        document.getElementById("model-profile-save-btn")?.classList.remove("hidden");
+        setProfileValue("profile-name", profile.name || "");
+        setProfileValue("profile-provider-type", profile.provider_type || "openai-compatible");
+        setProfileValue("profile-api-key", profile.api_key || "");
+        setProfileValue("profile-base-url", profile.base_url || "");
+        setProfileValue("profile-model", profile.model || "gpt-4o");
+        setProfileValue("profile-image-api-key", profile.image_api_key || profile.api_key || "");
+        setProfileValue("profile-image-base-url", profile.image_base_url || profile.base_url || "");
+        setProfileValue("profile-image-model", profile.image_model || "gpt-image-2");
+        setProfileValue("profile-image-generation-endpoint", profile.image_generation_endpoint || "");
+        setProfileValue("profile-image-edit-endpoint", profile.image_edit_endpoint || "");
+        setProfileValue("profile-image-default-size", profile.image_default_size || "1024x1024");
+        const fileInput = document.getElementById("model-profile-file");
+        if (fileInput) fileInput.value = "";
+        bindProfileEndpointAutofill();
+      }
+
+      function setProfileValue(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.value = value || "";
+      }
+
+      function getProfileValue(id) {
+        return (document.getElementById(id)?.value || "").trim();
+      }
+
+      function bindProfileEndpointAutofill() {
+        const imageBase = document.getElementById("profile-image-base-url");
+        const base = document.getElementById("profile-base-url");
+        const gen = document.getElementById("profile-image-generation-endpoint");
+        const edit = document.getElementById("profile-image-edit-endpoint");
+        const imageKey = document.getElementById("profile-image-api-key");
+        const apiKey = document.getElementById("profile-api-key");
+        const fill = () => {
+          if (imageBase && !imageBase.value && base?.value) imageBase.value = base.value;
+          if (imageKey && !imageKey.value && apiKey?.value) imageKey.value = apiKey.value;
+          const root = (imageBase?.value || "").replace(/\/+$/, "");
+          if (!root) return;
+          if (gen && (!gen.value || gen.dataset.auto === "true")) {
+            gen.value = `${root}/images/generations`;
+            gen.dataset.auto = "true";
+          }
+          if (edit && (!edit.value || edit.dataset.auto === "true")) {
+            edit.value = `${root}/images/edits`;
+            edit.dataset.auto = "true";
+          }
+        };
+        [gen, edit].forEach((el) => {
+          if (el) el.oninput = () => (el.dataset.auto = "false");
+        });
+        if (base) base.oninput = fill;
+        if (imageBase) imageBase.oninput = fill;
+        if (apiKey) apiKey.oninput = fill;
+        fill();
+      }
+
+      function collectModelProfile() {
+        return {
+          id: editingModelProfileId,
+          name: getProfileValue("profile-name"),
+          provider_type: getProfileValue("profile-provider-type") || "openai-compatible",
+          api_key: getProfileValue("profile-api-key"),
+          base_url: getProfileValue("profile-base-url"),
+          model: getProfileValue("profile-model"),
+          image_api_key: getProfileValue("profile-image-api-key"),
+          image_base_url: getProfileValue("profile-image-base-url"),
+          image_model: getProfileValue("profile-image-model"),
+          image_generation_endpoint: getProfileValue("profile-image-generation-endpoint"),
+          image_edit_endpoint: getProfileValue("profile-image-edit-endpoint"),
+          image_default_size: getProfileValue("profile-image-default-size"),
+        };
+      }
+
+      async function saveModelProfile(activate) {
+        const profile = collectModelProfile();
+        if (!profile.name || !profile.api_key || !profile.model) {
+          setModelProfileStatus("Profile name, API key, and model are required.", true);
+          return;
+        }
+        setModelProfileStatus("Saving...");
+        try {
+          const r = await api("/settings/model-profiles", "POST", { profile, activate });
+          editingModelProfileId = r.profile?.id || editingModelProfileId;
+          await loadModelProfiles();
+          await loadOverview();
+          setModelProfileStatus("Saved.");
+          toast("Profile saved");
+        } catch (e) {
+          setModelProfileStatus(e.message, true);
+          toast("Profile save failed: " + e.message, true);
+        }
+      }
+
+      async function activateModelProfile(profileId) {
+        try {
+          const r = await api("/settings/model-profiles/activate", "POST", { profile_id: profileId });
+          modelProfilesState.active_profile_id = r.active_profile_id || "";
+          await loadModelProfiles();
+          await loadOverview();
+          toast("Profile activated");
+        } catch (e) {
+          toast("Profile activation failed: " + e.message, true);
+        }
+      }
+
+      async function deleteModelProfile(profileId) {
+        if (!(await showConfirm("Delete profile", `Delete profile ${profileId}?`))) return;
+        try {
+          await api(`/settings/model-profiles/${encodeURIComponent(profileId)}`, "DELETE");
+          if (editingModelProfileId === profileId) editingModelProfileId = "";
+          await loadModelProfiles();
+          hideModelProfileForm();
+          await loadOverview();
+          toast("Profile deleted");
+        } catch (e) {
+          toast("Profile delete failed: " + e.message, true);
+        }
+      }
+
+      function parseModelProfileEnv(content) {
+        const parsed = {};
+        String(content || "")
+          .split(/\r?\n/)
+          .forEach((line) => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) return;
+            const idx = trimmed.indexOf("=");
+            const key = trimmed.slice(0, idx).trim();
+            let value = trimmed.slice(idx + 1).trim();
+            if (
+              (value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith("'") && value.endsWith("'"))
+            ) {
+              value = value.slice(1, -1);
+            }
+            if (key) parsed[key] = value;
+          });
+        return parsed;
+      }
+
+      function modelProfileFromEnvValues(values) {
+        const name =
+          values.ATELIER_PROVIDER_NAME ||
+          values.HARNESS_DEFAULT_PROVIDER ||
+          values.ATELIER_ACTIVE_PROFILE ||
+          "Imported Provider";
+        const baseUrl =
+          values.ATELIER_BASE_URL ||
+          values.OPENAI_HUB_BASE_URL ||
+          values.OPENAI_BASE_URL ||
+          values.THREE_SIX_ONE_BASE_URL ||
+          "";
+        const apiKey =
+          values.ATELIER_API_KEY ||
+          values.OPENAI_HUB_API_KEY ||
+          values.OPENAI_API_KEY ||
+          values.THREE_SIX_ONE_API_KEY ||
+          values.API_CZ_KEY ||
+          values.ANTHROPIC_API_KEY ||
+          "";
+        const imageBaseUrl =
+          values.ATELIER_IMAGE_BASE_URL ||
+          values.DESIGN_IMAGE_BASE_URL ||
+          values.ATELIER_BASE_URL ||
+          baseUrl;
+        const imageApiKey =
+          values.ATELIER_IMAGE_API_KEY ||
+          values.DESIGN_IMAGE_API_KEY ||
+          values.ATELIER_API_KEY ||
+          values.API_CZ_KEY ||
+          apiKey;
+        return {
+          id: values.ATELIER_ACTIVE_PROFILE || name,
+          name,
+          provider_type: values.ATELIER_PROVIDER_TYPE || "openai-compatible",
+          api_key: apiKey,
+          base_url: baseUrl,
+          model:
+            values.ATELIER_MODEL ||
+            values.OPENAI_HUB_MODEL ||
+            values.OPENAI_MODEL ||
+            values.THREE_SIX_ONE_MODEL ||
+            values.ANTHROPIC_MODEL ||
+            "gpt-4o",
+          image_api_key: imageApiKey,
+          image_base_url: imageBaseUrl,
+          image_model:
+            values.ATELIER_IMAGE_MODEL ||
+            values.DESIGN_IMAGE_MODEL ||
+            "gpt-image-2",
+          image_generation_endpoint:
+            values.ATELIER_IMAGE_GENERATION_ENDPOINT ||
+            values.DESIGN_IMAGE_ENDPOINT ||
+            "",
+          image_edit_endpoint:
+            values.ATELIER_IMAGE_EDIT_ENDPOINT ||
+            values.DESIGN_IMAGE_EDIT_ENDPOINT ||
+            "",
+          image_default_size:
+            values.ATELIER_IMAGE_DEFAULT_SIZE ||
+            values.DESIGN_IMAGE_DEFAULT_SIZE ||
+            "1024x1024",
+        };
+      }
+
+      async function loadModelProfileEnvFile(event) {
+        const file = event?.target?.files?.[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          pendingModelProfileEnvText = text;
+          const status = document.getElementById("model-profile-file-status");
+          if (status) status.textContent = `${file.name} loaded`;
+          console.debug("[model-profile] env file loaded", {
+            name: file.name,
+            size: file.size,
+            chars: text.length,
+          });
+          setModelProfileStatus(`Loaded ${file.name}. Click Recognize .env to fill the form.`);
+        } catch (e) {
+          console.warn("[model-profile] failed to read env file", e);
+          setModelProfileStatus("Failed to read file: " + e.message, true);
+        }
+      }
+
+      async function importModelProfileFromEnvText(content) {
+        if (!content.trim()) return;
+        setModelProfileStatus("Recognizing .env...");
+        try {
+          const parsed = parseModelProfileEnv(content);
+          const profile = modelProfileFromEnvValues(parsed);
+          editingModelProfileId = profile.id || "";
+          showModelProfileForm(profile);
+          console.debug("[model-profile] env recognized", {
+            keys: Object.keys(parsed),
+            profile: {
+              ...profile,
+              api_key: profile.api_key ? "[redacted]" : "",
+              image_api_key: profile.image_api_key ? "[redacted]" : "",
+            },
+          });
+          setModelProfileStatus("Profile fields filled from .env.");
+          toast("Env loaded into profile form");
+        } catch (e) {
+          console.warn("[model-profile] env recognition failed", e);
+          setModelProfileStatus(e.message, true);
+          toast("Env import failed: " + e.message, true);
+        }
+      }
+
+      function recognizeModelProfileEnvFile() {
+        const status = document.getElementById("model-profile-file-status");
+        if (!pendingModelProfileEnvText?.trim()) {
+          if (status) status.textContent = "Choose an .env file first.";
+          setModelProfileStatus("Choose an .env file first.", true);
+          console.warn("[model-profile] recognize requested without env text");
+          return;
+        }
+        importModelProfileFromEnvText(pendingModelProfileEnvText);
+      }
+
       function toggleConfig() {
         const panel = document.getElementById("config-panel");
+        document.getElementById("settings-panel")?.classList.remove("open");
         panel.classList.toggle("open");
         if (panel.classList.contains("open")) buildConfigTree();
       }
 
       async function openMemoryPanel() {
         const panel = document.getElementById("config-panel");
+        document.getElementById("settings-panel")?.classList.remove("open");
         if (!panel.classList.contains("open")) {
           panel.classList.add("open");
         }
