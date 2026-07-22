@@ -57,7 +57,15 @@ RESEARCH_ASSET_FETCH_SCHEMA = ToolSchema(
         ToolParam(name="runDir", type="string", description="Design run directory."),
         ToolParam(name="id", type="string", description="Stable asset id."),
         ToolParam(name="url", type="string", description="Image URL to download."),
-        ToolParam(name="kind", type="string", description="logo | campus | application | peer | other."),
+        ToolParam(
+            name="kind",
+            type="string",
+            description=(
+                "Reference kind. Common values: logo, campus, application, peer, competitor, "
+                "usage_context, cmf, detail, lifestyle, site, precedent, material, lighting, "
+                "campaign, typography, format, other."
+            ),
+        ),
         ToolParam(name="description", type="string", description="Optional human description.", required=False),
         ToolParam(name="sourcePageUrl", type="string", description="Page where asset was discovered.", required=False),
         ToolParam(name="doNotReplace", type="boolean", description="Protect from regeneration.", required=False),
@@ -81,7 +89,25 @@ RESEARCH_ASSET_VALIDATE_SCHEMA = ToolSchema(
 
 
 SOURCE_KINDS = {"homepage", "news", "gallery", "wiki", "blog", "social", "spec", "other"}
-ASSET_KINDS = {"logo", "campus", "application", "peer", "other"}
+ASSET_KINDS = {
+    "logo",
+    "campus",
+    "application",
+    "peer",
+    "competitor",
+    "usage_context",
+    "cmf",
+    "detail",
+    "lifestyle",
+    "site",
+    "precedent",
+    "material",
+    "lighting",
+    "campaign",
+    "typography",
+    "format",
+    "other",
+}
 IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "gif"}
 MAX_CACHE_BYTES = 1_000_000
 MAX_ASSET_BYTES = 15_000_000

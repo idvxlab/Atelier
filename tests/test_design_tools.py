@@ -13,7 +13,12 @@ from harness.storage.backends.memory import (
     InMemoryPlanStore,
     MemorySessionStore,
 )
-from harness.tools.builtin.design_image import image_edit_tool, image_generate_tool
+from harness.tools.builtin.design_image import (
+    IMAGE_EDIT_SCHEMA,
+    IMAGE_GENERATE_SCHEMA,
+    image_edit_tool,
+    image_generate_tool,
+)
 from harness.tools.builtin.design_run import (
     design_bus_post_tool,
     design_bus_read_tool,
@@ -53,6 +58,16 @@ def test_design_designer_engine_has_image_and_lint_tools():
     assert "artifact_lint" in engine._config.system_prompt
 
 
+def test_image_tool_schemas_hide_batch_and_accept_domain_metadata():
+    generate_params = {param.name for param in IMAGE_GENERATE_SCHEMA.params}
+    edit_params = {param.name for param in IMAGE_EDIT_SCHEMA.params}
+
+    assert "batchDir" not in generate_params
+    assert "batchDir" not in edit_params
+    assert {"domainType", "deliverableCategory"}.issubset(generate_params)
+    assert {"domainType", "deliverableCategory"}.issubset(edit_params)
+
+
 @pytest.mark.asyncio
 async def test_image_generate_mock_writes_file(monkeypatch, tmp_path):
     monkeypatch.setenv("DESIGN_IMAGE_BACKEND", "mock")
@@ -62,13 +77,17 @@ async def test_image_generate_mock_writes_file(monkeypatch, tmp_path):
         runId="r1",
         runDir=str(tmp_path),
         id="hero",
+        domainType="product_design",
+        deliverableCategory="hero render",
     )
 
     payload = json.loads(raw)
     assert payload["ok"] is True
     out = Path(payload["items"][0]["file"])
     assert out.exists()
-    assert out.with_suffix(out.suffix + ".json").exists()
+    sidecar = json.loads(out.with_suffix(out.suffix + ".json").read_text(encoding="utf-8"))
+    assert sidecar["domain_type"] == "product_design"
+    assert sidecar["deliverable_category"] == "hero render"
 
 
 @pytest.mark.asyncio
@@ -83,13 +102,17 @@ async def test_image_edit_mock_writes_file(monkeypatch, tmp_path):
         runId="r1",
         runDir=str(tmp_path),
         id="edited",
+        domainType="architecture_space_design",
+        deliverableCategory="interior perspective",
     )
 
     payload = json.loads(raw)
     assert payload["ok"] is True
     out = Path(payload["items"][0]["file"])
     assert out.exists()
-    assert out.with_suffix(out.suffix + ".json").exists()
+    sidecar = json.loads(out.with_suffix(out.suffix + ".json").read_text(encoding="utf-8"))
+    assert sidecar["domain_type"] == "architecture_space_design"
+    assert sidecar["deliverable_category"] == "interior perspective"
 
 
 @pytest.mark.asyncio
@@ -222,9 +245,9 @@ async def test_research_asset_fetch_and_validate(monkeypatch, tmp_path):
         await research_asset_fetch_tool(
             runId="r1",
             runDir=str(run_dir),
-            id="official-logo",
+            id="cmf-reference",
             url="https://atelier.test/logo.png",
-            kind="logo",
+            kind="cmf",
         )
     )
     assert fetched["ok"] is True
@@ -234,11 +257,12 @@ async def test_research_asset_fetch_and_validate(monkeypatch, tmp_path):
             runId="r1",
             runDir=str(run_dir),
             minUsableAssets=1,
-            requireLogo=True,
+            requireLogo=False,
         )
     )
     assert validation["ok"] is True
     assert validation["ready"] is True
+    assert validation["summary"]["by_kind"]["cmf"] == 1
 
 
 @pytest.mark.asyncio
@@ -249,7 +273,12 @@ async def test_artifact_lint_and_export_package(tmp_path):
     artifacts.mkdir(parents=True)
     research_assets.mkdir(parents=True)
     (run_dir / "brief.json").write_text(
-        json.dumps({"brief": "Design a poster."}),
+        json.dumps(
+            {
+                "brief": "Design a poster.",
+                "resolvedScope": {"domain_type": "poster_advertising_design"},
+            }
+        ),
         encoding="utf-8",
     )
     (run_dir / "bus.jsonl").write_text("", encoding="utf-8")
@@ -269,6 +298,7 @@ async def test_artifact_lint_and_export_package(tmp_path):
         )
     )
     assert lint["ok"] is True
+    assert lint["domain_type"] == "poster_advertising_design"
 
     exported = json.loads(
         await export_package_tool(
@@ -278,7 +308,10 @@ async def test_artifact_lint_and_export_package(tmp_path):
         )
     )
     assert exported["ok"] is True
+    assert exported["domain_type"] == "poster_advertising_design"
     assert (tmp_path / "final/package-manifest.json").exists()
+    package_manifest = json.loads((tmp_path / "final/package-manifest.json").read_text(encoding="utf-8"))
+    assert package_manifest["domain_type"] == "poster_advertising_design"
     index = tmp_path / "final/00-index.html"
     assert index.exists()
     html = index.read_text(encoding="utf-8")

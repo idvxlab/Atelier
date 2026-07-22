@@ -27,8 +27,9 @@ IMAGE_GENERATE_SCHEMA = ToolSchema(
         ToolParam(name="path", type="string", description="Optional explicit output file path.", required=False),
         ToolParam(name="runId", type="string", description="Optional design run id.", required=False),
         ToolParam(name="runDir", type="string", description="Optional design run directory.", required=False),
-        ToolParam(name="batchDir", type="string", description="Optional design batch directory.", required=False),
         ToolParam(name="purpose", type="string", description="Human-readable purpose for the image.", required=False),
+        ToolParam(name="domainType", type="string", description="Optional design domain type for sidecar metadata.", required=False),
+        ToolParam(name="deliverableCategory", type="string", description="Optional deliverable category for sidecar metadata.", required=False),
         ToolParam(name="negativePrompt", type="string", description="Optional negative prompt.", required=False),
         ToolParam(name="size", type="string", description="Image size, default 1024x1024.", required=False),
         ToolParam(name="count", type="integer", description="Number of images, default 1.", required=False),
@@ -57,8 +58,9 @@ IMAGE_EDIT_SCHEMA = ToolSchema(
         ToolParam(name="path", type="string", description="Optional explicit output file path.", required=False),
         ToolParam(name="runId", type="string", description="Optional design run id.", required=False),
         ToolParam(name="runDir", type="string", description="Optional design run directory.", required=False),
-        ToolParam(name="batchDir", type="string", description="Optional design batch directory.", required=False),
         ToolParam(name="purpose", type="string", description="Human-readable purpose for the image.", required=False),
+        ToolParam(name="domainType", type="string", description="Optional design domain type for sidecar metadata.", required=False),
+        ToolParam(name="deliverableCategory", type="string", description="Optional deliverable category for sidecar metadata.", required=False),
         ToolParam(name="maskPath", type="string", description="Optional mask image path.", required=False),
         ToolParam(name="size", type="string", description="Image size, default 1024x1024.", required=False),
         ToolParam(name="count", type="integer", description="Number of edited images, default 1.", required=False),
@@ -186,9 +188,7 @@ def _coerce_size(value: str | None) -> str:
     return size
 
 
-def _output_dir(runDir: str | None, batchDir: str | None, subdir: str) -> Path:
-    if batchDir:
-        return Path(batchDir) / "artifacts" / subdir
+def _output_dir(runDir: str | None, subdir: str) -> Path:
     if runDir:
         return Path(runDir) / "artifacts" / subdir
     return Path("outputs") / "images" / subdir
@@ -198,7 +198,6 @@ def _output_paths(
     *,
     explicit_path: str | None,
     runDir: str | None,
-    batchDir: str | None,
     subdir: str,
     image_id: str | None,
     count: int,
@@ -210,7 +209,7 @@ def _output_paths(
         stem = base.stem
         suffix = base.suffix or ".png"
         return [base.with_name(f"{stem}-{idx + 1}{suffix}") for idx in range(count)]
-    out_dir = _output_dir(runDir, batchDir, subdir)
+    out_dir = _output_dir(runDir, subdir)
     stem = _slug(image_id or f"image-{int(time.time())}")
     if count == 1:
         return [out_dir / f"{stem}.png"]
@@ -271,8 +270,9 @@ async def image_generate_tool(
     path: str | None = None,
     runId: str | None = None,
     runDir: str | None = None,
-    batchDir: str | None = None,
     purpose: str | None = None,
+    domainType: str | None = None,
+    deliverableCategory: str | None = None,
     negativePrompt: str | None = None,
     size: str | None = None,
     count: int | None = None,
@@ -291,7 +291,6 @@ async def image_generate_tool(
     out_paths = _output_paths(
         explicit_path=path,
         runDir=runDir,
-        batchDir=batchDir,
         subdir="generated-images",
         image_id=id,
         count=image_count,
@@ -302,13 +301,21 @@ async def image_generate_tool(
         written = await _write_items(
             items=items,
             paths=out_paths,
-            metadata={"tool": "image_generate", "backend": "mock", "runId": runId, "prompt": prompt},
+            metadata={
+                "tool": "image_generate",
+                "backend": "mock",
+                "runId": runId,
+                "domain_type": domainType,
+                "deliverable_category": deliverableCategory,
+                "purpose": purpose,
+                "prompt": prompt,
+            },
         )
         return _json({"ok": True, "backend": "mock", "items": written})
 
     key = _api_key()
     if not key:
-        return _json({"ok": False, "error": "Missing DESIGN_IMAGE_API_KEY or OPENAI_HUB_API_KEY"})
+        return _json({"ok": False, "error": "Missing ATELIER_IMAGE_API_KEY, ATELIER_API_KEY, DESIGN_IMAGE_API_KEY, or OPENAI_HUB_API_KEY"})
 
     payload: dict[str, Any] = {
         "model": _model(model),
@@ -355,6 +362,8 @@ async def image_generate_tool(
             "model": payload["model"],
             "runId": runId,
             "id": id,
+            "domain_type": domainType,
+            "deliverable_category": deliverableCategory,
             "purpose": purpose,
             "prompt": prompt,
             "negative_prompt": negativePrompt,
@@ -371,8 +380,9 @@ async def image_edit_tool(
     path: str | None = None,
     runId: str | None = None,
     runDir: str | None = None,
-    batchDir: str | None = None,
     purpose: str | None = None,
+    domainType: str | None = None,
+    deliverableCategory: str | None = None,
     maskPath: str | None = None,
     size: str | None = None,
     count: int | None = None,
@@ -397,7 +407,6 @@ async def image_edit_tool(
     out_paths = _output_paths(
         explicit_path=path,
         runDir=runDir,
-        batchDir=batchDir,
         subdir="edits",
         image_id=id,
         count=image_count,
@@ -408,13 +417,21 @@ async def image_edit_tool(
         written = await _write_items(
             items=items,
             paths=out_paths,
-            metadata={"tool": "image_edit", "backend": "mock", "runId": runId, "prompt": prompt},
+            metadata={
+                "tool": "image_edit",
+                "backend": "mock",
+                "runId": runId,
+                "domain_type": domainType,
+                "deliverable_category": deliverableCategory,
+                "purpose": purpose,
+                "prompt": prompt,
+            },
         )
         return _json({"ok": True, "backend": "mock", "items": written})
 
     key = _api_key()
     if not key:
-        return _json({"ok": False, "error": "Missing DESIGN_IMAGE_API_KEY or OPENAI_HUB_API_KEY"})
+        return _json({"ok": False, "error": "Missing ATELIER_IMAGE_API_KEY, ATELIER_API_KEY, DESIGN_IMAGE_API_KEY, or OPENAI_HUB_API_KEY"})
 
     form = {
         "model": _model(model),
@@ -459,6 +476,8 @@ async def image_edit_tool(
             "model": form["model"],
             "runId": runId,
             "id": id,
+            "domain_type": domainType,
+            "deliverable_category": deliverableCategory,
             "purpose": purpose,
             "prompt": prompt,
             "size": image_size,

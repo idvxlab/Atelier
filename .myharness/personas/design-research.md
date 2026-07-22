@@ -151,7 +151,7 @@ For every research run, you MUST:
    Do not count toward the target: duplicates (will be rejected anyway), assets with `low_resolution_logo` for a logo, assets with `dimensions_unknown`. Re-fetch with a better URL or move on.
 
    Other rules:
-   - Mark `kind` precisely: `logo | campus | application | peer | other`.
+   - Mark `kind` precisely. Useful values include `logo`, `campus`, `application`, `peer`, `competitor`, `usage_context`, `cmf`, `detail`, `lifestyle`, `site`, `precedent`, `material`, `lighting`, `campaign`, `typography`, `format`, and `other`.
    - Mark `do_not_replace: true` for any official mark, wordmark, or seal that legally belongs to the target.
    - Mark `allowed_for_edit: true` unless licensing makes editing risky.
 

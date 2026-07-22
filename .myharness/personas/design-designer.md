@@ -74,13 +74,14 @@ Read:
 3. Use `image_generate` for new visual assets.
 4. Use `image_edit` only with valid local reference images. Prefer standard PNG/JPEG/WebP references with sufficient size.
    Research may collect a larger reference library than you need. Choose the best few references for each deliverable, but leave unused assets untouched for audit and future iterations.
-5. Write all generated PNGs under `<runDir>/artifacts/generated-images/` or `<runDir>/artifacts/edits/`.
-6. Create `<runDir>/artifacts/00-gallery.html` and reference every final PNG with local relative paths.
+5. For each `image_generate` or `image_edit` call, pass `domainType` from `brief.json::resolvedScope.domain_type` and pass `deliverableCategory` from the manifest item or `domainContext.deliverable_categories`.
+6. Write all generated PNGs under `<runDir>/artifacts/generated-images/` or `<runDir>/artifacts/edits/`.
+7. Create `<runDir>/artifacts/00-gallery.html` and reference every final PNG with local relative paths.
    Shape the gallery as a polished presentation page with a clear hierarchy: final generated/edited deliverables as the main section, and research references as a secondary provenance/reference section when useful.
-7. Write `<runDir>/artifacts/artifact-manifest.json`.
-8. Run `artifact_lint` with `requireGallery: true`.
-9. If lint fails, fix the files once if possible.
-10. Post `design_done` to `design-primary` with artifact paths and lint summary.
+8. Write `<runDir>/artifacts/artifact-manifest.json`.
+9. Run `artifact_lint` with `requireGallery: true`.
+10. If lint fails, fix the files once if possible.
+11. Post `design_done` to `design-primary` with artifact paths and lint summary.
 
 ## Image Rules
 

@@ -38,7 +38,6 @@ EXPORT_PACKAGE_SCHEMA = ToolSchema(
         ToolParam(name="runDir", type="string", description="Design run directory."),
         ToolParam(name="finalDir", type="string", description="Optional final output directory.", required=False),
         ToolParam(name="brief", type="string", description="Optional brief for index page.", required=False),
-        ToolParam(name="recommendedBatch", type="string", description="Optional recommended batch id.", required=False),
     ],
 )
 
@@ -67,6 +66,7 @@ async def artifact_lint_tool(
     report: dict[str, Any] = {
         "ok": True,
         "runId": runId,
+        "domain_type": _domain_type(run_dir),
         "checked": [],
         "errors": [],
         "warnings": [],
@@ -133,7 +133,6 @@ async def export_package_tool(
     runDir: str,
     finalDir: str | None = None,
     brief: str | None = None,
-    recommendedBatch: str | None = None,
 ) -> str:
     run_dir = Path(runDir)
     if not run_dir.exists():
@@ -180,8 +179,8 @@ async def export_package_tool(
     manifest = {
         "ok": True,
         "runId": runId,
+        "domain_type": _domain_type(run_dir),
         "generated_at": _now_iso(),
-        "recommended_batch": recommendedBatch,
         "item_count": len(manifest_items),
         "items": manifest_items,
     }
@@ -196,6 +195,7 @@ async def export_package_tool(
         {
             "ok": True,
             "runId": runId,
+            "domain_type": _domain_type(run_dir),
             "finalDir": str(final_dir),
             "manifest": str(final_dir / "package-manifest.json"),
             "index": str(final_dir / "00-index.html"),
@@ -372,6 +372,18 @@ def _read_json(path: Path, default: Any) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return default
+
+
+def _domain_type(run_dir: Path) -> str:
+    brief = _read_json(run_dir / "brief.json", {})
+    if isinstance(brief, dict):
+        scope = brief.get("resolvedScope")
+        if isinstance(scope, dict) and scope.get("domain_type"):
+            return str(scope["domain_type"])
+        context = brief.get("domainContext")
+        if isinstance(context, dict) and context.get("domain_type"):
+            return str(context["domain_type"])
+    return ""
 
 
 def _esc(value: Any) -> str:
