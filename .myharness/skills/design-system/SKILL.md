@@ -13,12 +13,9 @@ metadata:
 
 A design system is the set of **must-use** rules every deliverable in a run shares: palette tokens, typography stack and roles, grid, motif language, voice / tone, lockup geometry, imagery treatment, asset-usage policy, and the cross-deliverable "do not use" list. Without a single source of truth, each PNG re-derives palette / type / motif from scratch and the resulting set never coheres.
 
-**Positioning is upstream of this file.** Per `brand-identity` SKILL §0 / §0.5, design system answers *how* to stay consistent, not *what* to be consistent about. Before authoring `design_system.json`, Planner reads the three MI/BI/VI blocks under `brief.json::resolvedScope`:
-- `mind_identity` (`identity_essence` + `feelings_to_evoke` + `core_mission_or_values` + `trust_anchors`) → anchors `system_thesis` + `voice.principle_keywords`.
-- `behavior_identity` (`voice_register` + `primary_audience` + `behavior_signals`) → anchors `voice.register` + `voice.do_say` + `imagery_strategy.approach`.
-- `visual_identity` (`design_system_preference` + `style_axis_preference` + `aesthetic_constraints`) → steers authoring mode + style axis + `do_not_use`.
+**Domain context is upstream of this file.** `design_system.json` answers how the PNG set stays visually coherent. For `brand_cultural_design`, this coherence is grounded in MI / BI / VI from `resolvedScope.domain_scope` and the `brand-identity` skill. For `product_design`, `architecture_space_design`, and `poster_advertising_design`, this coherence is grounded in `domainContext`, the selected domain skill, and the run's deliverable categories.
 
-A design system authored without positioning is "consistently wrong"; we treat positioning as the upstream contract and the design system as its consistent expression. Legacy briefs may surface the flat `resolvedScope.brand_positioning` field — treat that as a shim for `resolvedScope.mind_identity`.
+For non-brand domains, a design system is a presentation and visual-system contract: palette, typography, layout, motif language, material/atmosphere cues, imagery treatment, and cross-deliverable consistency. It does not imply a new corporate identity or mandatory lockup unless the brief requires one.
 
 The harness writes the system to `plan/design_system.json`. Planner owns it. Designer reads it before every prompt. Critic verifies cross-PNG consistency against it. `artifact_lint` enforces presence + schema + per-sidecar citation.
 
@@ -148,18 +145,18 @@ Use it as a template — **copy the structure, replace every field with content 
 
 ### 9.1 Preference flow (`design_system_preference`)
 
-Primary asks the user at CLARIFY time how Planner should build the design system as part of the Round 3 (VI / Visual Identity) question batch. The answer is persisted at `brief.json::resolvedScope.visual_identity.design_system_preference` (and mirrored to the legacy flat field `resolvedScope.design_system_preference` for backwards compatibility). Planner branches on it:
+This flow applies primarily to `brand_cultural_design`, where the user may choose whether to preserve a known reference system, derive a new extension, or let the system choose. For other domains, Planner may still record a visual-system preference, but it should be inferred from `domainContext`, the selected domain skill, and the brief instead of forcing a VI clarification round.
 
 | Value                | Planner behavior                                                                                                                                                                                                                                                                                                                          |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `use_reference`      | If the target maps to a bundled reference (see §9.2), COPY the reference into `plan/design_system.json`, rewrite the `runId` field, and add `derived_from.reference: "<reference path>"`. Do NOT re-derive from research. If no reference matches, fall back to `derive_new` and note the fallback rationale in `task_breakdown.md`.       |
-| `derive_new`         | Synthesize a brand-new design system from `research/evidence.json` + `research/brand_lock.md` per the existing rules. Do NOT load the bundled reference even if one matches the target.                                                                                                                                                  |
+| `use_reference`      | If the target maps to a bundled reference (see §9.2), copy the reference into `plan/design_system.json`, rewrite the `runId` field, and add `derived_from.reference: "<reference path>"`. If no reference matches, fall back to `derive_new` and note the fallback rationale in `task_breakdown.md`. |
+| `derive_new`         | Synthesize a brand-new design system from `research/evidence.json` + `research/brand_lock.md` per the selected domain and brief. |
 | `let_system_choose`  | Keep current behavior (derive from research, optionally consulting the bundled reference as a structural template). Record the actual choice + rationale in `task_breakdown.md`.                                                                                                                                                          |
 | absent / free-form   | Treat as `let_system_choose`. Free-form answers are recorded verbatim in `task_breakdown.md` so they are not lost.                                                                                                                                                                                                                        |
 
-Primary always asks the `design_system_preference` question as part of the Round 3 (VI / Visual Identity) batch — see `design-primary.md` §B Round 3. The legacy "ask only if trigger fires" rule is deprecated; under the MI/BI/VI flow, the VI round runs unconditionally for every brief. The default fallback when the user picks `let_system_choose`:
+Primary does not always ask a `design_system_preference` question. Ask it only when the selected domain and brief make the choice consequential, most commonly for `brand_cultural_design` runs that may use a bundled or official identity reference. Otherwise infer a reasonable visual-system approach and record it in `task_breakdown.md`.
 - If the target name maps to a known reference (see §9.2), Planner prefers `use_reference`.
-- Otherwise, Planner falls back to `derive_new` and records the rationale in `task_breakdown.md`.
+- Otherwise, Planner falls back to `derive_new` or a domain-appropriate visual-system approach and records the rationale in `task_breakdown.md`.
 
 ### 9.2 Known-reference target map
 
@@ -167,9 +164,9 @@ The lookup is a literal substring match, not a registry. The only mapping today 
 
 | Target match (substring, case-insensitive)                  | Reference file                                                            |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `上海创智学院` / `创智学院` / `shanghai innovation institute` | `.opencode/skills/design-system/reference/sii.design_system.json`         |
+| `上海创智学院` / `创智学院` / `shanghai innovation institute` | `.myharness/skills/design-system/reference/sii.design_system.json`        |
 
-To add a new reference, drop a new `<slug>.design_system.json` under `reference/` and add a single substring-match rule in §9.2 here AND in `design-planner.md`'s "Design-system authoring mode" section AND in `design-primary.md`'s CLARIFY trigger list. Do not build a registry abstraction.
+To add a new reference, drop a new `<slug>.design_system.json` under this skill's `reference/` directory and add a substring-match rule in §9.2.
 
 ## 10. Hard rules
 
@@ -178,7 +175,7 @@ To add a new reference, drop a new `<slug>.design_system.json` under `reference/
 3. Exactly one token should carry `role: "primary"`. If you don't pick, `loadDesignSystem` falls back to `tokens[0]`.
 4. `typography.roles` MUST include `display`, `headline`, `body`. Other roles are optional.
 5. `voice.do_say` and `voice.do_not_say` MUST each have ≥ 2 concrete entries.
-6. `lockup` MUST define at least one of `string_zh` / `string_en`.
+6. `lockup` should define at least one of `string_zh` / `string_en` when the run has a brand, institution, event title, or repeated public-facing name. For product and spatial concepts without a lockup, record an empty or minimal lockup with a rationale.
 7. `motif_system.name` is required and must be a non-empty string Designer can quote verbatim in prompts.
 8. `do_not_use` is the cross-deliverable cliché list; `artifact_lint` scans every sidecar prompt for these phrases. Keep entries ≥ 4 chars or they are ignored to avoid false positives.
 9. Never modify `design_system.json` from Designer or Critic. Edits go through Planner via a `plan_amendment` round routed by Primary.

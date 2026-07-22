@@ -16,9 +16,7 @@ systems. Other domains should load their own domain skill first and only use
 `brand-identity` when the run explicitly depends on existing identity assets,
 brand lockups, or cultural/institutional recognition.
 
-Legacy notes in this file may still describe MI / BI / VI as mandatory for every
-brief. In the domain-aware workflow, MI / BI / VI are mandatory only inside
-`resolvedScope.domain_scope` for `brand_cultural_design`.
+In the domain-aware workflow, MI / BI / VI are required only for `brand_cultural_design`.
 
 ## 0. Positioning before visual identity (the upstream principle)
 
@@ -36,7 +34,7 @@ Before anyone writes `plan/design_system.json`, three questions must be answered
 2. **What feelings should it evoke?** — knowledge, professionalism, future-orientation, public trust, warmth, openness, authority, innovation, etc.
 3. **What should people remember and trust about it?** — the credibility signal that makes a viewer believe the organisation in 5 seconds.
 
-These are captured in the harness as `brief.json::resolvedScope.mind_identity` — `identity_essence` (archetype), `feelings_to_evoke` (array of words), `core_mission_or_values` (1–2 lines or `let-research-infer`), and `trust_anchors` (1–2 line credibility signal or `let-research-infer`). They are the first round of the MANDATORY MI → BI → VI CLARIFY flow Primary runs for every brief (see `design-primary.md` §B and §0.5 below). Research consumes them when scoping peer references and flagging credibility signals. Planner consumes them when authoring `design_system.json::system_thesis` + `voice` + `acceptance_criteria.md`. Critic verifies the design reads as the chosen archetype's feelings within 2 seconds. Legacy briefs may still surface the flat `resolvedScope.brand_positioning` field — treat that as a shim for `resolvedScope.mind_identity`.
+These are captured for `brand_cultural_design` in `brief.json::resolvedScope.domain_scope.mind_identity`: `identity_essence` (archetype), `feelings_to_evoke` (array of words), `core_mission_or_values` (1-2 lines or `let-research-infer`), and `trust_anchors` (1-2 line credibility signal or `let-research-infer`). They are part of the MI -> BI -> VI clarify flow for brand/cultural runs. Research consumes them when scoping peer references and flagging credibility signals. Planner consumes them when authoring brand/cultural `design_system.json::system_thesis` + `voice` + `acceptance_criteria.md`. Critic verifies the design reads as the chosen archetype's feelings within 2 seconds.
 
 ### Domain-specific feeling palettes (use as Planner starting points)
 
@@ -52,7 +50,7 @@ These are *starting points*, not prescriptions. The user's stated `feelings_to_e
 
 ### When positioning is missing
 
-If `resolvedScope.mind_identity` (or the legacy `resolvedScope.brand_positioning`) is absent (e.g. legacy briefs from before this contract), Planner must:
+If `resolvedScope.domain_scope.mind_identity` is absent, Planner must:
 1. Infer the archetype from research evidence + brief surface signals.
 2. Record the inferred archetype + 1-line rationale in `task_breakdown.md`.
 3. Treat the inference as low-confidence; Critic will flag any drift between the inferred positioning and the rendered set as a `system_consistency` issue.
@@ -71,7 +69,7 @@ Positioning is captured across three concrete layers — the Corporate Identity 
 
 **`let-the-system-derive` for BI/VI fields means "derive from the layer above".** If `behavior_identity.voice_register = "let-the-system-derive"`, Planner uses the `identity_essence` → `voice.register` map. If `visual_identity.style_axis_preference = "let-the-system-derive"`, Planner uses the combined `(identity_essence, voice_register)` → `style_axis` map. Both maps live in `design-planner.md` and are the only place this derivation logic exists.
 
-**Why all three rounds are mandatory.** A design system grounded only in MI lacks tone; one grounded only in MI + VI lacks behavioral consistency across applications (the headline copy on a poster will not match the voice of the campus signage). Critic's `system_consistency` rubric checks all three layers; missing any layer creates a "consistently wrong" output that Critic will hard-fail.
+**Why all three layers matter for `brand_cultural_design`.** A design system grounded only in MI lacks tone; one grounded only in MI + VI lacks behavioral consistency across applications (the headline copy on a poster will not match the voice of the campus signage). Critic's `system_consistency` rubric checks all three layers; missing any layer creates a "consistently wrong" output that Critic will hard-fail.
 
 ## 1. What "brand identity" actually includes
 

@@ -82,7 +82,7 @@ The patch list must be **specific**. Each item:
 ```json
 {
   "id": "p1",
-  "artifact": "artifacts/edits/01-logo-application-poster.png",
+  "artifact": "artifacts/edits/01-primary-deliverable.png",
   "severity": "high | medium | low",
   "issue": "Concrete description of what's wrong",
   "fix": "Concrete instruction Designer can act on (e.g. re-run image_edit with referenceImagePaths=...)"
@@ -91,7 +91,7 @@ The patch list must be **specific**. Each item:
 
 Bad patch item: `"poster needs more contrast"`.
 
-Good patch item: `"01-logo-application-poster.png sidecar lists no references; re-run image_edit with referenceImagePaths=['research/assets/official-logo.png'] and a prompt that places the logo at top-left, 96px from the top edge."`
+Good patch item: `"01-primary-deliverable.png sidecar lists no references; re-run image_edit with referenceImagePaths=['research/assets/official-logo.png'] and a prompt that places the protected mark in a clearly specified position while preserving its identity."`
 
 ## 6. Nice-to-have list
 
@@ -112,7 +112,7 @@ For rounds ≥ 2, additionally check:
 
 - Did any dimension that scored 4+ in the previous round drop below 4 in this round?
 - Did any dimension that was the subject of a previous repair instruction still fail in this review?
-- Did the batch introduce new clichés or drift from an amended constraint?
+- Did this repair round introduce new clichés or drift from an amended constraint?
 
 If yes to any, set `severity: "high"` in the `evaluator_fail` message and call out the regression explicitly.
 

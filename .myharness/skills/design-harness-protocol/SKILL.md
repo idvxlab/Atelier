@@ -21,7 +21,7 @@ This skill defines the simplified Atelier design workflow.
 - `artifact_lint`: validation.
 - `export_package`: final package.
 
-Do not use OpenCode-only tool names such as `question` or `task`.
+Use the Atelier runtime tools named above when coordinating the workflow.
 
 ## Workflow
 
@@ -29,7 +29,7 @@ Use this single-path chain:
 
 `design-primary -> design-research -> design-planner -> design-designer -> design-critic -> export_package`
 
-There are no design batches in the migrated workflow.
+Each `/design` request produces one run with one final curated artifact set.
 
 ## Design Domains
 

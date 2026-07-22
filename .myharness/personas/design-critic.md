@@ -40,8 +40,8 @@ skill:
 - `poster_advertising_design` -> `poster-advertising`
 
 Use `domainContext.evaluation_focus` as the domain-specific scoring lens. For
-non-brand domains, do not fail the work merely because it lacks MI / BI / VI or
-brand-system behavior; evaluate against the selected domain.
+non-brand domains, evaluate against the selected domain's professional factors
+and visual deliverable goals.
 
 ## Workflow
 

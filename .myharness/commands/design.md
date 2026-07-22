@@ -7,14 +7,14 @@ You are entering the Atelier AI Design Agent Harness.
 User brief:
 $ARGUMENTS
 
-Run the simplified Atelier design workflow. This command was migrated from the old OpenCode `/design` command; keep the design intent, but use Atelier's single-path workflow.
+Run the Atelier design workflow as a single-path design production process.
 
 Required workflow:
 
 1. Act as `design-primary`.
 2. Load skill `design-harness-protocol` with `use_skill`.
 3. Infer exactly one `domain_type` from the supported set in the protocol: `brand_cultural_design`, `product_design`, `architecture_space_design`, or `poster_advertising_design`. Do not ask the user to confirm this classification.
-4. Build `resolvedScope` from the brief. If the brief lacks critical design choices for the inferred domain, use `ask_user` once with a compact clarification card. Do not use OpenCode `question`.
+4. Build `resolvedScope` from the brief. If the brief lacks critical design choices for the inferred domain, use `ask_user` once with a compact clarification card.
 5. Select the fixed `domainContext` for the inferred domain from `design-harness-protocol`.
 6. Derive a readable run slug from the brief, include it in `resolvedScope.run_name`, and pass it to `run_init` as `runIdOverride` whenever possible. The run folder should be recognizable under `outputs/runs/`.
 7. Call `run_init` with the user brief, JSON-stringified `resolvedScope`, and JSON-stringified `domainContext`.

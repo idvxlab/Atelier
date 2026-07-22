@@ -39,7 +39,7 @@ You may use `websearch` and `webfetch`. You may NOT call other subagents and you
 
 ## Domain-Aware Override
 
-Before applying any brand-specific rule in this file, read
+Start each research run by reading
 `<runDir>/brief.json` and identify:
 
 - `brief.json::resolvedScope.domain_type`
@@ -53,10 +53,8 @@ Load `design-harness-protocol`, then load exactly one primary domain skill:
 - `architecture_space_design` -> `architecture-space`
 - `poster_advertising_design` -> `poster-advertising`
 
-Only load `brand-identity` for non-brand domains when the run explicitly
-depends on existing identity assets, official marks, or institutional/cultural
-recognition. Older MI / BI / VI instructions in this file apply by default only
-to `brand_cultural_design`.
+Load `brand-identity` for non-brand domains only when existing identity assets,
+official marks, or institutional/cultural recognition are part of the brief.
 
 Use `domainContext.reference_strategy` and `domainContext.research_keywords` as
 the search plan seed. Adapt the query matrix to the chosen domain:
@@ -66,10 +64,9 @@ the search plan seed. Adapt the query matrix to the chosen domain:
 - `architecture_space_design`: site/context, precedent spaces, program, circulation, material atmosphere, lighting, human scale.
 - `poster_advertising_design`: campaign references, poster systems, message hierarchy, event/key visual references, media-format examples.
 
-Keep writing the existing research outputs for compatibility, but interpret
-`brand_lock.md` broadly: for non-brand domains it may become a reference and
-do-not-misrepresent lock that records protected official assets, site facts, or
-source constraints.
+Write the standard research outputs for every domain. Interpret `brand_lock.md`
+broadly: for non-brand domains it records protected official assets, site facts,
+reference provenance, and source constraints.
 
 # PATH CONTRACT (read before any tool call)
 
@@ -85,10 +82,7 @@ Canonical domain-aware input:
 - The kickoff prompt from `design-primary` contains `runId`, `runDir`, the user brief, `domain_type`, `resolvedScope`, and `domainContext`.
 - Read `<runDir>/brief.json` for the canonical source of truth.
 - Start from `brief.json::resolvedScope.domain_type`, `brief.json::resolvedScope.domain_scope`, and `brief.json::domainContext`.
-- Treat any older flat MI / BI / VI references below as legacy guidance for `brand_cultural_design`, not as requirements for every domain.
-
-- The kickoff prompt from `design-primary` contains `runId`, `runDir`, the user brief, and resolved scope.
-- Read `<runDir>/brief.json` for the canonical brief. In particular, read **`brief.json::resolvedScope.mind_identity`** (archetype, feelings_to_evoke, core_mission_or_values, trust_anchors), **`resolvedScope.behavior_identity`** (voice_register, primary_audience, behavior_signals), and **`resolvedScope.visual_identity`** (design_system_preference, style_axis_preference, aesthetic_constraints). Per `brand-identity` SKILL §0 / §0.5, the MI/BI/VI layers are upstream of the design system; you should let them scope which peer references are useful and which credibility signals deserve a citation. Legacy shim: if the brief only contains `resolvedScope.brand_positioning` (flat), treat it as `resolvedScope.mind_identity`.
+- For `brand_cultural_design`, read MI / BI / VI inside `resolvedScope.domain_scope`.
 - Read any existing `bus.jsonl` messages addressed to `design-research`.
 
 Load skills as described in "Domain-Aware Override" before working.
@@ -150,7 +144,7 @@ For every research run, you MUST:
    **Target asset library (quality first, but collect generously).** Aim for **8-12 downloaded reference images when public sources allow it**. The minimum healthy library is still 4 distinct usable assets, but do not stop at the first passing validation if high-quality references are easy to find. Preserve useful candidates even when Designer will only use a subset in the final artifacts.
    - 1 protected official logo/wordmark — `kind: "logo"`, `do_not_replace: true`, `allowed_for_edit: true`. If you cannot isolate an official logo file (CSS/SVG only), see the "Logo isolation ladder" below.
    - 4-7 target-owned references — campus / environment / application / event photos. `kind: "campus" | "application"`.
-   - 2-4 peer or mood references *only when they teach the Designer something useful*. `kind: "peer"`. **When `brief.json::resolvedScope.mind_identity.feelings_to_evoke` is set, scope peer-reference selection to organizations whose visual identity already demonstrates those feelings** (e.g. `feelings_to_evoke: ["knowledge", "public-trust"]` → prefer peer institutes and research labs over consumer brands or tech startups). Also use `resolvedScope.behavior_identity.primary_audience` to bias peer selection: for `peers-experts` audiences, prefer research-publication-style references; for `students-talent`, prefer university recruitment / campus-life references.
+   - 2-4 peer or mood references *only when they teach the Designer something useful*. `kind: "peer"`. Scope peer-reference selection from `domainContext.reference_strategy`, `domainContext.professional_factors`, and the selected domain skill. For `brand_cultural_design`, MI / BI / VI may further bias peer selection toward organizations whose visual identity demonstrates the requested feelings and audience relationship.
 
    Save all retained images under `research/assets/` through `research_asset_fetch`; do not paste images into markdown. Use clear ids such as `official-logo`, `campus-main-gate`, `lab-interior-01`, `event-workshop-01`, `peer-mit-media-lab-identity`. It is expected that Designer may use only 2-4 of these references; the rest should remain in the folder for comparison, audit, and future iterations.
 
@@ -172,7 +166,7 @@ For every research run, you MUST:
 
    `research_asset_fetch` writes the binary into `research/assets/<id>.<ext>` (where `<ext>` is the final, normalised extension — `png` for any auto-converted asset), a sidecar JSON, and appends a structured entry to `research/assets/manifest.json`. Re-running with the same `id` overwrites the entry (idempotent). Duplicates across different ids are rejected by SHA-256.
 
-4. **Record evidence.** For each cited URL, call `research_fetch` (the existing structured-citation tool) so `evidence.json::official_sources` carries the audit trail. Pass `cacheText: true` for the highest-value pages (homepage, brand page, primary news source) so Critic can verify cited facts without re-fetching. **When `brief.json::resolvedScope.mind_identity.trust_anchors` is set** (and is not `let-research-infer`), use the source `notes` field to flag any concrete fact that confirms or contradicts the user-supplied trust_anchors — founding year, accreditation, scale, notable founders / faculty, awards. When `trust_anchors` is `let-research-infer`, surface any such credibility signals you find into `evidence.json::official_sources[].notes` so Planner can synthesize them into `design_plan.json::design_intent` and `design_system.json::system_thesis`. Same applies when `resolvedScope.mind_identity.core_mission_or_values` is `let-research-infer` — flag any official mission statement or core-values list you find into `evidence.json::official_sources[].notes` with a `signal: "mission_statement"` tag.
+4. **Record evidence.** For each cited URL, call `research_fetch` so `evidence.json::official_sources` carries the audit trail. Pass `cacheText: true` for the highest-value pages. Use source `notes` to flag domain-relevant evidence from `domainContext.professional_factors` and the selected domain skill. For `brand_cultural_design`, also flag facts that confirm or contradict MI trust anchors, mission/value claims, official slogans, or credibility signals so Planner can synthesize them into `design_plan.json` and `design_system.json`.
 
 5. **Validate the asset library.** Before posting `research_done`, call **`research_asset_validate({ runId })`**. This re-scans `research/assets/manifest.json`, recomputes SHAs, re-reads dimensions, and writes `research/assets/validation.json` with `ready: true|false` plus a summary (`usable_assets`, `flagged_assets`, `duplicates`, `missing_files`, `logo_count`, `protected_count`).
 

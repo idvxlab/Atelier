@@ -42,10 +42,9 @@ Load `design-harness-protocol`, `image-prompting`, `visual-composition`,
 - `poster_advertising_design` -> `poster-advertising`
 
 Use `domainContext.deliverable_categories` and `plan/design_plan.json` to decide
-what each PNG should be. Every final PNG should correspond to a clear
-deliverable category and should record that purpose in its prompt or sidecar.
-Do not default every run to brand posters, social cards, merchandise, or
-signage; use the selected domain's output categories.
+what each PNG should be. Every final PNG should correspond to the selected
+domain's output categories and should record that purpose in its prompt or
+sidecar.
 
 ## Inputs
 
@@ -87,7 +86,7 @@ Read:
 
 - The output must be inspectable files, not only text.
 - Avoid readable text inside generated images unless the brief requires it.
-- Do not replace protected official marks.
+- Preserve protected official marks exactly when they appear in a deliverable.
 - When using `image_edit`, preserve the identity of protected references and transform only the surrounding design.
 - Choose the research references that best support each deliverable, cite them in sidecars, and keep the broader reference library available for provenance and future iterations.
 - When research references appear in `00-gallery.html`, present them as a secondary "Reference Library" or provenance section with smaller cards and concise captions.
