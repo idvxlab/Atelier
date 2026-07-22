@@ -59,36 +59,113 @@ capabilities such as `image_generate`, `image_edit`, or `artifact_lint`.
 ## Workflow
 
 1. Load `design-harness-protocol`.
-2. Parse the user brief for target, audience, language, deliverables, style, and constraints.
-3. Derive a readable run name before `run_init`. Use a short lowercase ASCII slug from the target and deliverable intent, for example `tongji-idvx-lab-visual-system` or `campus-open-day-poster`. Keep it stable, human-readable, and under 64 characters.
-4. If critical design choices are missing, call `ask_user` once with a compact card. Ask only questions that change design decisions.
-5. Call `run_init` with:
+2. Infer exactly one `domain_type` from the supported set below. Do not ask the user to confirm the classification.
+3. Select the matching fixed `domainContext` from `design-harness-protocol`.
+4. Parse the user brief into `resolvedScope`: target, audience, language, deliverable intent, style preferences, constraints, and the domain-specific `domain_scope`.
+5. If critical design choices are missing for the selected domain, call `ask_user` once with a compact card. Ask only questions that change design decisions.
+6. Merge the user's answers into `resolvedScope`. For remaining minor gaps, infer reasonable defaults and record them in `resolvedScope.assumptions`.
+7. Derive a readable run name before `run_init`. Use a short lowercase ASCII slug from the target and deliverable intent, for example `tongji-idvx-lab-visual-system`, `portable-dorm-air-purifier`, `watertown-visitor-center-space`, or `ai-design-forum-poster`. Keep it stable, human-readable, and under 64 characters.
+8. Call `run_init` with:
    - `brief`: the raw user brief
-   - `resolvedScope`: JSON string of clarified or inferred choices. Include `run_name` and `human_title` in this JSON.
-   - `runIdOverride`: the readable slug from step 3 whenever possible, so folders under `outputs/runs/` are easy to identify.
-6. Capture `runId`, `runDir`, and `finalDir` from the tool result.
-7. Post `kickoff` to `design-research`. Tell Research to build a broad reference image library, not only the exact images expected to be used in the final design.
-8. Spawn `design-research` with run paths and brief.
-9. Confirm research outputs exist or that limitations are documented.
-10. Spawn `design-planner`.
-11. Confirm planner outputs exist.
-12. Spawn `design-designer`.
-13. Confirm image artifacts and `00-gallery.html` exist.
-14. Spawn `design-critic`.
-15. If critic posts `evaluator_fail`, allow one repair pass by spawning `design-designer` again with the critic's concrete repair notes, then spawn `design-critic` one more time.
-16. Call `export_package`.
-17. Reply with a concise report: run name, run id, final folder, artifacts, critic verdict, and remaining risks.
+   - `resolvedScope`: JSON string of clarified or inferred user needs. Include `run_name`, `human_title`, `domain_type`, and `domain_scope`.
+   - `domainContext`: JSON string of the selected and briefly run-specific domain context.
+   - `runIdOverride`: the readable slug from step 7 whenever possible, so folders under `outputs/runs/` are easy to identify.
+9. Capture `runId`, `runDir`, and `finalDir` from the tool result.
+10. Post `kickoff` to `design-research`. Include `domain_type`, `resolvedScope`, and `domainContext` in the bus payload. Tell Research to build a broad reference image library, not only the exact images expected to be used in the final design.
+11. Spawn `design-research` with a task that includes run paths, brief, `domain_type`, `resolvedScope`, and `domainContext`.
+12. Confirm research outputs exist or that limitations are documented.
+13. Spawn `design-planner` with the same domain handoff and instructions to write `plan/design_system.json`, `plan/design_plan.json`, `plan/deliverable_manifest.json`, `plan/acceptance_criteria.md`, and `plan/task_breakdown.md`.
+14. Confirm planner outputs exist.
+15. Spawn `design-designer` with the same domain handoff and any planner output paths.
+16. Confirm image artifacts and `00-gallery.html` exist.
+17. Spawn `design-critic` with the same domain handoff and artifact paths.
+18. If critic posts `evaluator_fail`, allow one repair pass by spawning `design-designer` again with the critic's concrete repair notes, then spawn `design-critic` one more time.
+19. Call `export_package`.
+20. Reply with a concise report: run name, run id, domain type, final folder, artifacts, critic verdict, and remaining risks.
+
+## Domain Classification
+
+Pick one:
+
+- `brand_cultural_design`: institutions, brands, cultural merchandise, visual systems, campaign extensions, branded applications, souvenirs, identity-based posters or peripheral products.
+- `product_design`: product or industrial-design concepts, appliances, devices, furniture, tools, wearable objects, product CMF, usage scenes, and product-detail renderings.
+- `architecture_space_design`: architecture, interior, spatial, exhibition, retail, environmental, installation, visitor-center, lab, studio, or public-space concepts.
+- `poster_advertising_design`: standalone posters, campaign key visuals, advertising images, event visuals, recruitment posters, and communication-first graphic outputs.
+
+If a brief could fit multiple domains, choose the domain that best matches the
+headline deliverable. For example, "poster and merchandise for an institute" is
+usually `brand_cultural_design`, while "one event poster" is
+`poster_advertising_design`.
+
+## Scope Shape
+
+Always keep `resolvedScope` focused on this run's user needs:
+
+```json
+{
+  "run_name": "short-ascii-slug",
+  "human_title": "string",
+  "domain_type": "string",
+  "target": "string",
+  "audience": "string",
+  "language": "zh | en | mixed",
+  "deliverable_intent": "string",
+  "style_preferences": "string",
+  "constraints": "string",
+  "domain_scope": {},
+  "assumptions": []
+}
+```
+
+Use domain-specific `domain_scope` fields:
+
+- `brand_cultural_design`: `mind_identity`, `behavior_identity`, `visual_identity`.
+- `product_design`: `user_context`, `function_experience`, `form_material`.
+- `architecture_space_design`: `site_context`, `program_spatial`, `atmosphere_material`.
+- `poster_advertising_design`: `communication_goal`, `message_hierarchy`, `visual_direction`.
+
+`domainContext` is the selected professional context from the protocol plus a
+small amount of run-specific adaptation. It should guide Research, Planner,
+Designer, and Critic, but it should not duplicate the entire user brief.
 
 ## Clarification Guidance
 
-Prefer one compact clarification round. Good questions:
+Prefer one compact clarification round. Do not ask the user to confirm
+`domain_type`. Ask only for missing choices that materially affect the design.
 
-- What is the intended audience?
-- What feeling should the design communicate?
-- What style should it avoid?
-- Should existing public identity assets be preserved strictly?
+Common questions:
+
+- Intended audience or use scenario.
+- Desired feeling, tone, or market position.
+- Output priority if the brief asks for a broad set.
+- Style constraints to preserve or avoid.
+- Existing assets or identity rules that must be respected.
+
+Domain-specific question patterns:
+
+- `brand_cultural_design`: core identity/message, audience relationship, visual style axis, whether official public identity assets must be preserved strictly.
+- `product_design`: use scenario, core functions, form direction, material/CMF preference, scale or portability constraints.
+- `architecture_space_design`: location or site type, required functions/zones, approximate scale, desired atmosphere, material/light preference.
+- `poster_advertising_design`: campaign goal, key message/headline, information density, visual tone, required format or language.
 
 If the user asks you to proceed without clarification, infer reasonable defaults and record them in `resolvedScope`.
+
+## Domain Handoff
+
+When posting bus messages or spawning subagents, include this information in the
+message payload or task text:
+
+- `runId`
+- `runDir`
+- raw brief
+- `domain_type`
+- JSON `resolvedScope`
+- JSON `domainContext`
+- expected phase output paths
+
+When spawning a registered design subagent, call `spawn_agent` with only
+`agent` and `task`. Put `runId`, `runDir`, `resolvedScope`, and `domainContext`
+inside the task text; do not pass them as extra tool arguments.
 
 ## Final Deliverable Shape
 

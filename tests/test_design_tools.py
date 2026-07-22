@@ -100,12 +100,16 @@ async def test_run_init_and_design_bus_round_trip(monkeypatch, tmp_path):
     init = json.loads(
         await run_init_tool(
             brief="Design a small exhibition identity.",
-            resolvedScope='{"language":"zh+en"}',
+            resolvedScope='{"language":"zh+en","domain_type":"architecture_space_design"}',
+            domainContext='{"domain_type":"architecture_space_design","label":"Architecture & Space Design"}',
             runIdOverride="run-a",
         )
     )
     assert init["ok"] is True
     assert Path(init["paths"]["bus"]).exists()
+    brief_json = json.loads(Path(init["runDir"], "brief.json").read_text(encoding="utf-8"))
+    assert brief_json["resolvedScope"]["domain_type"] == "architecture_space_design"
+    assert brief_json["domainContext"]["label"] == "Architecture & Space Design"
 
     post = json.loads(
         await design_bus_post_tool(

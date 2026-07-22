@@ -5,9 +5,20 @@ license: MIT
 metadata:
   audience: design-research, design-planner, design-designer, design-critic
   workflow: ai-design-harness
+  domain_type: brand_cultural_design
 ---
 
 # Brand Identity Skill
+
+This skill is the domain skill for `brand_cultural_design`. Use it for brand,
+institutional identity, cultural merchandise, campaign extensions, and visual
+systems. Other domains should load their own domain skill first and only use
+`brand-identity` when the run explicitly depends on existing identity assets,
+brand lockups, or cultural/institutional recognition.
+
+Legacy notes in this file may still describe MI / BI / VI as mandatory for every
+brief. In the domain-aware workflow, MI / BI / VI are mandatory only inside
+`resolvedScope.domain_scope` for `brand_cultural_design`.
 
 ## 0. Positioning before visual identity (the upstream principle)
 

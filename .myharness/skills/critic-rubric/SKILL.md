@@ -49,6 +49,28 @@ When `hard_fail: true`, set `verdict: "fail"` regardless of other scores.
 
 Gallery presentation note: a strong `00-gallery.html` uses clear sections for final deliverables, design-system context, and optional research provenance. Reference images should read as supporting source material rather than competing with the final generated/edited outputs.
 
+## 3.1 Domain-Aware Scoring
+
+Read `brief.json::resolvedScope.domain_type` and `brief.json::domainContext`
+before scoring. The same file completeness and lint gates apply to every run,
+but the professional lens changes by domain.
+
+Add these two scores to `critique.json::scores`:
+
+- `domain_fit`: whether the artifact set fits the selected `domain_type` and uses the expected deliverable categories from `domainContext`.
+- `professional_fit`: whether the work addresses the selected domain's professional factors rather than only looking visually pleasant.
+
+Domain lenses:
+
+- `brand_cultural_design`: identity recognition, cultural translation, visual-system coherence, reference grounding, and production readiness.
+- `product_design`: user scenario, functional clarity, form/material coherence, scale plausibility, CMF, and product-render completeness.
+- `architecture_space_design`: spatial logic, program fit, site/context relationship, material atmosphere, lighting, and human scale.
+- `poster_advertising_design`: message clarity, hierarchy, visual hook, audience fit, format readiness, and campaign consistency.
+
+Do not force non-brand domains through MI / BI / VI. For non-brand domains,
+`design_system.json` is judged as the visual/presentation system for the PNG
+set, not as a corporate identity replacement.
+
 ## 4. Soft-fail rule
 
 Even without `hard_fail`, if **any** threshold in §1 is missed, set `verdict: "fail"` and `next_action: "revise"`.

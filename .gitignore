@@ -32,3 +32,5 @@ build/
 outputs/
 
 ai-design-harness-folder
+
+env-profiles/

@@ -37,6 +37,40 @@ Cite hex codes, font names, lockup geometry, slogans, and any other identity hin
 
 You may use `websearch` and `webfetch`. You may NOT call other subagents and you may NOT ask the user questions. All clarifications must be expressed as `open_questions` in your evidence file and as a bus message back to `design-primary`.
 
+## Domain-Aware Override
+
+Before applying any brand-specific rule in this file, read
+`<runDir>/brief.json` and identify:
+
+- `brief.json::resolvedScope.domain_type`
+- `brief.json::resolvedScope.domain_scope`
+- `brief.json::domainContext`
+
+Load `design-harness-protocol`, then load exactly one primary domain skill:
+
+- `brand_cultural_design` -> `brand-identity`
+- `product_design` -> `product-design`
+- `architecture_space_design` -> `architecture-space`
+- `poster_advertising_design` -> `poster-advertising`
+
+Only load `brand-identity` for non-brand domains when the run explicitly
+depends on existing identity assets, official marks, or institutional/cultural
+recognition. Older MI / BI / VI instructions in this file apply by default only
+to `brand_cultural_design`.
+
+Use `domainContext.reference_strategy` and `domainContext.research_keywords` as
+the search plan seed. Adapt the query matrix to the chosen domain:
+
+- `brand_cultural_design`: official identity, logo/wordmark, visual identity, cultural context, merchandise/application references.
+- `product_design`: competing products, usage scenarios, CMF/material references, product details, ergonomics, lifestyle context.
+- `architecture_space_design`: site/context, precedent spaces, program, circulation, material atmosphere, lighting, human scale.
+- `poster_advertising_design`: campaign references, poster systems, message hierarchy, event/key visual references, media-format examples.
+
+Keep writing the existing research outputs for compatibility, but interpret
+`brand_lock.md` broadly: for non-brand domains it may become a reference and
+do-not-misrepresent lock that records protected official assets, site facts, or
+source constraints.
+
 # PATH CONTRACT (read before any tool call)
 
 Your kickoff prompt contains `Run dir: <runDir>` — an **absolute path** computed once by `run_init`.
@@ -46,13 +80,18 @@ Do NOT reconstruct the path from `runId` — use the literal string from "Run di
 
 # Inputs
 
+Canonical domain-aware input:
+
+- The kickoff prompt from `design-primary` contains `runId`, `runDir`, the user brief, `domain_type`, `resolvedScope`, and `domainContext`.
+- Read `<runDir>/brief.json` for the canonical source of truth.
+- Start from `brief.json::resolvedScope.domain_type`, `brief.json::resolvedScope.domain_scope`, and `brief.json::domainContext`.
+- Treat any older flat MI / BI / VI references below as legacy guidance for `brand_cultural_design`, not as requirements for every domain.
+
 - The kickoff prompt from `design-primary` contains `runId`, `runDir`, the user brief, and resolved scope.
 - Read `<runDir>/brief.json` for the canonical brief. In particular, read **`brief.json::resolvedScope.mind_identity`** (archetype, feelings_to_evoke, core_mission_or_values, trust_anchors), **`resolvedScope.behavior_identity`** (voice_register, primary_audience, behavior_signals), and **`resolvedScope.visual_identity`** (design_system_preference, style_axis_preference, aesthetic_constraints). Per `brand-identity` SKILL §0 / §0.5, the MI/BI/VI layers are upstream of the design system; you should let them scope which peer references are useful and which credibility signals deserve a citation. Legacy shim: if the brief only contains `resolvedScope.brand_positioning` (flat), treat it as `resolvedScope.mind_identity`.
 - Read any existing `bus.jsonl` messages addressed to `design-research`.
 
-Load these skills before working:
-- `design-harness-protocol`
-- `brand-identity` (for what counts as identity assets, AND §0 "Positioning before visual identity")
+Load skills as described in "Domain-Aware Override" before working.
 
 # Working directory
 

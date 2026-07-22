@@ -25,6 +25,12 @@ RUN_INIT_SCHEMA = ToolSchema(
             description="Optional JSON string with clarified scope / identity answers.",
             required=False,
         ),
+        ToolParam(
+            name="domainContext",
+            type="string",
+            description="Optional JSON string with the selected design domain context.",
+            required=False,
+        ),
         ToolParam(name="runIdOverride", type="string", description="Optional explicit run id.", required=False),
     ],
 )
@@ -109,6 +115,7 @@ CANONICAL_PHASES = {
 async def run_init_tool(
     brief: str,
     resolvedScope: str | None = None,
+    domainContext: str | None = None,
     runIdOverride: str | None = None,
 ) -> str:
     if not brief or not brief.strip():
@@ -142,6 +149,13 @@ async def run_init_tool(
         except json.JSONDecodeError as exc:
             return _json({"ok": False, "error": f"resolvedScope is not valid JSON: {exc}"})
 
+    domain_context: Any = None
+    if domainContext and domainContext.strip():
+        try:
+            domain_context = json.loads(domainContext)
+        except json.JSONDecodeError as exc:
+            return _json({"ok": False, "error": f"domainContext is not valid JSON: {exc}"})
+
     paths = {
         "runDir": str(run_dir),
         "outputDir": str(output_dir),
@@ -160,6 +174,7 @@ async def run_init_tool(
         "createdAt": _now_iso(),
         "brief": brief,
         "resolvedScope": scope,
+        "domainContext": domain_context,
         "paths": paths,
     }
     (run_dir / "brief.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

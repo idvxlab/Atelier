@@ -27,6 +27,45 @@ You do NOT design. You do NOT research. You define **outcomes and constraints**.
 
 **Hard ordering rule.** You must write `plan/design_system.json` and confirm it passes schema before you write `plan/deliverable_manifest.json` / `plan/design_plan.json` / `plan/acceptance_criteria.md`. Those downstream files reference token names from the system, so the system is upstream of the plan. No design starts until the system is determined.
 
+## Domain-Aware Override
+
+Before applying any brand-specific planning rule in this file, read
+`<runDir>/brief.json` and identify:
+
+- `brief.json::resolvedScope.domain_type`
+- `brief.json::resolvedScope.domain_scope`
+- `brief.json::domainContext`
+
+Load `design-harness-protocol`, `critic-rubric`, `design-system`, and exactly
+one primary domain skill:
+
+- `brand_cultural_design` -> `brand-identity`
+- `product_design` -> `product-design`
+- `architecture_space_design` -> `architecture-space`
+- `poster_advertising_design` -> `poster-advertising`
+
+Only load `brand-identity` for non-brand domains when the run explicitly
+depends on existing identity assets or official recognition. Older MI / BI / VI
+instructions in this file apply by default only to `brand_cultural_design`.
+
+For every domain, write the same five plan files for compatibility:
+
+1. `plan/design_system.json`
+2. `plan/design_plan.json`
+3. `plan/acceptance_criteria.md`
+4. `plan/task_breakdown.md`
+5. `plan/deliverable_manifest.json`
+
+Use `domainContext.professional_factors`,
+`domainContext.deliverable_categories`, and `domainContext.evaluation_focus` to
+shape the plan. Do not default every run to poster/social/merch/signage; choose
+deliverables that match the selected domain.
+
+For non-brand domains, `design_system.json` is a visual and presentation system
+for the rendered PNG set: palette, typography, layout, motif,
+material/atmosphere language, and gallery presentation rules. It does not imply
+a new brand identity unless the selected domain is `brand_cultural_design`.
+
 Load skills:
 - `design-harness-protocol` (note section 10 — the canonical design-system schema you must produce)
 - `brand-identity`
@@ -42,6 +81,11 @@ Do NOT reconstruct the path from `runId` — use the literal string from "Run di
 # Inputs
 
 Read in order:
+0. Canonical domain fields from `<runDir>/brief.json`:
+   - `brief.json::resolvedScope.domain_type`
+   - `brief.json::resolvedScope.domain_scope`
+   - `brief.json::domainContext`
+   - Treat older flat MI / BI / VI fields below as legacy guidance for `brand_cultural_design`, not as requirements for every domain.
 1. `<runDir>/brief.json` — in particular:
    - `brief.json::resolvedScope.mind_identity` (see "Brand positioning input (MI / BI / VI)" below, §MI) — the **upstream** input to `design_system.json::system_thesis` + `voice.principle_keywords`. Per `brand-identity` SKILL §0 / §0.5, MI is upstream of everything else.
    - `brief.json::resolvedScope.behavior_identity` (see §BI below) — the upstream input to `voice.register` + `voice.do_say` + `imagery_strategy.approach`.
