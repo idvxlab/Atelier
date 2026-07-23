@@ -108,6 +108,23 @@ async def test_serper_takes_priority_over_brave(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_atelier_search_profile_can_select_serper(monkeypatch):
+    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
+    monkeypatch.setenv("ATELIER_SEARCH_PROVIDER", "serper")
+    monkeypatch.setenv("ATELIER_SEARCH_API_KEY", "atelier-serper-key")
+
+    with respx.mock:
+        serper_route = respx.post("https://google.serper.dev/search").mock(
+            return_value=httpx.Response(200, json={"organic": []}),
+        )
+        result = json.loads(await web_search.web_search_tool("hello"))
+
+    assert serper_route.called
+    assert result["provider"] == "serper"
+
+
+@pytest.mark.asyncio
 async def test_brave_used_when_serper_unavailable(monkeypatch):
     monkeypatch.delenv("SERPER_API_KEY", raising=False)
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")

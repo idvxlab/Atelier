@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import uuid
+from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -86,6 +87,9 @@ MANAGED_ENV_KEYS = [
     "ATELIER_API_KEY",
     "ATELIER_BASE_URL",
     "ATELIER_MODEL",
+    "ATELIER_SUMMARY_API_KEY",
+    "ATELIER_SUMMARY_BASE_URL",
+    "ATELIER_SUMMARY_MODEL",
     "ATELIER_IMAGE_API_KEY",
     "ATELIER_IMAGE_BASE_URL",
     "ATELIER_IMAGE_MODEL",
@@ -93,6 +97,8 @@ MANAGED_ENV_KEYS = [
     "ATELIER_IMAGE_EDIT_ENDPOINT",
     "ATELIER_IMAGE_BACKEND",
     "ATELIER_IMAGE_DEFAULT_SIZE",
+    "ATELIER_SEARCH_PROVIDER",
+    "ATELIER_SEARCH_API_KEY",
     "HARNESS_DEFAULT_PROVIDER",
     "OPENAI_HUB_API_KEY",
     "OPENAI_HUB_BASE_URL",
@@ -160,9 +166,13 @@ def _normalize_profile(raw: dict[str, Any]) -> dict[str, Any]:
         provider_type = "openai-compatible"
     profile_id = _safe_profile_id(str(raw.get("id") or name))
     base_url = str(raw.get("base_url") or "").strip()
+    summary_base_url = str(raw.get("summary_base_url") or base_url).strip()
     image_base_url = str(raw.get("image_base_url") or base_url).strip()
     image_generation_endpoint = str(raw.get("image_generation_endpoint") or "").strip()
     image_edit_endpoint = str(raw.get("image_edit_endpoint") or "").strip()
+    search_provider = str(raw.get("search_provider") or "").strip().casefold()
+    if search_provider not in {"", "serper", "brave"}:
+        search_provider = ""
     if image_base_url:
         image_base = image_base_url.rstrip("/")
         if not image_generation_endpoint:
@@ -176,12 +186,17 @@ def _normalize_profile(raw: dict[str, Any]) -> dict[str, Any]:
         "api_key": str(raw.get("api_key") or "").strip(),
         "base_url": base_url,
         "model": str(raw.get("model") or "gpt-4o").strip(),
+        "summary_api_key": str(raw.get("summary_api_key") or raw.get("api_key") or "").strip(),
+        "summary_base_url": summary_base_url,
+        "summary_model": str(raw.get("summary_model") or "").strip(),
         "image_api_key": str(raw.get("image_api_key") or raw.get("api_key") or "").strip(),
         "image_base_url": image_base_url,
         "image_model": str(raw.get("image_model") or "gpt-image-2").strip(),
         "image_generation_endpoint": image_generation_endpoint,
         "image_edit_endpoint": image_edit_endpoint,
         "image_default_size": str(raw.get("image_default_size") or "1024x1024").strip(),
+        "search_provider": search_provider,
+        "search_api_key": str(raw.get("search_api_key") or "").strip(),
     }
 
 
@@ -208,12 +223,27 @@ def _profile_to_env_values(profile: dict[str, Any]) -> dict[str, str]:
         "ATELIER_API_KEY": profile["api_key"],
         "ATELIER_BASE_URL": profile["base_url"],
         "ATELIER_MODEL": profile["model"],
+        "ATELIER_SUMMARY_API_KEY": profile.get("summary_api_key") or profile["api_key"],
+        "ATELIER_SUMMARY_BASE_URL": profile.get("summary_base_url") or profile["base_url"],
+        "ATELIER_SUMMARY_MODEL": profile.get("summary_model", ""),
         "ATELIER_IMAGE_API_KEY": profile.get("image_api_key") or profile["api_key"],
         "ATELIER_IMAGE_BASE_URL": image_base,
         "ATELIER_IMAGE_MODEL": profile.get("image_model", ""),
         "ATELIER_IMAGE_GENERATION_ENDPOINT": profile.get("image_generation_endpoint", ""),
         "ATELIER_IMAGE_EDIT_ENDPOINT": profile.get("image_edit_endpoint", ""),
         "ATELIER_IMAGE_DEFAULT_SIZE": profile.get("image_default_size", ""),
+        "ATELIER_SEARCH_PROVIDER": profile.get("search_provider", ""),
+        "ATELIER_SEARCH_API_KEY": profile.get("search_api_key", ""),
+        "SERPER_API_KEY": (
+            profile.get("search_api_key", "")
+            if profile.get("search_provider") == "serper"
+            else ""
+        ),
+        "BRAVE_SEARCH_API_KEY": (
+            profile.get("search_api_key", "")
+            if profile.get("search_provider") == "brave"
+            else ""
+        ),
     }
 
 
@@ -228,12 +258,17 @@ def _profile_from_atelier_env() -> dict[str, Any] | None:
         "api_key": values.get("ATELIER_API_KEY", ""),
         "base_url": values.get("ATELIER_BASE_URL", ""),
         "model": values.get("ATELIER_MODEL", "gpt-4o"),
+        "summary_api_key": values.get("ATELIER_SUMMARY_API_KEY", ""),
+        "summary_base_url": values.get("ATELIER_SUMMARY_BASE_URL", ""),
+        "summary_model": values.get("ATELIER_SUMMARY_MODEL", ""),
         "image_api_key": values.get("ATELIER_IMAGE_API_KEY", ""),
         "image_base_url": values.get("ATELIER_IMAGE_BASE_URL", ""),
         "image_model": values.get("ATELIER_IMAGE_MODEL", ""),
         "image_generation_endpoint": values.get("ATELIER_IMAGE_GENERATION_ENDPOINT", ""),
         "image_edit_endpoint": values.get("ATELIER_IMAGE_EDIT_ENDPOINT", ""),
         "image_default_size": values.get("ATELIER_IMAGE_DEFAULT_SIZE", ""),
+        "search_provider": values.get("ATELIER_SEARCH_PROVIDER", ""),
+        "search_api_key": values.get("ATELIER_SEARCH_API_KEY", ""),
     })
 
 
@@ -322,6 +357,22 @@ def _derive_env_defaults(values: dict[str, str]) -> dict[str, str]:
             next_values["DESIGN_IMAGE_EDIT_ENDPOINT"] = f"{image_base}/images/edits"
     if not next_values["DESIGN_IMAGE_API_KEY"]:
         next_values["DESIGN_IMAGE_API_KEY"] = next_values["OPENAI_HUB_API_KEY"]
+    if not next_values["ATELIER_SUMMARY_BASE_URL"]:
+        next_values["ATELIER_SUMMARY_BASE_URL"] = next_values["ATELIER_BASE_URL"]
+    if not next_values["ATELIER_SUMMARY_API_KEY"]:
+        next_values["ATELIER_SUMMARY_API_KEY"] = next_values["ATELIER_API_KEY"]
+    if not next_values["ATELIER_SEARCH_PROVIDER"]:
+        if next_values["SERPER_API_KEY"]:
+            next_values["ATELIER_SEARCH_PROVIDER"] = "serper"
+            next_values["ATELIER_SEARCH_API_KEY"] = next_values["SERPER_API_KEY"]
+        elif next_values["BRAVE_SEARCH_API_KEY"]:
+            next_values["ATELIER_SEARCH_PROVIDER"] = "brave"
+            next_values["ATELIER_SEARCH_API_KEY"] = next_values["BRAVE_SEARCH_API_KEY"]
+    if not next_values["ATELIER_SEARCH_API_KEY"]:
+        if next_values["ATELIER_SEARCH_PROVIDER"] == "serper":
+            next_values["ATELIER_SEARCH_API_KEY"] = next_values["SERPER_API_KEY"]
+        elif next_values["ATELIER_SEARCH_PROVIDER"] == "brave":
+            next_values["ATELIER_SEARCH_API_KEY"] = next_values["BRAVE_SEARCH_API_KEY"]
     return next_values
 
 
@@ -345,6 +396,24 @@ def _profile_to_provider_config(profile: dict[str, Any]) -> ProviderConfig:
     )
 
 
+def _summary_provider_id(profile_id: str) -> str:
+    return f"{profile_id}-summary"
+
+
+def _profile_to_summary_provider_config(profile: dict[str, Any]) -> ProviderConfig | None:
+    summary_model = str(profile.get("summary_model") or "").strip()
+    if not summary_model:
+        return None
+    return ProviderConfig(
+        name=profile["provider_type"],
+        model=summary_model,
+        api_key=profile.get("summary_api_key") or profile["api_key"],
+        base_url=profile.get("summary_base_url") or profile["base_url"],
+        max_tokens=2048,
+        temperature=0.0,
+    )
+
+
 def _apply_model_profiles_to_config(cfg: HarnessConfig) -> None:
     settings = _load_atelier_settings()
     profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
@@ -357,11 +426,46 @@ def _apply_model_profiles_to_config(cfg: HarnessConfig) -> None:
 
     for profile in profiles:
         cfg.providers[profile["id"]] = _profile_to_provider_config(profile)
+        summary_provider = _profile_to_summary_provider_config(profile)
+        if summary_provider is not None:
+            cfg.providers[_summary_provider_id(profile["id"])] = summary_provider
 
     if cfg.default_provider not in cfg.providers:
         cfg.default_provider = profiles[0]["id"]
     if cfg.compression.summary_provider and cfg.compression.summary_provider not in cfg.providers:
         cfg.compression.summary_provider = ""
+
+
+def _profile_for_provider_name(provider_name: str) -> dict[str, Any] | None:
+    settings = _load_atelier_settings()
+    profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
+    env_profile = _profile_from_atelier_env()
+    if env_profile and all(p["id"] != env_profile["id"] for p in profiles):
+        profiles.append(env_profile)
+    for profile in profiles:
+        if profile["id"] == provider_name:
+            return profile
+    return None
+
+
+def _session_config_for_provider(cfg: HarnessConfig, provider_name: str) -> HarnessConfig:
+    session_cfg = deepcopy(cfg)
+    profile = _profile_for_provider_name(provider_name)
+    if profile is None:
+        return session_cfg
+    summary_id = _summary_provider_id(profile["id"])
+    if summary_id in session_cfg.providers:
+        session_cfg.compression.summary_provider = summary_id
+    search_provider = str(profile.get("search_provider") or "").strip()
+    search_api_key = str(profile.get("search_api_key") or "").strip()
+    if search_provider and search_api_key:
+        os.environ["ATELIER_SEARCH_PROVIDER"] = search_provider
+        os.environ["ATELIER_SEARCH_API_KEY"] = search_api_key
+        if search_provider == "serper":
+            os.environ["SERPER_API_KEY"] = search_api_key
+        elif search_provider == "brave":
+            os.environ["BRAVE_SEARCH_API_KEY"] = search_api_key
+    return session_cfg
 
 
 def _model_profile_provider_names() -> list[str]:
@@ -560,11 +664,12 @@ async def _build_session_engine(
                     f"Available: {list(cfg.providers.keys())}"
                 ),
             )
+    session_cfg = _session_config_for_provider(cfg, provider_name)
     if cfg.mcp_servers:
         engine, mcp_clients = await build_engine_with_mcp(
             session_id=session_id,
-            provider_cfg=cfg.providers[provider_name],
-            harness_cfg=cfg,
+            provider_cfg=session_cfg.providers[provider_name],
+            harness_cfg=session_cfg,
             session_store=_session_store,
             memory_store=_memory_store,
             plan_store=_plan_store,
@@ -581,8 +686,8 @@ async def _build_session_engine(
     return (
         build_engine(
             session_id=session_id,
-            provider_cfg=cfg.providers[provider_name],
-            harness_cfg=cfg,
+            provider_cfg=session_cfg.providers[provider_name],
+            harness_cfg=session_cfg,
             session_store=_session_store,
             memory_store=_memory_store,
             plan_store=_plan_store,
@@ -1526,14 +1631,17 @@ async def api_import_model_profile_from_env(req: RuntimeEnvImportRequest) -> dic
             or parsed.get("OPENAI_HUB_API_KEY")
             or parsed.get("OPENAI_API_KEY")
             or parsed.get("THREE_SIX_ONE_API_KEY")
+            or parsed.get("API_CZ_KEY")
             or parsed.get("ANTHROPIC_API_KEY")
             or ""
         ),
         "base_url": (
             parsed.get("ATELIER_BASE_URL")
+            or parsed.get("ATELIER_PROVIDER_BASE_URL")
             or parsed.get("OPENAI_HUB_BASE_URL")
             or parsed.get("OPENAI_BASE_URL")
             or parsed.get("THREE_SIX_ONE_BASE_URL")
+            or parsed.get("API_CZ_BASE_URL")
             or ""
         ),
         "model": (
@@ -1541,8 +1649,28 @@ async def api_import_model_profile_from_env(req: RuntimeEnvImportRequest) -> dic
             or parsed.get("OPENAI_HUB_MODEL")
             or parsed.get("OPENAI_MODEL")
             or parsed.get("THREE_SIX_ONE_MODEL")
+            or parsed.get("API_CZ_MODEL")
             or parsed.get("ANTHROPIC_MODEL")
             or "gpt-4o"
+        ),
+        "summary_api_key": (
+            parsed.get("ATELIER_SUMMARY_API_KEY")
+            or parsed.get("SUMMARY_API_KEY")
+            or parsed.get("ATELIER_API_KEY")
+            or parsed.get("API_CZ_KEY")
+            or ""
+        ),
+        "summary_base_url": (
+            parsed.get("ATELIER_SUMMARY_BASE_URL")
+            or parsed.get("SUMMARY_BASE_URL")
+            or parsed.get("ATELIER_BASE_URL")
+            or parsed.get("API_CZ_BASE_URL")
+            or ""
+        ),
+        "summary_model": (
+            parsed.get("ATELIER_SUMMARY_MODEL")
+            or parsed.get("SUMMARY_MODEL")
+            or ""
         ),
         "image_api_key": parsed.get("ATELIER_IMAGE_API_KEY") or parsed.get("DESIGN_IMAGE_API_KEY") or "",
         "image_base_url": parsed.get("ATELIER_IMAGE_BASE_URL") or parsed.get("DESIGN_IMAGE_BASE_URL") or "",
@@ -1558,6 +1686,17 @@ async def api_import_model_profile_from_env(req: RuntimeEnvImportRequest) -> dic
             or ""
         ),
         "image_default_size": parsed.get("ATELIER_IMAGE_DEFAULT_SIZE") or parsed.get("DESIGN_IMAGE_DEFAULT_SIZE") or "",
+        "search_provider": (
+            parsed.get("ATELIER_SEARCH_PROVIDER")
+            or ("serper" if parsed.get("SERPER_API_KEY") else "")
+            or ("brave" if parsed.get("BRAVE_SEARCH_API_KEY") else "")
+        ),
+        "search_api_key": (
+            parsed.get("ATELIER_SEARCH_API_KEY")
+            or parsed.get("SERPER_API_KEY")
+            or parsed.get("BRAVE_SEARCH_API_KEY")
+            or ""
+        ),
     })
     settings = _load_atelier_settings()
     profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]

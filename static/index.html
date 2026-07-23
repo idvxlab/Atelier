@@ -2564,6 +2564,18 @@
                   <input id="profile-model" type="text" placeholder="gpt-4o" />
                 </div>
                 <div class="settings-field">
+                  <label>Compression model</label>
+                  <input id="profile-summary-model" type="text" placeholder="optional, e.g. gpt-4o-mini" />
+                </div>
+                <div class="settings-field">
+                  <label>Compression base URL</label>
+                  <input id="profile-summary-base-url" type="text" placeholder="defaults to Base URL" />
+                </div>
+                <div class="settings-field">
+                  <label>Compression API key</label>
+                  <input id="profile-summary-api-key" type="password" autocomplete="off" placeholder="defaults to API key" />
+                </div>
+                <div class="settings-field">
                   <label>Image API key</label>
                   <input id="profile-image-api-key" type="password" autocomplete="off" />
                 </div>
@@ -2586,6 +2598,18 @@
                 <div class="settings-field">
                   <label>Default image size</label>
                   <input id="profile-image-default-size" type="text" placeholder="1024x1024" />
+                </div>
+                <div class="settings-field">
+                  <label>Search provider</label>
+                  <select id="profile-search-provider">
+                    <option value="">None / env fallback</option>
+                    <option value="serper">Serper</option>
+                    <option value="brave">Brave Search</option>
+                  </select>
+                </div>
+                <div class="settings-field">
+                  <label>Search API key</label>
+                  <input id="profile-search-api-key" type="password" autocomplete="off" />
                 </div>
               </div>
             </div>
@@ -5790,12 +5814,17 @@
           api_key: "",
           base_url: "",
           model: "gpt-4o",
+          summary_api_key: "",
+          summary_base_url: "",
+          summary_model: "",
           image_api_key: "",
           image_base_url: "",
           image_model: "gpt-image-2",
           image_generation_endpoint: "",
           image_edit_endpoint: "",
           image_default_size: "1024x1024",
+          search_provider: "",
+          search_api_key: "",
         });
       }
 
@@ -5815,12 +5844,17 @@
         setProfileValue("profile-api-key", profile.api_key || "");
         setProfileValue("profile-base-url", profile.base_url || "");
         setProfileValue("profile-model", profile.model || "gpt-4o");
+        setProfileValue("profile-summary-api-key", profile.summary_api_key || profile.api_key || "");
+        setProfileValue("profile-summary-base-url", profile.summary_base_url || profile.base_url || "");
+        setProfileValue("profile-summary-model", profile.summary_model || "");
         setProfileValue("profile-image-api-key", profile.image_api_key || profile.api_key || "");
         setProfileValue("profile-image-base-url", profile.image_base_url || profile.base_url || "");
         setProfileValue("profile-image-model", profile.image_model || "gpt-image-2");
         setProfileValue("profile-image-generation-endpoint", profile.image_generation_endpoint || "");
         setProfileValue("profile-image-edit-endpoint", profile.image_edit_endpoint || "");
         setProfileValue("profile-image-default-size", profile.image_default_size || "1024x1024");
+        setProfileValue("profile-search-provider", profile.search_provider || "");
+        setProfileValue("profile-search-api-key", profile.search_api_key || "");
         const fileInput = document.getElementById("model-profile-file");
         if (fileInput) fileInput.value = "";
         bindProfileEndpointAutofill();
@@ -5842,9 +5876,13 @@
         const edit = document.getElementById("profile-image-edit-endpoint");
         const imageKey = document.getElementById("profile-image-api-key");
         const apiKey = document.getElementById("profile-api-key");
+        const summaryBase = document.getElementById("profile-summary-base-url");
+        const summaryKey = document.getElementById("profile-summary-api-key");
         const fill = () => {
           if (imageBase && !imageBase.value && base?.value) imageBase.value = base.value;
           if (imageKey && !imageKey.value && apiKey?.value) imageKey.value = apiKey.value;
+          if (summaryBase && !summaryBase.value && base?.value) summaryBase.value = base.value;
+          if (summaryKey && !summaryKey.value && apiKey?.value) summaryKey.value = apiKey.value;
           const root = (imageBase?.value || "").replace(/\/+$/, "");
           if (!root) return;
           if (gen && (!gen.value || gen.dataset.auto === "true")) {
@@ -5873,12 +5911,17 @@
           api_key: getProfileValue("profile-api-key"),
           base_url: getProfileValue("profile-base-url"),
           model: getProfileValue("profile-model"),
+          summary_api_key: getProfileValue("profile-summary-api-key"),
+          summary_base_url: getProfileValue("profile-summary-base-url"),
+          summary_model: getProfileValue("profile-summary-model"),
           image_api_key: getProfileValue("profile-image-api-key"),
           image_base_url: getProfileValue("profile-image-base-url"),
           image_model: getProfileValue("profile-image-model"),
           image_generation_endpoint: getProfileValue("profile-image-generation-endpoint"),
           image_edit_endpoint: getProfileValue("profile-image-edit-endpoint"),
           image_default_size: getProfileValue("profile-image-default-size"),
+          search_provider: getProfileValue("profile-search-provider"),
+          search_api_key: getProfileValue("profile-search-api-key"),
         };
       }
 
@@ -5980,6 +6023,21 @@
           values.ATELIER_API_KEY ||
           values.API_CZ_KEY ||
           apiKey;
+        const summaryBaseUrl =
+          values.ATELIER_SUMMARY_BASE_URL ||
+          values.SUMMARY_BASE_URL ||
+          values.ATELIER_BASE_URL ||
+          baseUrl;
+        const summaryApiKey =
+          values.ATELIER_SUMMARY_API_KEY ||
+          values.SUMMARY_API_KEY ||
+          values.ATELIER_API_KEY ||
+          values.API_CZ_KEY ||
+          apiKey;
+        const searchProvider =
+          values.ATELIER_SEARCH_PROVIDER ||
+          (values.SERPER_API_KEY ? "serper" : "") ||
+          (values.BRAVE_SEARCH_API_KEY ? "brave" : "");
         return {
           id: values.ATELIER_ACTIVE_PROFILE || name,
           name,
@@ -5993,6 +6051,12 @@
             values.THREE_SIX_ONE_MODEL ||
             values.ANTHROPIC_MODEL ||
             "gpt-4o",
+          summary_api_key: summaryApiKey,
+          summary_base_url: summaryBaseUrl,
+          summary_model:
+            values.ATELIER_SUMMARY_MODEL ||
+            values.SUMMARY_MODEL ||
+            "",
           image_api_key: imageApiKey,
           image_base_url: imageBaseUrl,
           image_model:
@@ -6011,6 +6075,12 @@
             values.ATELIER_IMAGE_DEFAULT_SIZE ||
             values.DESIGN_IMAGE_DEFAULT_SIZE ||
             "1024x1024",
+          search_provider: searchProvider,
+          search_api_key:
+            values.ATELIER_SEARCH_API_KEY ||
+            values.SERPER_API_KEY ||
+            values.BRAVE_SEARCH_API_KEY ||
+            "",
         };
       }
 
@@ -6047,7 +6117,9 @@
             profile: {
               ...profile,
               api_key: profile.api_key ? "[redacted]" : "",
+              summary_api_key: profile.summary_api_key ? "[redacted]" : "",
               image_api_key: profile.image_api_key ? "[redacted]" : "",
+              search_api_key: profile.search_api_key ? "[redacted]" : "",
             },
           });
           setModelProfileStatus("Profile fields filled from .env.");
