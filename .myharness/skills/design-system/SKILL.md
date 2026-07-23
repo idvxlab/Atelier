@@ -1,6 +1,6 @@
 ---
 name: design-system
-description: How to author `plan/design_system.json` — the must-use contract every deliverable in a run shares (palette tokens, type roles, grid, motif, voice, lockup, imagery, asset usage). Owned by design-planner; consumed by Designer + Critic + artifact_lint. Includes a worked SII example.
+description: "How to author `plan/design_system.json` — the must-use contract every deliverable in a run shares (palette tokens, type roles, grid, motif, voice, lockup, imagery, asset usage). Owned by design-planner; consumed by Designer + Critic + artifact_lint. Includes a worked SII example."
 license: MIT
 metadata:
   audience: design-planner, design-designer, design-critic

@@ -1,6 +1,6 @@
 ---
 name: architecture-space
-description: Architecture, interior, exhibition, and spatial-design domain guidance for Atelier: site, program, spatial sequence, atmosphere, material, and presentation render deliverables.
+description: "Architecture, interior, exhibition, and spatial-design domain guidance for Atelier: site, program, spatial sequence, atmosphere, material, and presentation render deliverables."
 license: MIT
 metadata:
   audience: design-research, design-planner, design-designer, design-critic
@@ -79,9 +79,21 @@ Recommended deliverable categories:
 
 - exterior perspective or arrival view
 - interior perspective or key spatial moment
-- spatial zoning / circulation concept image
+- plan or zoning diagram
+- circulation or spatial sequence image
 - material atmosphere board
-- optional site relation view or detail vignette
+
+Optional additional categories:
+
+- site relation view
+- section perspective
+- facade or detail vignette
+- day-night atmosphere pair
+- human-scale use scene
+
+These are categories. If the brief names several zones, rooms, user flows, or
+atmosphere moments, Planner may expand one category into several concrete PNG
+entries in `deliverable_manifest.json`.
 
 ## 5. Designer Guidance
 

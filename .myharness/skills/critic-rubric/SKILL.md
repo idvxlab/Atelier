@@ -1,6 +1,6 @@
 ---
 name: critic-rubric
-description: The canonical scoring rubric used by design-critic for the PNG-set + gallery shape, with thresholds and hard-fail rules. Planner and Designer load this to make sure their work targets the same bar.
+description: "The canonical scoring rubric used by design-critic for the PNG-set + gallery shape, with thresholds and hard-fail rules. Planner and Designer load this to make sure their work targets the same bar."
 license: MIT
 metadata:
   audience: design-planner, design-designer, design-critic
@@ -13,7 +13,7 @@ metadata:
 
 | Dimension                    | What it scores                                                                                                | Threshold |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------- | --------- |
-| `requirement_coverage`       | Every deliverable declared in `plan/deliverable_manifest.json` is present (all required PNGs + `00-gallery.html`) and on-brief. The count is driven by `min_items`; default full set is 10 PNGs, but user-specified runs may have fewer.    | ≥ 4       |
+| `requirement_coverage`       | Every deliverable declared in `plan/deliverable_manifest.json` is present (all required PNGs + `00-gallery.html`) and on-brief. The count is driven by `min_items` and the selected domain's manifest, so compact and expanded runs may have different PNG totals.    | ≥ 4       |
 | `research_compliance`        | Designer respected `research/brand_lock.md` and cited facts from `research/evidence.json`                      | ≥ 4       |
 | `non_duplication`            | No replacement of any reference asset flagged `do_not_replace: true`; no copied marks                          | = 5       |
 | `reference_grounding`        | Each generated PNG ties back to a Research asset (used by `image_edit`) or a Research fact in the prompt       | ≥ 4       |
@@ -59,6 +59,15 @@ Add these two scores to `critique.json::scores`:
 
 - `domain_fit`: whether the artifact set fits the selected `domain_type` and uses the expected deliverable categories from `domainContext`.
 - `professional_fit`: whether the work addresses the selected domain's professional factors rather than only looking visually pleasant.
+
+Category coverage rule:
+
+- Read `domainContext.required_outputs` and `domainContext.deliverable_categories`.
+- Read every required PNG entry in `plan/deliverable_manifest.json`.
+- Treat manifest entries as concrete files and `deliverable_category` as the broader requirement they satisfy.
+- A category may be satisfied by one or more PNGs; multiple PNGs for one category are expected when the brief asks for several objects, applications, scenes, or formats.
+- Flag a `requirement_coverage` or `domain_fit` issue when a required category is absent from the manifest, when a required manifest PNG is missing, or when all PNGs in a category are off-brief.
+- Flag a hard failure when `00-gallery.html` hides expanded outputs by showing only one representative PNG while required concrete PNG files for that category exist.
 
 Domain lenses:
 

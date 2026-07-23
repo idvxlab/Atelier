@@ -158,6 +158,34 @@ async def test_run_init_and_design_bus_round_trip(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_run_init_uses_numbered_id_when_override_exists(monkeypatch, tmp_path):
+    monkeypatch.setenv("DESIGN_HARNESS_ROOT", str(tmp_path / "harness"))
+    monkeypatch.setenv("DESIGN_OUTPUTS_ROOT", str(tmp_path / "outputs"))
+
+    first = json.loads(
+        await run_init_tool(
+            brief="Design a product concept.",
+            resolvedScope='{"domain_type":"product_design"}',
+            runIdOverride="same-run",
+        )
+    )
+    second = json.loads(
+        await run_init_tool(
+            brief="Design a product concept again.",
+            resolvedScope='{"domain_type":"product_design"}',
+            runIdOverride="same-run",
+        )
+    )
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert first["runId"] == "same-run"
+    assert second["runId"] == "same-run-2"
+    assert Path(first["runDir"]).exists()
+    assert Path(second["runDir"]).exists()
+
+
+@pytest.mark.asyncio
 async def test_research_fetch_records_evidence(tmp_path):
     run_dir = tmp_path / "run"
 
@@ -283,6 +311,10 @@ async def test_artifact_lint_and_export_package(tmp_path):
     )
     (run_dir / "bus.jsonl").write_text("", encoding="utf-8")
     (artifacts / "poster.png").write_bytes(_png_bytes(width=128, height=128))
+    (artifacts / "poster.png.json").write_text(
+        json.dumps({"deliverable_category": "main poster"}),
+        encoding="utf-8",
+    )
     (research_assets / "reference.png").write_bytes(_png_bytes(width=64, height=64))
     (artifacts / "00-gallery.html").write_text(
         "<!doctype html><html><head><title>Gallery</title></head><body><img src='poster.png'></body></html>",
@@ -299,6 +331,7 @@ async def test_artifact_lint_and_export_package(tmp_path):
     )
     assert lint["ok"] is True
     assert lint["domain_type"] == "poster_advertising_design"
+    assert lint["summary"]["deliverable_categories"] == {"main poster": 1}
 
     exported = json.loads(
         await export_package_tool(

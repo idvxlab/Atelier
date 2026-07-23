@@ -1,6 +1,6 @@
 ---
 name: brand-identity
-description: Brand identity fundamentals — what counts as identity, how to extend without replacing, palette and typography decisions, and how to avoid generic AI-design clichés.
+description: "Brand identity fundamentals — what counts as identity, how to extend without replacing, palette and typography decisions, and how to avoid generic AI-design clichés."
 license: MIT
 metadata:
   audience: design-research, design-planner, design-designer, design-critic
@@ -163,3 +163,22 @@ For every deliverable produced:
 - Is there *one* idea you can name in a single sentence?
 
 If the answer to any is "no", revise before posting `design_done`.
+
+## 9. Baseline Brand-Cultural Outputs
+
+For `brand_cultural_design`, Planner should normally cover these required
+categories:
+
+- key visual
+- color system board
+- typography system board
+- application and merchandise
+- visual-system board
+
+Optional additional categories include poster series, social media cards,
+environmental applications, and motif/detail boards.
+
+These are categories. If the brief names several applications or merchandise
+items, Planner should expand `application and merchandise` into multiple
+concrete PNG entries in `plan/deliverable_manifest.json`, while keeping the same
+`deliverable_category` for traceability.

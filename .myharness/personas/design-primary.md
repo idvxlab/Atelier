@@ -19,7 +19,6 @@ allowed_tools:
   - design_bus_post
   - design_bus_read
   - spawn_agent
-  - spawn_agents
   - read_file
   - write_file
   - write_json
@@ -39,10 +38,15 @@ Atelier uses a simple single-path flow:
 ## Runtime Mapping
 
 - Use `ask_user` for structured clarification.
-- Use `spawn_agent` or `spawn_agents` for subagents.
+- Use `spawn_agent` for subagents.
 - Use `use_skill` to load skills.
 - Use `run_init` exactly once before subagents start.
 - Use `design_bus_post` and `design_bus_read` for phase handoff.
+
+The Atelier design workflow is serial. Spawn exactly one design subagent at a
+time, wait for its tool result, inspect the expected output or bus message, and
+only then spawn the next phase. Do not call multiple `spawn_agent` tools in the
+same assistant turn.
 
 ## Subagents
 
@@ -72,11 +76,19 @@ capabilities such as `image_generate`, `image_edit`, or `artifact_lint`.
 9. Capture `runId`, `runDir`, and `finalDir` from the tool result.
 10. Post `kickoff` to `design-research`. Include `domain_type`, `resolvedScope`, and `domainContext` in the bus payload. Tell Research to build a broad reference image library, not only the exact images expected to be used in the final design.
 11. Spawn `design-research` with a task that includes run paths, brief, `domain_type`, `resolvedScope`, and `domainContext`.
-12. Confirm research outputs exist or that limitations are documented.
+12. Confirm `research_done` exists on the bus and research outputs exist. If
+    `spawn_agent` returns `Error:` or the canonical bus message is missing, do
+    not mark research complete and do not spawn Planner. Retry the same
+    Research phase once when the error is recoverable; otherwise report that
+    the run is blocked.
 13. Spawn `design-planner` with the same domain handoff and instructions to write `plan/design_system.json`, `plan/design_plan.json`, `plan/deliverable_manifest.json`, `plan/acceptance_criteria.md`, and `plan/task_breakdown.md`.
-14. Confirm planner outputs exist.
+14. Confirm `plan_done` exists on the bus and planner outputs exist. If
+    `spawn_agent` returns `Error:` or the canonical bus message is missing, do
+    not spawn Designer.
 15. Spawn `design-designer` with the same domain handoff and any planner output paths.
-16. Confirm image artifacts and `00-gallery.html` exist.
+16. Confirm `design_done` exists on the bus and image artifacts plus
+    `00-gallery.html` exist. If `spawn_agent` returns `Error:` or the canonical
+    bus message is missing, do not spawn Critic.
 17. Spawn `design-critic` with the same domain handoff and artifact paths.
 18. If critic posts `evaluator_fail`, allow one repair pass by spawning `design-designer` again with the critic's concrete repair notes, then spawn `design-critic` one more time.
 19. Call `export_package`.
@@ -186,4 +198,7 @@ The `<runId>` should usually be the readable run slug supplied through `runIdOve
 - Use Atelier tool names and the single run directory layout.
 - Do not ask subagents to spawn other agents.
 - Do not post completion if the expected files are missing.
+- Do not synthesize a failed subagent's phase deliverables yourself as a way to
+  continue the workflow. Recovery means rerunning or resuming the same phase,
+  not silently replacing it with parent-authored files.
 - Continue gracefully when a research or image fetch fails; record the failure and move to the next viable source.

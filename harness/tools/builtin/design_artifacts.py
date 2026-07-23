@@ -15,7 +15,8 @@ ARTIFACT_LINT_SCHEMA = ToolSchema(
     name="artifact_lint",
     description=(
         "Lint design artifacts in a run directory. Checks images, JSON, HTML gallery, "
-        "placeholder text, missing manifest files, and protected reference usage."
+        "placeholder text, missing manifest files, protected reference usage, "
+        "and summarizes deliverable categories from PNG sidecars."
     ),
     params=[
         ToolParam(name="runId", type="string", description="Design run id."),
@@ -124,6 +125,7 @@ async def artifact_lint_tool(
     else:
         _issue(report, "warnings", str(manifest_path), "manifest.exists", "artifact-manifest.json is missing.")
 
+    report["deliverable_categories"] = _collect_deliverable_categories(files)
     _check_protected_references(report, run_dir, files)
     return _finish_report(report)
 
@@ -239,6 +241,19 @@ def _check_protected_references(report: dict[str, Any], run_dir: Path, artifact_
                     _issue(report, "errors", str(sidecar), "protected.replace", "Generated artifact appears to replace protected asset.")
 
 
+def _collect_deliverable_categories(artifact_files: list[Path]) -> dict[str, int]:
+    categories: dict[str, int] = {}
+    for sidecar in [p for p in artifact_files if p.suffix.lower() == ".json"]:
+        data = _read_json(sidecar, {})
+        if not isinstance(data, dict):
+            continue
+        category = str(data.get("deliverable_category") or "").strip()
+        if not category:
+            continue
+        categories[category] = categories.get(category, 0) + 1
+    return dict(sorted(categories.items()))
+
+
 def _issue(report: dict[str, Any], bucket: str, file: str, rule: str, detail: str) -> None:
     report[bucket].append({"file": file, "rule": rule, "detail": detail})
 
@@ -249,6 +264,7 @@ def _finish_report(report: dict[str, Any]) -> str:
         "checked": len(report["checked"]),
         "errors": len(report["errors"]),
         "warnings": len(report["warnings"]),
+        "deliverable_categories": report.get("deliverable_categories", {}),
     }
     return _json(report)
 

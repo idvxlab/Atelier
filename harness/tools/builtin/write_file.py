@@ -6,7 +6,11 @@ from harness.types.tools import ToolSchema, ToolParam
 
 WRITE_FILE_SCHEMA = ToolSchema(
     name="write_file",
-    description="Write content to a file, creating parent directories if needed.",
+    description=(
+        "Write plain text files such as Markdown, HTML, CSS, or source code, "
+        "creating parent directories if needed. For .json files, use write_json "
+        "instead so the model passes structured data instead of a long escaped string."
+    ),
     params=[
         ToolParam(name="path", type="string", description="Destination file path"),
         ToolParam(name="content", type="string", description="Content to write"),

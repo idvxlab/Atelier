@@ -1,6 +1,6 @@
 ---
 name: poster-advertising
-description: Poster, advertising, event key-visual, and campaign communication guidance for Atelier: message hierarchy, visual hook, media adaptation, and critique focus.
+description: "Poster, advertising, event key-visual, and campaign communication guidance for Atelier: message hierarchy, visual hook, media adaptation, and critique focus."
 license: MIT
 metadata:
   audience: design-research, design-planner, design-designer, design-critic
@@ -81,9 +81,20 @@ Recommended deliverable categories:
 
 - main poster
 - key visual
-- series poster or variation
+- color system board
+- typography and information hierarchy board
 - social adaptation
+
+Optional additional categories:
+
+- poster series variation
+- banner adaptation
 - typographic/detail crop
+- media placement mockup
+
+These are categories. If the brief names multiple media formats, campaign
+phases, or poster sizes, Planner may expand one category into several concrete
+PNG entries in `deliverable_manifest.json`.
 
 ## 5. Designer Guidance
 

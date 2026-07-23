@@ -582,6 +582,29 @@ async def test_connection_error_is_marked_recoverable():
 
 
 @pytest.mark.asyncio
+async def test_provider_channel_503_is_marked_recoverable():
+    engine = _build_engine("Recovered after provider retry.")
+    async with engine._state_lock:
+        engine._sm.transition(EngineState.ERROR)
+        engine._last_error = (
+            "openai.InternalServerError: Error code: 503 - "
+            "{'error': {'code': 'model_not_found', "
+            "'message': 'No available channel for model gpt-5.4 under group auto'}}"
+        )
+
+    snapshot = await engine.get_snapshot()
+    assert snapshot["recoverable_error"] is True
+
+    result = await engine.recover_if_possible()
+    await asyncio.sleep(0.1)
+
+    snapshot = await engine.get_snapshot()
+    assert result["status"] == "started"
+    assert snapshot["state"] == "COMPLETED"
+    assert snapshot["last_error"] == ""
+
+
+@pytest.mark.asyncio
 async def test_recoverable_error_auto_recovers_without_frontend_trigger():
     llm = _FlakyLLM()
     engine = _build_engine_with_llm(llm)

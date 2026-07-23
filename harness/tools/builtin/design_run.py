@@ -121,9 +121,10 @@ async def run_init_tool(
     if not brief or not brief.strip():
         return _json({"ok": False, "error": "brief is required"})
 
-    run_id = _sanitize_run_id(runIdOverride) if runIdOverride else _timestamp_id()
     harness_root = Path(os.getenv("DESIGN_HARNESS_ROOT", ".design-harness"))
     outputs_root = Path(os.getenv("DESIGN_OUTPUTS_ROOT", "outputs"))
+    run_id = _sanitize_run_id(runIdOverride) if runIdOverride else _timestamp_id()
+    run_id = _unique_run_id(run_id, harness_root, outputs_root)
     run_dir = harness_root / "runs" / run_id
     output_dir = outputs_root / "runs" / run_id
 
@@ -289,6 +290,19 @@ def _timestamp_id() -> str:
 def _sanitize_run_id(value: str | None) -> str:
     value = re.sub(r"[^A-Za-z0-9._-]+", "-", (value or "").strip()).strip("-._")
     return value or _timestamp_id()
+
+
+def _unique_run_id(base_id: str, harness_root: Path, outputs_root: Path) -> str:
+    base = _sanitize_run_id(base_id)
+    candidate = base
+    suffix = 2
+    while (
+        (harness_root / "runs" / candidate).exists()
+        or (outputs_root / "runs" / candidate).exists()
+    ):
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    return candidate
 
 
 def _now_iso() -> str:

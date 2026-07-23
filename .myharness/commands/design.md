@@ -8,6 +8,8 @@ User brief:
 $ARGUMENTS
 
 Run the Atelier design workflow as a single-path design production process.
+Run the phases serially: spawn one subagent, wait for its result, inspect the
+phase output, then spawn the next subagent. Do not parallelize the workflow.
 
 Required workflow:
 

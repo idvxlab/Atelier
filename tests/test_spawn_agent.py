@@ -21,7 +21,7 @@ from harness.tools.builtin.spawn_agent import (
     make_spawn_agent_tool,
     make_spawn_agents_tool,
 )
-from harness.types.messages import Message, TextBlock
+from harness.types.messages import Message, TextBlock, ToolCallBlock, ToolResultBlock
 
 
 # ── Shared mock helpers ────────────────────────────────────────────────────────
@@ -44,7 +44,11 @@ class _MockLLM:
         return "Summary."
 
 
-def _build_engine(reply_text: str = "Done.", session_id: str = "test") -> AgentEngine:
+def _build_engine(
+    reply_text: str = "Done.",
+    session_id: str = "test",
+    max_rounds: int = 50,
+) -> AgentEngine:
     emitter = EventEmitter(session_id)
     llm = _MockLLM(reply_text)
     store = MemorySessionStore()
@@ -61,7 +65,7 @@ def _build_engine(reply_text: str = "Done.", session_id: str = "test") -> AgentE
         max_rounds=5,
     )
     return AgentEngine(
-        config=EngineConfig(session_id=session_id),
+        config=EngineConfig(session_id=session_id, max_rounds=max_rounds),
         loop=loop,
         session_store=store,
         emitter=emitter,
@@ -128,6 +132,159 @@ class TestRunToCompletion:
 
         assert result == "Recovered."
         assert calls == 2
+
+    @pytest.mark.asyncio
+    async def test_tool_tail_auto_continues_inline(self):
+        """Sub-agent run_to_completion continues after tool results without opening it."""
+        engine = _build_engine("unused")
+        calls = 0
+
+        async def fake_guarded():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                engine._messages.append(
+                    Message(
+                        role="assistant",
+                        content=[
+                            ToolCallBlock(
+                                tool_call_id="call-1",
+                                tool_name="read_file",
+                                tool_input={"path": "README.md"},
+                            )
+                        ],
+                    )
+                )
+                engine._messages.append(
+                    Message(
+                        role="tool",
+                        content=[
+                            ToolResultBlock(
+                                tool_call_id="call-1",
+                                tool_name="read_file",
+                                content="file contents",
+                                is_error=False,
+                            )
+                        ],
+                    )
+                )
+                async with engine._state_lock:
+                    engine._sm.transition(EngineState.WAITING_INPUT)
+                return
+            engine._messages.append(
+                Message(role="assistant", content=[TextBlock(text="Finished after tool.")])
+            )
+            async with engine._state_lock:
+                engine._sm.transition(EngineState.COMPLETED)
+
+        engine._run_loop_guarded = fake_guarded
+
+        result = await engine.run_to_completion("ping")
+
+        assert result == "Finished after tool."
+        assert calls == 2
+
+    @pytest.mark.asyncio
+    async def test_tool_tail_continues_beyond_four_inline_cycles(self):
+        """Long sub-agent tasks should not be mistaken for completion after four batches."""
+        engine = _build_engine("unused", max_rounds=20)
+        calls = 0
+
+        async def fake_guarded():
+            nonlocal calls
+            calls += 1
+            if calls <= 6:
+                call_id = f"call-{calls}"
+                engine._messages.append(
+                    Message(
+                        role="assistant",
+                        content=[
+                            TextBlock(text=f"Intermediate batch {calls}."),
+                            ToolCallBlock(
+                                tool_call_id=call_id,
+                                tool_name="read_file",
+                                tool_input={"path": f"file-{calls}.md"},
+                            ),
+                        ],
+                    )
+                )
+                engine._messages.append(
+                    Message(
+                        role="tool",
+                        content=[
+                            ToolResultBlock(
+                                tool_call_id=call_id,
+                                tool_name="read_file",
+                                content=f"contents {calls}",
+                                is_error=False,
+                            )
+                        ],
+                    )
+                )
+                async with engine._state_lock:
+                    engine._sm.transition(EngineState.WAITING_INPUT)
+                return
+            engine._messages.append(
+                Message(role="assistant", content=[TextBlock(text="Finished after long tool chain.")])
+            )
+            async with engine._state_lock:
+                engine._sm.transition(EngineState.COMPLETED)
+
+        engine._run_loop_guarded = fake_guarded
+
+        result = await engine.run_to_completion("ping")
+
+        assert result == "Finished after long tool chain."
+        assert calls == 7
+
+    @pytest.mark.asyncio
+    async def test_incomplete_subagent_does_not_return_no_response_or_clear_pending(self):
+        """An incomplete child must remain pending and report an explicit error."""
+        parent = _build_engine("parent", session_id="parent-session")
+        engine = _build_engine("unused", session_id="child-session", max_rounds=1)
+        await parent.register_pending_spawn(
+            task="child task",
+            sub_id="child-session",
+            display_name="child",
+        )
+
+        async def fake_guarded():
+            engine._messages.append(
+                Message(
+                    role="assistant",
+                    content=[
+                        ToolCallBlock(
+                            tool_call_id="call-stuck",
+                            tool_name="read_file",
+                            tool_input={"path": "README.md"},
+                        )
+                    ],
+                )
+            )
+            engine._messages.append(
+                Message(
+                    role="tool",
+                    content=[
+                        ToolResultBlock(
+                            tool_call_id="call-stuck",
+                            tool_name="read_file",
+                            content="file contents",
+                            is_error=False,
+                        )
+                    ],
+                )
+            )
+            async with engine._state_lock:
+                engine._sm.transition(EngineState.WAITING_INPUT)
+
+        engine._run_loop_guarded = fake_guarded
+
+        result = await engine.run_to_completion("ping", parent_engine=parent)
+        parent_snap = await parent.get_snapshot()
+
+        assert result.startswith("Error: sub-agent child-session did not complete")
+        assert "(no response)" not in result
+        assert any(ps["sub_id"] == "child-session" for ps in parent_snap["pending_spawns"])
 
     @pytest.mark.asyncio
     async def test_can_reuse_after_completion(self):

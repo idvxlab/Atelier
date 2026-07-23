@@ -46,6 +46,17 @@ what each PNG should be. Every final PNG should correspond to the selected
 domain's output categories and should record that purpose in its prompt or
 sidecar.
 
+`plan/deliverable_manifest.json` is the execution authority. Its PNG entries are
+concrete files to produce, while `deliverable_category` records the broader
+required category. A single category may appear on several PNG entries when the
+brief asks for multiple applications, objects, scenes, or formats.
+
+Before producing the full set, establish a visual consistency anchor from
+`design_system.json` and `domainContext.consistency_anchor`. The anchor may be a
+canonical product render or three-view, a logo/motif reference, a spatial
+material-and-light reference, or a poster key visual. Use that anchor as a
+reference for later images whenever continuity matters.
+
 ## Inputs
 
 The parent must provide:
@@ -74,14 +85,17 @@ Read:
 3. Use `image_generate` for new visual assets.
 4. Use `image_edit` only with valid local reference images. Prefer standard PNG/JPEG/WebP references with sufficient size.
    Research may collect a larger reference library than you need. Choose the best few references for each deliverable, but leave unused assets untouched for audit and future iterations.
-5. For each `image_generate` or `image_edit` call, pass `domainType` from `brief.json::resolvedScope.domain_type` and pass `deliverableCategory` from the manifest item or `domainContext.deliverable_categories`.
-6. Write all generated PNGs under `<runDir>/artifacts/generated-images/` or `<runDir>/artifacts/edits/`.
-7. Create `<runDir>/artifacts/00-gallery.html` and reference every final PNG with local relative paths.
+5. If the manifest has a canonical anchor item, produce it first. Otherwise choose the first hero/key visual/system image as the anchor and record that choice in `artifact-manifest.json`.
+6. Produce every concrete PNG entry in `plan/deliverable_manifest.json`. If several entries share the same `deliverable_category`, treat them as a coherent series.
+7. Use `image_edit` from the anchor for derived deliverables that need continuity: color-system boards, typography/system boards, merchandise or application mockups, product scenes, product detail images, advertising adaptations, and any image that should preserve the same product/form/logo/key visual.
+8. For each `image_generate` or `image_edit` call, pass `domainType` from `brief.json::resolvedScope.domain_type` and pass `deliverableCategory` from the manifest item or `domainContext.deliverable_categories`.
+9. Write all generated PNGs under `<runDir>/artifacts/generated-images/` or `<runDir>/artifacts/edits/`.
+10. Create `<runDir>/artifacts/00-gallery.html` and reference every final PNG with local relative paths.
    Shape the gallery as a polished presentation page with a clear hierarchy: final generated/edited deliverables as the main section, and research references as a secondary provenance/reference section when useful.
-8. Write `<runDir>/artifacts/artifact-manifest.json`.
-9. Run `artifact_lint` with `requireGallery: true`.
-10. If lint fails, fix the files once if possible.
-11. Post `design_done` to `design-primary` with artifact paths and lint summary.
+11. Write `<runDir>/artifacts/artifact-manifest.json`.
+12. Run `artifact_lint` with `requireGallery: true`.
+13. If lint fails, fix the files once if possible.
+14. Post `design_done` to `design-primary` with artifact paths and lint summary.
 
 ## Image Rules
 
@@ -90,17 +104,20 @@ Read:
 - Preserve protected official marks exactly when they appear in a deliverable.
 - When using `image_edit`, preserve the identity of protected references and transform only the surrounding design.
 - Choose the research references that best support each deliverable, cite them in sidecars, and keep the broader reference library available for provenance and future iterations.
+- Keep the consistency anchor visible in prompts and sidecars. For product design, preserve form, proportions, CMF, controls, and material texture. For brand-cultural design, preserve logo/motif, palette, type roles, and layout rhythm. For poster-advertising design, preserve the key visual, headline hierarchy, palette, type roles, and graphic device. For architecture-space design, preserve massing/spatial concept, material palette, light atmosphere, and scale cues.
 - When research references appear in `00-gallery.html`, present them as a secondary "Reference Library" or provenance section with smaller cards and concise captions.
 - If image editing fails because a reference is invalid, generate a clean reference image first and retry once.
 
 ## Output Contract
 
-Minimum artifact set:
+Required artifact set:
 
-- one primary poster or hero visual PNG
-- one icon/social/supporting visual PNG
-- `00-gallery.html`
-- `artifact-manifest.json`
+- every required concrete PNG entry from `plan/deliverable_manifest.json`
+- one self-contained `00-gallery.html`
+- one `artifact-manifest.json`
+
+Use `write_json` for `artifact-manifest.json` and any side metadata you write
+manually. Use `write_file` for `00-gallery.html` and other plain text files.
 
 All outputs belong directly to this run's `artifacts` directory.
 
@@ -109,7 +126,9 @@ All outputs belong directly to this run's `artifacts` directory.
 `00-gallery.html` should look like a curated design-review board:
 
 - First section: run title, short brief, design-system summary, palette swatches if available.
-- Main section: final generated/edited deliverables, grouped by purpose such as poster, social, merchandise, signage, or supporting visual.
+- Main section: final generated/edited deliverables, grouped by `deliverable_category` from the manifest and sidecars.
+- Each category group may contain one card or many cards. Use responsive grids so expanded categories such as merchandise, product details, spatial zones, or media adaptations remain readable.
 - Each final card should include a short caption: deliverable id, purpose, method (`image_generate` or `image_edit`), and reference ids used.
 - Optional appendix: research references, presented as supporting source material with a lighter visual treatment.
 - Use inline CSS only, no scripts, no external network assets, no marketing copy about the harness itself.
+- Do not mix research reference images into the main final-deliverables groups; keep them in the appendix when shown.

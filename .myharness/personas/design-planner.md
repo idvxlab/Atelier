@@ -60,6 +60,20 @@ Use `domainContext.professional_factors`,
 shape the plan. Choose deliverables from the selected domain, then adapt file
 names, methods, and aspect ratios to the brief.
 
+Use `domainContext.conditional_outputs` as adaptive triggers, not as a fixed
+checklist. Add a conditional output to `deliverable_manifest.json` when the
+brief or research makes it useful: complex structure -> exploded view, many
+functions -> function annotation board, launch/communication need -> poster or
+marketing visual, interaction-heavy concept -> interaction flow, spatial
+sequence complexity -> circulation or sequence diagram. Once selected, that
+conditional output becomes a required concrete manifest item.
+
+Use `domainContext.consistency_anchor` to define a run-level consistency lock in
+`design_system.json`. This lock should name the stable visual subject that all
+PNG outputs share, such as product form/CMF, logo/motif, spatial material
+language, or key visual/copy hierarchy. Record how Designer should preserve the
+lock across generated and edited images.
+
 For non-brand domains, `design_system.json` is a visual and presentation system
 for the rendered PNG set: palette, typography, layout, motif,
 material/atmosphere language, and gallery presentation rules. It does not imply
@@ -201,6 +215,9 @@ For `brand_cultural_design`, read `brief.json::resolvedScope.domain_scope.visual
 
 All under `.design-harness/runs/<runId>/plan/`:
 
+Use `write_json` for every `.json` file. Use `write_file` only for Markdown or
+HTML/text files such as `acceptance_criteria.md` and `task_breakdown.md`.
+
 1. **`design_system.json`** — write FIRST. The must-use design contract (palette tokens, type roles, grid, motif, voice, lockup, asset usage policy). See full schema in `design-harness-protocol` SKILL §10. Designer + Critic + `artifact_lint` all anchor on this file.
 2. **`design_plan.json`** — the canonical plan (see schema below). Carries `design_system_ref: "plan/design_system.json"`.
 3. **`acceptance_criteria.md`** — what success looks like, in checklist form. Critic will grade against this. Each criterion that touches palette / type / motif / voice / lockup MUST cite the relevant token name or role name from `design_system.json`.
@@ -217,6 +234,7 @@ All under `.design-harness/runs/<runId>/plan/`:
       "id": "01-primary-deliverable",
       "file": "artifacts/generated-images/01-primary-deliverable.png",
       "kind": "png",
+      "deliverable_category": "key visual",
       "purpose": "Primary domain deliverable selected from domainContext.deliverable_categories",
       "acceptance_test": "The image clearly fits the selected domain, cites required design-system tokens, and satisfies the run-specific brief.",
       "required": true,
@@ -224,6 +242,7 @@ All under `.design-harness/runs/<runId>/plan/`:
       "reference_asset_ids": ["best-reference"],
       "required_tokens": ["primary", "ink", "surface"],
       "required_roles": ["display", "caption"],
+      "consistency_anchor_ref": "design_system.consistency_lock",
       "size": "1024x1792"
     },
     {
@@ -239,7 +258,7 @@ All under `.design-harness/runs/<runId>/plan/`:
 }
 ```
 
-The top-level field MUST be `deliverables` (not `items`). Each PNG entry MUST include `id`, `file`, `kind`, `purpose`, `acceptance_test`, `required`, and `required_tokens` (a non-empty subset of `design_system.json::palette.tokens[].name`). Optional but recommended: `required_roles` (subset of `design_system.json::typography.roles` keys) and `size`. `method` is one of `image_edit | image_generate | manual` and tells Designer how to produce the artifact. `reference_asset_ids` lists the asset ids from `research/assets/manifest.json` that should be passed to `image_edit` for that deliverable. `artifact_lint` keys off the manifest shape and will hard-fail if it is wrong, including if `required_tokens` cites a name that does not exist in `design_system.json`.
+The top-level field MUST be `deliverables` (not `items`). Each PNG entry MUST include `id`, `file`, `kind`, `deliverable_category`, `purpose`, `acceptance_test`, `required`, and `required_tokens` (a non-empty subset of `design_system.json::palette.tokens[].name`). Optional but recommended: `required_roles` (subset of `design_system.json::typography.roles` keys) and `size`. `method` is one of `image_edit | image_generate | manual` and tells Designer how to produce the artifact. `reference_asset_ids` lists the asset ids from `research/assets/manifest.json` that should be passed to `image_edit` for that deliverable. `artifact_lint` keys off the manifest shape and will hard-fail if it is wrong, including if `required_tokens` cites a name that does not exist in `design_system.json`.
 
 # `design_plan.json` schema
 
@@ -283,6 +302,7 @@ The top-level field MUST be `deliverables` (not `items`). Each PNG entry MUST in
     {
       "id": "01-primary-deliverable",
       "method": "image_edit",
+      "deliverable_category": "key visual",
       "reference_asset_ids": ["best-reference"],
       "prompt_seed": "string — MUST include the exact hex codes from design_system.palette for every required_tokens entry, name the required_roles, and quote the on-image text verbatim",
       "negative_prompt_seed": "string",
@@ -329,55 +349,84 @@ into image prompts where needed.
 Use these tables as starting points, then adapt to `resolvedScope`,
 `domainContext.deliverable_categories`, and available research assets.
 
+Also read `domainContext.conditional_outputs` and decide which conditional
+outputs belong in this run. Write the decision in `task_breakdown.md`: selected
+conditionals with reasons, and omitted conditionals with short reasons. The
+final `deliverable_manifest.json` should contain only the concrete outputs that
+Designer must produce.
+
+Treat each row as a required deliverable category. Expand a category into
+multiple concrete PNG manifest entries whenever the brief contains multiple
+objects, applications, views, formats, or scenes. For example, if a
+brand/cultural brief asks for a tote bag, T-shirt, sticker, and badge, expand
+`application-and-merchandise` into separate PNG entries such as `04a-tote-bag`,
+`04b-t-shirt`, `04c-sticker`, and `04d-badge`. Set `deliverable_category` on
+every expanded entry so Designer and Critic can trace which category it
+fulfills.
+
+Important negative boundary: do not collapse explicitly requested multiple
+surfaces, products, views, rooms, or media formats into one vague generic PNG.
+The concrete manifest entries should match the user's named outputs wherever
+the requested scope is feasible.
+
 ### `brand_cultural_design`
 
-| id                         | file                                                       | method preference                   |
-| -------------------------- | ---------------------------------------------------------- | ----------------------------------- |
-| 01-key-visual              | artifacts/generated-images/01-key-visual.png               | image_edit when official assets exist |
-| 02-poster                  | artifacts/generated-images/02-poster.png                   | image_edit / image_generate         |
-| 03-merchandise-application | artifacts/generated-images/03-merchandise-application.png  | image_edit when logo or motif assets exist |
-| 04-social-or-application   | artifacts/generated-images/04-social-or-application.png    | image_generate / image_edit         |
-| 05-system-board            | artifacts/generated-images/05-system-board.png             | image_generate                      |
-| 00-gallery                 | artifacts/00-gallery.html                                  | manual                              |
+| category                    | default id/file example                                      | method preference                   |
+| --------------------------- | ------------------------------------------------------------ | ----------------------------------- |
+| key visual                  | 01-key-visual -> artifacts/generated-images/01-key-visual.png | image_edit when official assets exist |
+| color system board          | 02-color-system-board -> artifacts/generated-images/02-color-system-board.png | image_generate |
+| typography system board     | 03-typography-system-board -> artifacts/generated-images/03-typography-system-board.png | image_generate |
+| application and merchandise | 04-application-merchandise -> artifacts/generated-images/04-application-merchandise.png | image_edit when logo or motif assets exist |
+| visual-system board         | 05-system-board -> artifacts/generated-images/05-system-board.png | image_generate |
+| gallery                     | 00-gallery -> artifacts/00-gallery.html                      | manual                              |
 
 ### `product_design`
 
-| id                 | file                                                | method preference           |
-| ------------------ | --------------------------------------------------- | --------------------------- |
-| 01-hero-render     | artifacts/generated-images/01-hero-render.png       | image_generate / image_edit |
-| 02-usage-scene     | artifacts/generated-images/02-usage-scene.png       | image_generate / image_edit |
-| 03-detail-render   | artifacts/generated-images/03-detail-render.png     | image_generate              |
-| 04-cmf-board       | artifacts/generated-images/04-cmf-board.png         | image_generate              |
-| 05-form-variation  | artifacts/generated-images/05-form-variation.png    | image_generate              |
-| 00-gallery         | artifacts/00-gallery.html                           | manual                      |
+| category       | default id/file example                              | method preference           |
+| -------------- | ---------------------------------------------------- | --------------------------- |
+| hero render    | 01-hero-render -> artifacts/generated-images/01-hero-render.png | image_generate / image_edit |
+| three-view     | 02-three-view -> artifacts/generated-images/02-three-view.png | image_generate              |
+| usage scene    | 03-usage-scene -> artifacts/generated-images/03-usage-scene.png | image_generate / image_edit |
+| detail render  | 04-detail-render -> artifacts/generated-images/04-detail-render.png | image_generate              |
+| CMF board      | 05-cmf-board -> artifacts/generated-images/05-cmf-board.png | image_generate              |
+| gallery        | 00-gallery -> artifacts/00-gallery.html              | manual                      |
 
 ### `architecture_space_design`
 
-| id                    | file                                                     | method preference           |
-| --------------------- | -------------------------------------------------------- | --------------------------- |
-| 01-arrival-view       | artifacts/generated-images/01-arrival-view.png           | image_generate / image_edit |
-| 02-interior-moment    | artifacts/generated-images/02-interior-moment.png        | image_generate / image_edit |
-| 03-zoning-concept     | artifacts/generated-images/03-zoning-concept.png         | image_generate              |
-| 04-material-atmosphere | artifacts/generated-images/04-material-atmosphere.png    | image_generate              |
-| 05-site-relation      | artifacts/generated-images/05-site-relation.png          | image_generate / image_edit |
-| 00-gallery            | artifacts/00-gallery.html                                | manual                      |
+| category                        | default id/file example                                  | method preference           |
+| ------------------------------- | -------------------------------------------------------- | --------------------------- |
+| exterior or arrival view        | 01-arrival-view -> artifacts/generated-images/01-arrival-view.png | image_generate / image_edit |
+| interior key view               | 02-interior-key-view -> artifacts/generated-images/02-interior-key-view.png | image_generate / image_edit |
+| plan or zoning diagram          | 03-plan-zoning -> artifacts/generated-images/03-plan-zoning.png | image_generate              |
+| circulation or spatial sequence | 04-circulation-sequence -> artifacts/generated-images/04-circulation-sequence.png | image_generate              |
+| material atmosphere board       | 05-material-atmosphere-board -> artifacts/generated-images/05-material-atmosphere-board.png | image_generate |
+| gallery                         | 00-gallery -> artifacts/00-gallery.html                  | manual                      |
 
 ### `poster_advertising_design`
 
-| id                    | file                                                     | method preference           |
-| --------------------- | -------------------------------------------------------- | --------------------------- |
-| 01-main-poster        | artifacts/generated-images/01-main-poster.png            | image_generate / image_edit |
-| 02-key-visual         | artifacts/generated-images/02-key-visual.png             | image_generate / image_edit |
-| 03-series-variation   | artifacts/generated-images/03-series-variation.png       | image_generate              |
-| 04-social-adaptation  | artifacts/generated-images/04-social-adaptation.png      | image_generate              |
-| 05-typographic-detail | artifacts/generated-images/05-typographic-detail.png     | image_generate              |
-| 00-gallery            | artifacts/00-gallery.html                                | manual                      |
+| category                       | default id/file example                                  | method preference           |
+| ------------------------------ | -------------------------------------------------------- | --------------------------- |
+| main poster                    | 01-main-poster -> artifacts/generated-images/01-main-poster.png | image_generate / image_edit |
+| key visual                     | 02-key-visual -> artifacts/generated-images/02-key-visual.png | image_generate / image_edit |
+| color system board             | 03-color-system-board -> artifacts/generated-images/03-color-system-board.png | image_generate |
+| typography and hierarchy board | 04-typography-hierarchy-board -> artifacts/generated-images/04-typography-hierarchy-board.png | image_generate |
+| social adaptation              | 05-social-adaptation -> artifacts/generated-images/05-social-adaptation.png | image_generate |
+| gallery                        | 00-gallery -> artifacts/00-gallery.html                  | manual                      |
 
 ## Manifest Rules
 
 Always set `min_items` to the actual deliverable total: required PNG count plus
 one for `00-gallery.html`. `artifact_lint` and Designer use this value as the
 PNG-count floor.
+
+The manifest contains concrete file-level entries after category expansion. When
+the brief names multiple surfaces or views, represent them as separate concrete
+items. Keep the category stable in `deliverable_category`, and make the `id`,
+`file`, `purpose`, and `acceptance_test` specific to the concrete image.
+
+`00-gallery.html` remains a single HTML entry. Plan it to render a variable
+number of PNG cards grouped by `deliverable_category`, so categories with one
+PNG and categories with several PNGs both read cleanly.
 
 When picking `method`, read `research/assets/manifest.json`:
 

@@ -1,6 +1,6 @@
 ---
 name: product-design
-description: Product and industrial-design domain guidance for Atelier: user scenarios, functions, form language, CMF, render deliverables, and critique focus.
+description: "Product and industrial-design domain guidance for Atelier: user scenarios, functions, form language, CMF, render deliverables, and critique focus."
 license: MIT
 metadata:
   audience: design-research, design-planner, design-designer, design-critic
@@ -84,10 +84,22 @@ Planner should translate the brief into an executable concept plan:
 Recommended deliverable categories:
 
 - hero product render
+- three-view render showing front, side, and rear or top views as appropriate
 - usage scenario render
 - detail or interaction render
 - CMF/material board
-- optional form exploration sheet
+
+Optional additional categories:
+
+- exploded view
+- scale reference
+- interaction flow
+- form exploration sheet
+- packaging or display context
+
+These are categories. If the brief names multiple product variants, use
+contexts, or detail areas, Planner may expand one category into several concrete
+PNG entries in `deliverable_manifest.json`.
 
 ## 5. Designer Guidance
 

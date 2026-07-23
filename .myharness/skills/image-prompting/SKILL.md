@@ -1,6 +1,6 @@
 ---
 name: image-prompting
-description: Craft for both text-to-image (image_generate) and image-edit (image_edit) prompts. How to specify subject, framing, palette, on-image text — and, for edits, how to phrase the prompt so the result respects the reference's geometry / palette / framing.
+description: "Craft for both text-to-image (image_generate) and image-edit (image_edit) prompts. How to specify subject, framing, palette, on-image text — and, for edits, how to phrase the prompt so the result respects the reference's geometry / palette / framing."
 license: MIT
 metadata:
   audience: design-designer

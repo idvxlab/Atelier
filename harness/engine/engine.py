@@ -467,6 +467,20 @@ class AgentEngine:
         viewing an old session should not start a model call. The frontend can
         call this when the snapshot says needs_continuation=true.
         """
+        result = await self._prepare_continue_if_needed(source="continue_if_needed")
+        if result.get("status") != "started":
+            return result
+        await self._emit_event(
+            {
+                "type": "runtime.event",
+                "data": {"phase": "auto_continuation_started"},
+            }
+        )
+        asyncio.create_task(self._run_loop_guarded())
+        return result
+
+    async def _prepare_continue_if_needed(self, source: str = "continue_if_needed") -> dict[str, Any]:
+        """Transition a tool-tailed idle engine into RUNNING for the next model turn."""
         async with self._state_lock:
             state = self._sm.state
             if state not in (EngineState.WAITING_INPUT, EngineState.COMPLETED):
@@ -484,16 +498,9 @@ class AgentEngine:
                 "triggered-executed",
                 detail={
                     "to": EngineState.RUNNING.name,
-                    "source": "continue_if_needed",
+                    "source": source,
                 },
             )
-        await self._emit_event(
-            {
-                "type": "runtime.event",
-                "data": {"phase": "auto_continuation_started"},
-            }
-        )
-        asyncio.create_task(self._run_loop_guarded())
         return {"status": "started"}
 
     async def recover_if_possible(self) -> dict[str, Any]:
@@ -563,11 +570,17 @@ class AgentEngine:
         if any(marker in lowered for marker in nonrecoverable):
             return False
         recoverable = (
+            "503",
+            "service unavailable",
+            "internalservererror",
+            "no available channel",
             "connection error",
             "connection",
             "timeout",
             "timed out",
             "temporarily unavailable",
+            "incomplete chunked read",
+            "endofstream",
             "tool_call",
             "tool result",
             "tool_result",
@@ -769,11 +782,29 @@ class AgentEngine:
         self._parent_engine = parent_engine
         await self._run_loop_guarded()
 
-        # Sub-agents run without an active frontend view, so the browser-side
-        # auto-recover path is not triggered for them. Recover transient
-        # provider/protocol/tool-result errors inline while the parent is still
-        # awaiting this subtask.
-        for _ in range(2):
+        # Sub-agents run without an active frontend view, so browser-driven
+        # continuation/recovery for the child session may never fire while the
+        # parent is open. Finish those resumable states inline before returning
+        # the spawn_agent tool result. Design workflows can legitimately take
+        # many tool batches, so this must not stop after only a few resumes.
+        resume_limit = max(30, min(80, self._config.max_rounds * 2))
+        for _ in range(resume_limit):
+            continuation = await self._prepare_continue_if_needed(
+                source="subagent_inline_continue"
+            )
+            if continuation.get("status") == "started":
+                await self._emit_event(
+                    {
+                        "type": "runtime.event",
+                        "data": {
+                            "phase": "auto_continuation_started",
+                            "source": "subagent_inline_continue",
+                        },
+                    }
+                )
+                await self._run_loop_guarded()
+                continue
+
             if self._auto_recovery_attempts >= 2:
                 break
             recovery = await self._prepare_recovery_if_possible()
@@ -792,9 +823,26 @@ class AgentEngine:
             )
             await self._run_loop_guarded()
 
-        # Notify parent engine that this sub-agent has completed
-        if parent_engine is not None:
+        completed = self._sm.state == EngineState.COMPLETED
+
+        # Notify parent engine only when this sub-agent really completed. If a
+        # child is still waiting/recoverable, keeping it in pending_spawns stops
+        # the parent UI from treating the phase as finished.
+        if parent_engine is not None and completed:
             await parent_engine.remove_completed_spawn(self._config.session_id)
+
+        if not completed:
+            reason = self._sm.state.name
+            if self._sm.state == EngineState.ERROR:
+                reason = "RECOVERABLE_ERROR" if self._is_recoverable_engine_error(self._last_error) else "ERROR"
+            elif self._last_visible_message_is_tool():
+                reason = "WAITING_AFTER_TOOL_RESULT"
+            return (
+                f"Error: sub-agent {self._config.session_id} did not complete "
+                f"(state={self._sm.state.name}, reason={reason}). "
+                "Do not proceed to the next phase until this sub-agent has "
+                "finished or its required bus message is present."
+            )
 
         # Return the last assistant text
         for msg in reversed(self._messages):

@@ -286,6 +286,8 @@ async def research_asset_fetch_tool(
         data = response.content
     except httpx.RequestError as exc:
         return _json({"ok": False, "error": f"request failed: {type(exc).__name__}: {exc}"})
+    except Exception as exc:
+        return _json({"ok": False, "error": f"download failed: {type(exc).__name__}: {exc}"})
 
     if not data:
         return _json({"ok": False, "error": "0-byte body"})

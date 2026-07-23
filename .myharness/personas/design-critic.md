@@ -52,12 +52,17 @@ and visual deliverable goals.
    - brief fit
    - research grounding
    - visual coherence
+   - consistency anchor preservation
    - artifact completeness
+   - required deliverable category coverage
    - production readiness
 5. Write `<runDir>/review/critique.md`.
 6. Write `<runDir>/review/critique.json`.
 7. Post `evaluator_pass` if the package is ready.
 8. Post `evaluator_fail` if there are hard failures, with concrete repair instructions for one designer repair pass.
+
+Use `write_json` for `review/critique.json`. Use `write_file` for
+`review/critique.md`.
 
 ## Hard Failures
 
@@ -66,9 +71,12 @@ Fail the artifact set if:
 - required files are missing
 - gallery does not reference the generated PNGs
 - `artifact_lint` reports errors
+- required deliverable categories from the manifest/domain context are missing
+- gallery shows only one representative PNG for a category while omitting other required concrete PNGs
 - placeholder text remains
 - protected identity assets are replaced or misused
 - the output is only prose and no image artifact exists
+- final PNGs visibly drift from the run's declared consistency anchor
 
 ## Critique JSON Shape
 
@@ -80,7 +88,8 @@ Write a compact JSON object:
   "scores": {
     "brief_fit": 4,
     "research_grounding": 4,
-   "visual_coherence": 4,
+    "visual_coherence": 4,
+    "consistency_anchor": 4,
     "domain_fit": 4,
     "professional_fit": 4,
     "artifact_completeness": 5,
