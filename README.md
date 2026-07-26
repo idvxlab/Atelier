@@ -35,53 +35,79 @@ Atelier is designed for teams and researchers who need more than a single-turn a
 
 The repository includes selected full-resolution design run packages under [`example_outputs/runs/`](example_outputs/runs/). These examples are copied from local run outputs while keeping the working `outputs/` directory ignored. Each package preserves the exported `final/` folder, including the gallery page, generated images, research files, planning files, and critique records.
 
+Images below use the original exported PNG files. The README only constrains display width so the source images remain available at full resolution in each case folder.
+
 ### Brand and Cultural Merchandise: Jingju Guochao Series
 
-A cultural merchandise system inspired by Peking opera facial makeup, covering product overview, packaging, collectible details, and visual specification boards.  
+A cultural merchandise system inspired by Peking opera facial makeup, covering product overview, packaging, collectible details, and visual specification boards.
+
 [Open final package](example_outputs/runs/jingju-guochao-merch/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/jingju-guochao-merch/final/artifacts/00-gallery.html)
 
-<p>
-  <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/01-product-overview.png" width="240" alt="Jingju merchandise product overview">
-  <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/07-packaging-application.png" width="240" alt="Jingju merchandise packaging application">
-  <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/10-series-overview.png" width="240" alt="Jingju merchandise series overview">
-  <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/design-spec/cultural-palette.png" width="240" alt="Jingju cultural palette board">
-</p>
+| Product system | Packaging | Series overview |
+| --- | --- | --- |
+| <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/01-product-overview.png" width="220" alt="Jingju merchandise product overview"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/07-packaging-application.png" width="220" alt="Jingju merchandise packaging application"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/10-series-overview.png" width="220" alt="Jingju merchandise series overview"> |
+| Detail close-up | Lifestyle use | Cultural palette |
+| <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/05-detail-closeup.png" width="220" alt="Jingju merchandise detail close-up"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/06-lifestyle-use.png" width="220" alt="Jingju merchandise lifestyle use"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/design-spec/cultural-palette.png" width="220" alt="Jingju cultural palette board"> |
+
+### Brand and Cultural Merchandise: Tongji IDVX Lab
+
+A lab-oriented merchandise case for IDVX, showing how a research identity can become bags, notebooks, badges, and campus-use visuals.
+
+[Open final package](example_outputs/runs/tongji-idvx-lab-merch/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/00-gallery.html)
+
+| Tote hero | Tote detail | Notebook cover |
+| --- | --- | --- |
+| <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/01-tote-hero-front.png" width="220" alt="Tongji IDVX tote hero front"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/02-tote-detail-strap.png" width="220" alt="Tongji IDVX tote detail strap"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/03-notebook-cover.png" width="220" alt="Tongji IDVX notebook cover"> |
+| Notebook spread | Badge system | Campus scene |
+| <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/04-notebook-open-spread.png" width="220" alt="Tongji IDVX notebook spread"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/05-badge-set-board.png" width="220" alt="Tongji IDVX badge board"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/08-campus-application-scene.png" width="220" alt="Tongji IDVX campus application scene"> |
 
 ### Product Design: Elderly AI Companion Device
 
-A product concept for older adults living alone, covering the hero render, three-view form lock, home usage scenarios, interaction details, CMF, and scale references.  
+A product concept for older adults living alone, covering the hero render, three-view form lock, home usage scenarios, interaction details, CMF, and form language.
+
 [Open final package](example_outputs/runs/elderly-ai-companion-device/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/elderly-ai-companion-device/final/artifacts/00-gallery.html)
 
-<p>
-  <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/01-hero-render.png" width="240" alt="Elderly AI companion hero render">
-  <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/02-three-view.png" width="240" alt="Elderly AI companion three-view">
-  <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/03-usage-scene-bedroom.png" width="240" alt="Elderly AI companion bedroom usage scene">
-  <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/06-cmf-board.png" width="240" alt="Elderly AI companion CMF board">
-</p>
+| Hero render | Three-view | Bedroom scene |
+| --- | --- | --- |
+| <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/01-hero-render.png" width="220" alt="Elderly AI companion hero render"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/02-three-view.png" width="220" alt="Elderly AI companion three-view"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/03-usage-scene-bedroom.png" width="220" alt="Elderly AI companion bedroom usage scene"> |
+| Interaction detail | CMF board | Form language |
+| <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/05-detail-interaction.png" width="220" alt="Elderly AI companion interaction detail"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/06-cmf-board.png" width="220" alt="Elderly AI companion CMF board"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/07-form-language.png" width="220" alt="Elderly AI companion form language board"> |
 
 ### Architecture and Space Design: Zhujiajiao Visitor Center
 
-A visitor-center concept for Zhujiajiao ancient town, covering site relationship, zoning, circulation, section perspective, key interior moments, facade study, material-light strategy, and accessibility analysis.  
+A visitor-center concept for Zhujiajiao ancient town, covering site relationship, zoning, circulation, section perspective, key interior moments, facade study, material-light strategy, and accessibility analysis.
+
 [Open final package](example_outputs/runs/zhujiajiao-visitor-center-space/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/00-gallery.html)
 
-<p>
-  <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/01-site-context-relation.png" width="240" alt="Zhujiajiao visitor center site context">
-  <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/02-master-plan-zoning.png" width="240" alt="Zhujiajiao visitor center zoning diagram">
-  <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/06-hero-entry-hall.png" width="240" alt="Zhujiajiao visitor center entry hall">
-  <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/11-material-light-board.png" width="240" alt="Zhujiajiao visitor center material and lighting board">
-</p>
+| Site context | Zoning | Circulation |
+| --- | --- | --- |
+| <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/01-site-context-relation.png" width="220" alt="Zhujiajiao visitor center site context"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/02-master-plan-zoning.png" width="220" alt="Zhujiajiao visitor center zoning diagram"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/03-circulation-flow.png" width="220" alt="Zhujiajiao visitor center circulation flow"> |
+| Entry hall | Facade | Material and light |
+| <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/06-hero-entry-hall.png" width="220" alt="Zhujiajiao visitor center entry hall"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/10-facade-elevation.png" width="220" alt="Zhujiajiao visitor center facade elevation"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/11-material-light-board.png" width="220" alt="Zhujiajiao visitor center material and lighting board"> |
 
 ### Poster and Advertising Design: IEEE VIS 2026 Promotion System
 
-A conference promotion system covering a main poster, key visual, typography hierarchy, color rules, social media adaptations, badge/lanyard, and presentation template.  
+A conference promotion system covering a main poster, key visual, typography hierarchy, color rules, social media adaptations, badge/lanyard, and presentation template.
+
 [Open final package](example_outputs/runs/ieee-vis-2026-promo/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/ieee-vis-2026-promo/final/artifacts/00-gallery.html)
 
-<p>
-  <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/01-main-poster.png" width="240" alt="IEEE VIS 2026 main poster">
-  <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/03-typography-hierarchy-board.png" width="240" alt="IEEE VIS 2026 typography hierarchy board">
-  <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/05-social-twitter-post.png" width="240" alt="IEEE VIS 2026 social media adaptation">
-  <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/10-badge-lanyard.png" width="240" alt="IEEE VIS 2026 badge and lanyard">
-</p>
+| Main poster | Key visual | Type hierarchy |
+| --- | --- | --- |
+| <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/01-main-poster.png" width="220" alt="IEEE VIS 2026 main poster"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/02-key-visual.png" width="220" alt="IEEE VIS 2026 key visual"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/03-typography-hierarchy-board.png" width="220" alt="IEEE VIS 2026 typography hierarchy board"> |
+| Social post | Badge and lanyard | PPT template |
+| <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/05-social-twitter-post.png" width="220" alt="IEEE VIS 2026 social media adaptation"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/10-badge-lanyard.png" width="220" alt="IEEE VIS 2026 badge and lanyard"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/11-ppt-template.png" width="220" alt="IEEE VIS 2026 presentation template"> |
+
+### Campus Campaign and Merchandise: Shanghai Chuangzhi College
+
+A campus-facing communication and merchandise system with bilingual posters, social cards, merch mockups, and moodboards.
+
+[Open final package](example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/00-gallery.html)
+
+| Logo poster | Chinese poster | English poster |
+| --- | --- | --- |
+| <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/01-logo-application-poster.png" width="220" alt="Shanghai Chuangzhi logo application poster"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/02-campaign-poster-zh.png" width="220" alt="Shanghai Chuangzhi Chinese campaign poster"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/03-campaign-poster-en.png" width="220" alt="Shanghai Chuangzhi English campaign poster"> |
+| Announcement card | Merch mockup | Moodboard |
+| <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/04-social-card-announce.png" width="220" alt="Shanghai Chuangzhi announcement social card"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/07-merch-mockup.png" width="220" alt="Shanghai Chuangzhi merch mockup"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/09-moodboard.png" width="220" alt="Shanghai Chuangzhi moodboard"> |
 
 ## Architecture
 
