@@ -86,6 +86,20 @@ When Research finds an organisation's identity, it usually contains:
 
 Identity is a *system*, not a logo. If you only think about "the logo", you will under-deliver.
 
+## 1.5 Lean Research Priority
+
+For `brand_cultural_design`, keep official identity evidence, but avoid a bloated
+reference library. A useful compact research set is:
+
+- 1 official logo, wordmark, or official application screenshot when available
+- 1-2 target-owned context/application/cultural references
+- 1-2 peer-system or merchandise/application references with clear learning value
+
+Keep extra campus, news, event, or mood images only when they directly affect the
+application matrix, motif selection, cultural translation, or protected-asset
+rules. Logo and official identity evidence should not be dropped just to reduce
+research time.
+
 ## 2. Three operating modes
 
 Pick one explicitly in `design_plan.json::mode`:
@@ -182,3 +196,15 @@ These are categories. If the brief names several applications or merchandise
 items, Planner should expand `application and merchandise` into multiple
 concrete PNG entries in `plan/deliverable_manifest.json`, while keeping the same
 `deliverable_category` for traceability.
+
+Planner should reason from the concrete brand/cultural problem before
+finalizing the manifest:
+
+- several named merchandise items -> split application/merchandise into one PNG per item or coherent item group
+- public campaign or recruitment communication -> add poster or social-media adaptations
+- physical place, exhibition, campus, or event context -> add signage/environmental application
+- rich cultural symbol system -> add motif/detail board
+- strong official identity assets -> use key visual, logo/mark, or motif as the consistency anchor for all applications
+
+Record selected and omitted expansions in `design_plan.json::domain_handoff` so
+Designer and Critic can understand why the package has that shape.

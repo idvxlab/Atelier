@@ -57,18 +57,21 @@ would materially change the design direction.
 
 ## 3. Research Guidance
 
-Research should collect references for:
+Research should keep research lean. Collect only references that can affect the
+product form, CMF, interaction, scenario, or scale decisions. A useful compact
+set is:
 
-- similar product categories and competing objects
-- usage contexts and body/object scale cues
-- material, color, and finish references
-- interface, detail, mechanism, and portability examples
-- lifestyle images that show the product's likely environment
+- 1-2 similar product categories or competing objects
+- 1 usage context or body/object scale cue
+- 1 material, color, finish, interface, detail, or mechanism reference
+- 1 lifestyle image only when the environment materially changes the design
 
 Reference images should be saved in `research/assets/` and described by role:
 `competitor`, `usage_context`, `cmf`, `detail`, or `lifestyle` when possible.
 The current asset tool may still use generic kinds such as `peer` or `other`;
 record the more specific role in descriptions until the tool schema is expanded.
+Skip generic product inspiration that cannot be tied to a manifest item or
+`domain_handoff` note.
 
 ## 4. Planner Guidance
 
@@ -88,10 +91,13 @@ Recommended deliverable categories:
 - usage scenario render
 - detail or interaction render
 - CMF/material board
+- form language board
+- scale reference
 
 Optional additional categories:
 
 - exploded view
+- function annotation board
 - scale reference
 - interaction flow
 - form exploration sheet
@@ -100,6 +106,19 @@ Optional additional categories:
 These are categories. If the brief names multiple product variants, use
 contexts, or detail areas, Planner may expand one category into several concrete
 PNG entries in `deliverable_manifest.json`.
+
+Planner should reason from the concrete product problem before finalizing the
+manifest:
+
+- complex structure, modules, or visible internal components -> add exploded view
+- many core functions -> add function annotation board
+- screen, voice, gesture, service, or companion behavior -> add interaction flow
+- several environments -> split usage scene into multiple concrete scenes
+- object size or body relationship matters -> include scale reference
+- launch, retail, or public communication is part of the brief -> add packaging/display or marketing visual
+
+Record selected and omitted expansions in `design_plan.json::domain_handoff` so
+Designer and Critic can understand why the package has that shape.
 
 ## 5. Designer Guidance
 
@@ -113,6 +132,8 @@ Each image prompt should include:
 - form language and silhouette
 - material/finish/color direction
 - view type: hero, usage, detail, CMF, or exploration
+- the selected consistency anchor, usually the three-view or canonical product render
+- any `domain_handoff.execution_notes` relevant to this deliverable
 
 Avoid images that only look like abstract branding graphics.
 

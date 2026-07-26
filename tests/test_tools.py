@@ -682,6 +682,28 @@ async def test_bound_todo_write_uses_current_session_id():
 
 
 @pytest.mark.asyncio
+async def test_bound_todo_write_does_not_require_session_id_argument():
+    from harness.storage.backends.memory import InMemoryPlanStore, MemorySessionStore
+
+    session_store = MemorySessionStore()
+    plan_store = InMemoryPlanStore()
+    tool = make_todo_write_tool(
+        session_store,
+        plan_store,
+        bound_session_id="current-session",
+    )
+
+    await tool(
+        action="set",
+        todos=[{"content": "plan without exposed session id", "status": "pending"}],
+    )
+
+    current_plan = await plan_store.load_by_session("current-session")
+    assert current_plan is not None
+    assert current_plan.items[0].content == "plan without exposed session id"
+
+
+@pytest.mark.asyncio
 async def test_memory_tool_add_search_delete():
     from harness.storage.backends.memory import InMemoryMemoryStore
     from harness.tools.builtin.memory_tool import make_memory_tool

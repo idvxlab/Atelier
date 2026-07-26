@@ -60,6 +60,11 @@ Use `domainContext.professional_factors`,
 shape the plan. Choose deliverables from the selected domain, then adapt file
 names, methods, and aspect ratios to the brief.
 
+Use `domainContext.anchor_candidates` to pick one primary visual anchor for the
+run. Choose only the strongest anchor for continuity unless the brief genuinely
+needs two. Examples: product `three-view`, architecture `key spatial view`,
+poster `main poster`, brand-cultural `key visual` or protected logo/motif.
+
 Use `domainContext.conditional_outputs` as adaptive triggers, not as a fixed
 checklist. Add a conditional output to `deliverable_manifest.json` when the
 brief or research makes it useful: complex structure -> exploded view, many
@@ -67,6 +72,30 @@ functions -> function annotation board, launch/communication need -> poster or
 marketing visual, interaction-heavy concept -> interaction flow, spatial
 sequence complexity -> circulation or sequence diagram. Once selected, that
 conditional output becomes a required concrete manifest item.
+
+Use `domainContext.handoff_focus` and `research/evidence.json::domain_findings`
+to create a run-specific `domain_handoff` object. This object is extensible:
+start with the required fields below, then add domain-specific fields when the
+brief or research makes them useful.
+
+Required `domain_handoff` fields:
+
+- `anchor_lock`: selected anchor item, why it was chosen, and what must stay stable.
+- `expansion_logic`: selected conditional or expanded deliverables, with reasons.
+- `omitted_expansions`: optional or conditional outputs not selected, with short reasons.
+- `execution_notes`: concrete guidance Designer must preserve across PNGs.
+- `research_basis`: evidence URLs or reference asset ids that support the above.
+
+When choosing deliverables, think in two passes:
+
+1. **Baseline pass**: cover the selected domain's required output categories.
+2. **Run-specific expansion pass**: inspect `resolvedScope`, `domain_scope`,
+   `research/evidence.json::domain_findings`, and available reference assets.
+   Add or split deliverables when the concrete problem needs them. Write the
+   reasoning in `domain_handoff.expansion_logic` and `task_breakdown.md`.
+
+The expansion pass should be professional and proportional. Add more outputs
+when they clarify the design, not just to make the package larger.
 
 Use `domainContext.consistency_anchor` to define a run-level consistency lock in
 `design_system.json`. This lock should name the stable visual subject that all
@@ -218,6 +247,30 @@ All under `.design-harness/runs/<runId>/plan/`:
 Use `write_json` for every `.json` file. Use `write_file` only for Markdown or
 HTML/text files such as `acceptance_criteria.md` and `task_breakdown.md`.
 
+## Plan File Size Discipline
+
+Planner should preserve design detail without turning JSON tool arguments into
+huge escaped strings. Keep JSON fields structured and bounded:
+
+- `purpose`: one short reason for the deliverable, usually 50-150 characters.
+- `acceptance_test`: concrete pass/fail criteria, usually 100-250 characters.
+- `prompt_seed`: an executable image-prompt seed, usually 300-800 characters.
+- `negative_prompt_seed`: compact avoid-list, usually under 180 characters.
+- `domain_handoff.execution_notes`: several short bullets are better than one
+  very long paragraph.
+
+`prompt_seed` is not the final image prompt. It should capture the image intent,
+main subject, view type, required visual anchors, palette token names or hexes,
+and essential exclusions. Designer will combine it with `design_system.json`,
+`domain_handoff`, the manifest item, research references, and the selected
+domain skill to write the full prompt for `image_generate` or `image_edit`.
+
+If a JSON file becomes too large, shorten long string fields first and move
+expanded reasoning into `task_breakdown.md` or `acceptance_criteria.md`. Do not
+use `write_file` to write a giant escaped JSON string unless `write_json` is
+impossible. If a fallback append workflow is used for any JSON file, read it
+back and verify it is valid JSON before posting `plan_done`.
+
 1. **`design_system.json`** — write FIRST. The must-use design contract (palette tokens, type roles, grid, motif, voice, lockup, asset usage policy). See full schema in `design-harness-protocol` SKILL §10. Designer + Critic + `artifact_lint` all anchor on this file.
 2. **`design_plan.json`** — the canonical plan (see schema below). Carries `design_system_ref: "plan/design_system.json"`.
 3. **`acceptance_criteria.md`** — what success looks like, in checklist form. Critic will grade against this. Each criterion that touches palette / type / motif / voice / lockup MUST cite the relevant token name or role name from `design_system.json`.
@@ -273,6 +326,28 @@ The top-level field MUST be `deliverables` (not `items`). Each PNG entry MUST in
     "tone_keywords": ["string"]
   },
   "design_intent": "1-3 sentence design thesis (mirrors design_system.system_thesis)",
+  "domain_handoff": {
+    "anchor_lock": {
+      "selected_anchor": "string",
+      "reason": "string",
+      "must_preserve": ["string"]
+    },
+    "expansion_logic": [
+      {
+        "deliverable_or_category": "string",
+        "reason": "string",
+        "source": "brief | research | domainContext"
+      }
+    ],
+    "omitted_expansions": [
+      {
+        "deliverable_or_category": "string",
+        "reason": "string"
+      }
+    ],
+    "execution_notes": ["string"],
+    "research_basis": ["source url or research asset id"]
+  },
   "visual_direction": {
     "style_axis": ["rational-tech", "academic", "warm-humanistic", "experimental-futurist"],
     "selected_axis": "string",
@@ -304,7 +379,7 @@ The top-level field MUST be `deliverables` (not `items`). Each PNG entry MUST in
       "method": "image_edit",
       "deliverable_category": "key visual",
       "reference_asset_ids": ["best-reference"],
-      "prompt_seed": "string — MUST include the exact hex codes from design_system.palette for every required_tokens entry, name the required_roles, and quote the on-image text verbatim",
+      "prompt_seed": "300-800 character image-prompt seed. Include subject, view type, key visual anchors, required palette token names or hexes, and essential text intent. Designer expands this into the final image prompt.",
       "negative_prompt_seed": "string",
       "size": "1024x1792",
       "required": true
@@ -387,31 +462,53 @@ the requested scope is feasible.
 | hero render    | 01-hero-render -> artifacts/generated-images/01-hero-render.png | image_generate / image_edit |
 | three-view     | 02-three-view -> artifacts/generated-images/02-three-view.png | image_generate              |
 | usage scene    | 03-usage-scene -> artifacts/generated-images/03-usage-scene.png | image_generate / image_edit |
-| detail render  | 04-detail-render -> artifacts/generated-images/04-detail-render.png | image_generate              |
-| CMF board      | 05-cmf-board -> artifacts/generated-images/05-cmf-board.png | image_generate              |
+| detail or interaction view | 04-detail-interaction -> artifacts/generated-images/04-detail-interaction.png | image_generate / image_edit |
+| CMF board      | 05-cmf-board -> artifacts/generated-images/05-cmf-board.png | image_generate / image_edit |
+| form language board | 06-form-language -> artifacts/generated-images/06-form-language.png | image_generate / image_edit |
+| scale reference | 07-scale-reference -> artifacts/generated-images/07-scale-reference.png | image_generate              |
 | gallery        | 00-gallery -> artifacts/00-gallery.html              | manual                      |
+
+For product design, prefer `three-view` as the anchor when it exists because it
+locks proportion, silhouette, control placement, and CMF. Use `image_edit` from
+that anchor for later usage scenes, CMF boards, detail views, form-language
+boards, and function annotations whenever the backend accepts the reference.
 
 ### `architecture_space_design`
 
 | category                        | default id/file example                                  | method preference           |
 | ------------------------------- | -------------------------------------------------------- | --------------------------- |
-| exterior or arrival view        | 01-arrival-view -> artifacts/generated-images/01-arrival-view.png | image_generate / image_edit |
-| interior key view               | 02-interior-key-view -> artifacts/generated-images/02-interior-key-view.png | image_generate / image_edit |
-| plan or zoning diagram          | 03-plan-zoning -> artifacts/generated-images/03-plan-zoning.png | image_generate              |
-| circulation or spatial sequence | 04-circulation-sequence -> artifacts/generated-images/04-circulation-sequence.png | image_generate              |
-| material atmosphere board       | 05-material-atmosphere-board -> artifacts/generated-images/05-material-atmosphere-board.png | image_generate |
+| hero spatial render             | 01-hero-spatial-render -> artifacts/generated-images/01-hero-spatial-render.png | image_generate / image_edit |
+| plan or zoning diagram          | 02-plan-zoning -> artifacts/generated-images/02-plan-zoning.png | image_generate              |
+| circulation or user journey     | 03-circulation-journey -> artifacts/generated-images/03-circulation-journey.png | image_generate              |
+| section or sectional perspective | 04-section-perspective -> artifacts/generated-images/04-section-perspective.png | image_generate / image_edit |
+| material and lighting atmosphere board | 05-material-light-board -> artifacts/generated-images/05-material-light-board.png | image_generate |
+| accessibility and scale board   | 06-accessibility-scale-board -> artifacts/generated-images/06-accessibility-scale-board.png | image_generate |
 | gallery                         | 00-gallery -> artifacts/00-gallery.html                  | manual                      |
+
+For architecture/space design, plan, circulation, and section images are
+explanatory design drawings. They should explain spatial organization,
+movement, vertical relationship, scale, and light paths. They are not decorative
+mood images. Add site/context relation, interior key moments, facade/elevation,
+detail vignettes, day/night pairs, or presentation overview boards when the
+brief or research makes those views useful.
 
 ### `poster_advertising_design`
 
 | category                       | default id/file example                                  | method preference           |
 | ------------------------------ | -------------------------------------------------------- | --------------------------- |
 | main poster                    | 01-main-poster -> artifacts/generated-images/01-main-poster.png | image_generate / image_edit |
-| key visual                     | 02-key-visual -> artifacts/generated-images/02-key-visual.png | image_generate / image_edit |
-| color system board             | 03-color-system-board -> artifacts/generated-images/03-color-system-board.png | image_generate |
-| typography and hierarchy board | 04-typography-hierarchy-board -> artifacts/generated-images/04-typography-hierarchy-board.png | image_generate |
+| key visual or master visual    | 02-key-visual -> artifacts/generated-images/02-key-visual.png | image_generate / image_edit |
+| typography and information hierarchy board | 03-typography-hierarchy-board -> artifacts/generated-images/03-typography-hierarchy-board.png | image_generate |
+| color and visual rules board   | 04-color-visual-rules-board -> artifacts/generated-images/04-color-visual-rules-board.png | image_generate |
 | social adaptation              | 05-social-adaptation -> artifacts/generated-images/05-social-adaptation.png | image_generate |
 | gallery                        | 00-gallery -> artifacts/00-gallery.html                  | manual                      |
+
+For poster/advertising design, treat the key visual as a campaign seed. The
+main poster proves the complete message hierarchy; adaptations prove that the
+same idea survives changed format, crop, and medium. Add banner/horizontal
+adaptations, poster series variations, media placement mockups, detail crops,
+or campaign asset overview boards when the brief names several formats,
+messages, phases, or placement contexts.
 
 ## Manifest Rules
 
@@ -423,6 +520,14 @@ The manifest contains concrete file-level entries after category expansion. When
 the brief names multiple surfaces or views, represent them as separate concrete
 items. Keep the category stable in `deliverable_category`, and make the `id`,
 `file`, `purpose`, and `acceptance_test` specific to the concrete image.
+
+The manifest path is authoritative. The `file` value in
+`plan/deliverable_manifest.json` must be the exact path Designer writes and the
+exact path `00-gallery.html` embeds. Use stable numbered filenames from the
+manifest, such as `01-hero-spatial-render.png`, and do not switch to a separate
+descriptive naming scheme later. If a deliverable is renamed, update the
+manifest first, then mirror the same path in `design_plan.json`, sidecars,
+`artifact-manifest.json`, and the gallery.
 
 `00-gallery.html` remains a single HTML entry. Plan it to render a variable
 number of PNG cards grouped by `deliverable_category`, so categories with one

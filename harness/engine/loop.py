@@ -347,7 +347,9 @@ class ReactLoop:
             )
 
             # ── 8. Validate the pair BEFORE appending ─────────────────────
-            validate_message_sequence(messages + [reply, tool_result_msg])
+            validate_message_sequence(
+                repair_message_sequence(messages) + [reply, tool_result_msg]
+            )
 
             # ── 9. Append pair atomically ──────────────────────────────────
             await on_message(reply)

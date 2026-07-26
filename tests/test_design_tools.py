@@ -333,6 +333,53 @@ async def test_artifact_lint_and_export_package(tmp_path):
     assert lint["domain_type"] == "poster_advertising_design"
     assert lint["summary"]["deliverable_categories"] == {"main poster": 1}
 
+    (artifacts / "00-gallery.html").write_text(
+        (
+            "<!doctype html><html><head><title>Gallery</title></head><body>"
+            "<img src='poster.png'>"
+            "<img src='../research/assets/reference.png'>"
+            "</body></html>"
+        ),
+        encoding="utf-8",
+    )
+    lint_with_reference = json.loads(
+        await artifact_lint_tool(
+            runId="r1",
+            runDir=str(run_dir),
+            minPngs=1,
+            requireGallery=True,
+        )
+    )
+    assert lint_with_reference["ok"] is True
+
+    (artifacts / "00-gallery.html").write_text(
+        (
+            "<!doctype html><html><head><title>Gallery</title></head><body>"
+            "<img src='poster.png'>"
+            "<img src='../research/assets/missing-reference.png'>"
+            "</body></html>"
+        ),
+        encoding="utf-8",
+    )
+    lint_with_missing_reference = json.loads(
+        await artifact_lint_tool(
+            runId="r1",
+            runDir=str(run_dir),
+            minPngs=1,
+            requireGallery=True,
+        )
+    )
+    assert lint_with_missing_reference["ok"] is False
+    assert any(
+        issue["rule"] == "html.image_exists"
+        for issue in lint_with_missing_reference["errors"]
+    )
+
+    (artifacts / "00-gallery.html").write_text(
+        "<!doctype html><html><head><title>Gallery</title></head><body><img src='poster.png'></body></html>",
+        encoding="utf-8",
+    )
+
     exported = json.loads(
         await export_package_tool(
             runId="r1",

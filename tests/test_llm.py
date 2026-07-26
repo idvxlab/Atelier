@@ -110,6 +110,19 @@ class TestValidateMessageSequence:
         assert result.tool_call_id == "missing-result"
         assert result.is_error
 
+    def test_repair_message_sequence_handles_system_after_tool_call(self):
+        msgs = [
+            _user("go"),
+            _assistant_tool("missing-result", "todo_write"),
+            Message(role="system", content=[TextBlock(text="<internal>reminder</internal>")]),
+        ]
+
+        repaired = repair_message_sequence(msgs)
+
+        validate_message_sequence(repaired)
+        assert repaired[2].role == "tool"
+        assert repaired[3].role == "system"
+
 
 def test_openai_tool_arguments_parse_truncated_json_as_invalid():
     parsed = _parse_tool_arguments('{"path": "demo.py", "content": "unterminated')

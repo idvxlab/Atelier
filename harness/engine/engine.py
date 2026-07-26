@@ -37,6 +37,10 @@ StateListener = Callable[[], Awaitable[None]]
 EngineEvent = dict  # {"type": str, "data": dict}
 EventListener = Callable[[EngineEvent], Awaitable[None]]
 
+NETWORK_RECOVERY_ATTEMPTS = 99
+OTHER_RECOVERY_ATTEMPTS = 5
+SUBAGENT_RECOVERY_DELAY_SECONDS = 3.0
+
 from harness.types.messages import Message, TextBlock, new_message_id
 from harness.engine.state_machine import StateMachine, EngineState
 from harness.engine.loop import ReactLoop, InterruptSignal
@@ -592,6 +596,36 @@ class AgentEngine:
         )
         return any(marker in lowered for marker in recoverable)
 
+    def _is_network_recoverable_engine_error(self, error: str) -> bool:
+        lowered = (error or "").casefold()
+        if not lowered or not self._is_recoverable_engine_error(error):
+            return False
+        network_markers = (
+            "connection error",
+            "apiconnectionerror",
+            "remoteprotocolerror",
+            "peer closed connection",
+            "incomplete chunked read",
+            "endofstream",
+            "timeout",
+            "timed out",
+            "temporarily unavailable",
+            "503",
+            "service unavailable",
+            "no available channel",
+        )
+        return any(marker in lowered for marker in network_markers)
+
+    def _subagent_recovery_limit_for_error(self, error: str) -> int:
+        if self._is_network_recoverable_engine_error(error):
+            return NETWORK_RECOVERY_ATTEMPTS
+        if self._is_recoverable_engine_error(error):
+            return OTHER_RECOVERY_ATTEMPTS
+        return 0
+
+    async def _sleep_before_subagent_recovery(self) -> None:
+        await asyncio.sleep(SUBAGENT_RECOVERY_DELAY_SECONDS)
+
     def _last_visible_message_is_tool(self) -> bool:
         for msg in reversed(self._messages):
             if self._is_internal_ui_hidden_message(msg):
@@ -805,7 +839,10 @@ class AgentEngine:
                 await self._run_loop_guarded()
                 continue
 
-            if self._auto_recovery_attempts >= 2:
+            recovery_error = self._last_error
+            recovery_limit = self._subagent_recovery_limit_for_error(recovery_error)
+            is_network_recovery = self._is_network_recoverable_engine_error(recovery_error)
+            if recovery_limit <= 0 or self._auto_recovery_attempts >= recovery_limit:
                 break
             recovery = await self._prepare_recovery_if_possible()
             if recovery.get("status") != "started":
@@ -818,9 +855,14 @@ class AgentEngine:
                         "phase": "engine_recovery_started",
                         "source": "subagent_inline_recover",
                         "attempt": self._auto_recovery_attempts,
+                        "limit": recovery_limit,
+                        "network": is_network_recovery,
                     },
                 }
             )
+            if self._user_cancelled:
+                break
+            await self._sleep_before_subagent_recovery()
             await self._run_loop_guarded()
 
         completed = self._sm.state == EngineState.COMPLETED

@@ -9,7 +9,10 @@ WRITE_FILE_SCHEMA = ToolSchema(
     description=(
         "Write plain text files such as Markdown, HTML, CSS, or source code, "
         "creating parent directories if needed. For .json files, use write_json "
-        "instead so the model passes structured data instead of a long escaped string."
+        "instead so the model passes structured data instead of a long escaped string. "
+        "For long plain-text files, write the first chunk normally and later chunks "
+        "with append=true. Avoid writing huge JSON content as one escaped string; "
+        "if append is used as a JSON fallback, read back and validate the final JSON."
     ),
     params=[
         ToolParam(name="path", type="string", description="Destination file path"),

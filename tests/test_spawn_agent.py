@@ -107,9 +107,13 @@ class TestRunToCompletion:
         assert "模型连续返回空内容" in result
 
     @pytest.mark.asyncio
-    async def test_recoverable_error_auto_recovers_inline(self):
+    async def test_recoverable_error_auto_recovers_inline(self, monkeypatch):
         """Sub-agent run_to_completion recovers without opening the child session."""
         engine = _build_engine("unused")
+        async def no_sleep():
+            return None
+
+        monkeypatch.setattr(engine, "_sleep_before_subagent_recovery", no_sleep)
         calls = 0
 
         async def fake_guarded():
@@ -132,6 +136,38 @@ class TestRunToCompletion:
 
         assert result == "Recovered."
         assert calls == 2
+
+    @pytest.mark.asyncio
+    async def test_network_recoverable_error_retries_beyond_two_attempts(self, monkeypatch):
+        """Network failures should keep retrying instead of returning early to the parent."""
+        engine = _build_engine("unused")
+
+        async def no_sleep():
+            return None
+
+        monkeypatch.setattr(engine, "_sleep_before_subagent_recovery", no_sleep)
+        calls = 0
+
+        async def fake_guarded():
+            nonlocal calls
+            calls += 1
+            if calls <= 3:
+                engine._last_error = "httpx.RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)"
+                async with engine._state_lock:
+                    engine._sm.transition(EngineState.ERROR)
+                return
+            engine._messages.append(
+                Message(role="assistant", content=[TextBlock(text="Recovered after repeated network errors.")])
+            )
+            async with engine._state_lock:
+                engine._sm.transition(EngineState.COMPLETED)
+
+        engine._run_loop_guarded = fake_guarded
+
+        result = await engine.run_to_completion("ping")
+
+        assert result == "Recovered after repeated network errors."
+        assert calls == 4
 
     @pytest.mark.asyncio
     async def test_tool_tail_auto_continues_inline(self):

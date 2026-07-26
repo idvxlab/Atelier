@@ -54,16 +54,20 @@ atmosphere would lead to a materially different concept.
 
 ## 3. Research Guidance
 
-Research should collect references for:
+Research should keep research lean. Collect references only when they can shape
+site response, spatial organization, circulation, material/light, or human scale.
+A useful compact set is:
 
-- site/context or analogous environmental images
-- precedent buildings, interiors, exhibitions, or spatial installations
-- material palette and lighting atmosphere
-- circulation, zoning, or public/private relationship examples
-- human-scale cues and use scenarios
+- 1 site/context or analogous environmental image
+- 1-2 precedent buildings, interiors, exhibitions, or spatial installations
+- 1 plan, zoning, section, or circulation reference
+- 1 material/light or human-scale reference
+- 1 accessibility/comfort reference only when the users include elders, children, public visitors, or accessibility-sensitive groups
 
 When real site data is unavailable, collect analogous references and label the
 run as a concept based on assumptions.
+Skip decorative mood references that do not inform a view, diagram, material
+decision, or `domain_handoff` note.
 
 ## 4. Planner Guidance
 
@@ -77,23 +81,41 @@ Planner should define:
 
 Recommended deliverable categories:
 
-- exterior perspective or arrival view
-- interior perspective or key spatial moment
+- hero spatial render or key perspective
 - plan or zoning diagram
-- circulation or spatial sequence image
-- material atmosphere board
+- circulation or user journey diagram
+- section or sectional perspective
+- material and lighting atmosphere board
+- accessibility and scale board
 
 Optional additional categories:
 
 - site relation view
-- section perspective
-- facade or detail vignette
+- interior key moment render
+- elevation or facade study
+- detail vignette
 - day-night atmosphere pair
 - human-scale use scene
+- presentation overview board
 
 These are categories. If the brief names several zones, rooms, user flows, or
 atmosphere moments, Planner may expand one category into several concrete PNG
 entries in `deliverable_manifest.json`.
+
+Planner should reason from the concrete spatial problem before finalizing the
+manifest:
+
+- strong site/context dependency -> add site relation view
+- exterior identity, threshold, or entrance expression matters -> add elevation/facade study
+- vertical organization, mezzanine, atrium, slope, or stacked program -> add section perspective
+- several rooms or zones -> split interior/key view into multiple concrete views
+- visitor journey or operational flow matters -> add circulation or sequence diagram
+- lighting atmosphere is central -> add day/night or alternate light scene
+- envelope, craft, facade, or installation detail matters -> add detail vignette
+- elders, children, care, public service, accessibility, or comfort-sensitive users -> keep accessibility and scale visible in a dedicated board and in at least one experiential render
+
+Record selected and omitted expansions in `design_plan.json::domain_handoff` so
+Designer and Critic can understand why the package has that shape.
 
 ## 5. Designer Guidance
 
@@ -103,11 +125,14 @@ presentation images.
 Each image prompt should include:
 
 - space type and function
-- view type: exterior, interior, zoning, material board, or site relation
+- view type: hero render, site relation, plan/zoning, circulation, section, interior key moment, facade/elevation, material board, or detail vignette
 - spatial organization and human-scale cues
 - atmosphere and lighting
 - material direction
+- accessibility or comfort cues when relevant: handrails, ramps, resting points, glare control, clear circulation, seating scale, doorway width, or surface safety
 - context or site relationship when relevant
+- the selected consistency anchor, usually the key spatial view or massing/arrival view
+- any `domain_handoff.execution_notes` relevant to this deliverable
 
 Avoid purely decorative mood images that do not show usable space.
 
@@ -117,7 +142,9 @@ Critic should evaluate:
 
 - whether spatial logic and program are understandable
 - whether scale and human use feel plausible
+- whether plan, section, and circulation images explain the design rather than merely decorate it
 - whether material and light support the intended atmosphere
+- whether accessibility and scale are visible when the brief names sensitive users or public access
 - whether site/context is addressed when the brief requires it
 - whether outputs read as spatial design, not only abstract branding
 

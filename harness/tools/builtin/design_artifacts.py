@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import html as html_lib
 import json
 import re
 import shutil
@@ -213,6 +214,35 @@ def _lint_html(report: dict[str, Any], path: Path, content: str) -> None:
         _issue(report, "warnings", str(path), "html.script", "Gallery should usually be no-JS/self-contained.")
     if re.search(r'(?:src|href)=["\']https?://', content, flags=re.I):
         _issue(report, "warnings", str(path), "html.network", "External http(s) reference found.")
+    _lint_local_image_references(report, path, content)
+
+
+def _lint_local_image_references(report: dict[str, Any], path: Path, content: str) -> None:
+    for ref in _html_image_refs(content):
+        if _is_external_ref(ref):
+            continue
+        normalized = html_lib.unescape(ref).split("#", 1)[0].split("?", 1)[0].replace("\\", "/").strip()
+        if not normalized:
+            continue
+        target = (path.parent / normalized).resolve()
+        if not target.exists():
+            _issue(report, "errors", str(path), "html.image_exists", f"Image reference does not exist: {ref}")
+
+
+def _html_image_refs(content: str) -> list[str]:
+    refs: list[str] = []
+    refs.extend(match.group(2) for match in re.finditer(r'\bsrc\s*=\s*(["\'])(.*?)\1', content, flags=re.I | re.S))
+    for match in re.finditer(r'\bsrcset\s*=\s*(["\'])(.*?)\1', content, flags=re.I | re.S):
+        for candidate in match.group(2).split(","):
+            url = candidate.strip().split(" ", 1)[0].strip()
+            if url:
+                refs.append(url)
+    return refs
+
+
+def _is_external_ref(ref: str) -> bool:
+    lower = ref.strip().lower()
+    return lower.startswith(("http://", "https://", "data:", "mailto:", "tel:", "#"))
 
 
 def _lint_placeholders(report: dict[str, Any], path: Path, content: str) -> None:

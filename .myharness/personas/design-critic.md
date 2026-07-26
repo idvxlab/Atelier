@@ -55,6 +55,8 @@ and visual deliverable goals.
    - consistency anchor preservation
    - artifact completeness
    - required deliverable category coverage
+   - manifest/gallery path consistency
+   - presentation-page narrative quality
    - production readiness
 5. Write `<runDir>/review/critique.md`.
 6. Write `<runDir>/review/critique.json`.
@@ -73,10 +75,21 @@ Fail the artifact set if:
 - `artifact_lint` reports errors
 - required deliverable categories from the manifest/domain context are missing
 - gallery shows only one representative PNG for a category while omitting other required concrete PNGs
+- a required manifest file path does not exist because Designer wrote the artifact under a different filename
 - placeholder text remains
 - protected identity assets are replaced or misused
 - the output is only prose and no image artifact exists
 - final PNGs visibly drift from the run's declared consistency anchor
+
+For `architecture_space_design`, treat missing explanatory spatial logic as a
+serious domain issue: if the plan required plan/zoning, circulation/user
+journey, or section/sectional perspective images and they are absent from the
+gallery or artifact set, fail `domain_fit` and request repair.
+
+For `poster_advertising_design`, treat adaptation drift as a serious domain
+issue: if social/banner/series/placement outputs exist but do not preserve the
+same key visual, message hierarchy, palette, and graphic device, fail
+`professional_fit` and request repair.
 
 ## Critique JSON Shape
 

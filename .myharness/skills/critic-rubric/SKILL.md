@@ -49,6 +49,12 @@ When `hard_fail: true`, set `verdict: "fail"` regardless of other scores.
 
 Gallery presentation note: a strong `00-gallery.html` uses clear sections for final deliverables, design-system context, and optional research provenance. Reference images should read as supporting source material rather than competing with the final generated/edited outputs.
 
+Manifest/gallery path consistency: every required PNG path declared in
+`plan/deliverable_manifest.json` must exist and must be the same path embedded
+by `00-gallery.html` and recorded in `artifacts/artifact-manifest.json`. Treat
+renamed or substituted files as a deliverability issue; hard-fail when the
+declared required file is missing.
+
 ## 3.1 Domain-Aware Scoring
 
 Read `brief.json::resolvedScope.domain_type` and `brief.json::domainContext`
@@ -73,8 +79,21 @@ Domain lenses:
 
 - `brand_cultural_design`: identity recognition, cultural translation, visual-system coherence, reference grounding, and production readiness.
 - `product_design`: user scenario, functional clarity, form/material coherence, scale plausibility, CMF, and product-render completeness.
-- `architecture_space_design`: spatial logic, program fit, site/context relationship, material atmosphere, lighting, and human scale.
-- `poster_advertising_design`: message clarity, hierarchy, visual hook, audience fit, format readiness, and campaign consistency.
+- `architecture_space_design`: spatial logic, program fit, plan/zoning clarity, circulation/user journey, section or vertical relationship, site/context relationship, material atmosphere, lighting, accessibility, and human scale.
+- `poster_advertising_design`: message clarity, hierarchy, visual hook, key visual consistency, audience fit, format readiness, placement readiness, CTA survival, and campaign consistency.
+
+Domain-specific gallery quality:
+
+- Architecture/space galleries should read as a design presentation: concept,
+  system, spatial logic, experience renders, detail/atmosphere, and references.
+  A gallery that only lists render cards without explaining plan, circulation,
+  section, material/light, and scale relationships should lose
+  `professional_fit`.
+- Poster/advertising galleries should read as a campaign presentation: campaign
+  thesis, master visual, main poster, visual rules, format adaptations, and
+  placement or detail views when present. A gallery that shows unrelated poster
+  variants without a shared key visual/message hierarchy should lose
+  `system_consistency` and `professional_fit`.
 
 Do not force non-brand domains through MI / BI / VI. For non-brand domains,
 `design_system.json` is judged as the visual/presentation system for the PNG

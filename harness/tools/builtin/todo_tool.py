@@ -276,11 +276,11 @@ def make_todo_write_tool(
     bound_session_id: str | None = None,
 ):
     async def persistent_todo_write_tool(
-        session_id: str,
         action: str,
         todos: list[dict] | None = None,
         index: int | None = None,
         status: str | None = None,
+        session_id: str = "",
     ) -> str:
         target_session_id = bound_session_id or session_id
         return await todo_write_tool(

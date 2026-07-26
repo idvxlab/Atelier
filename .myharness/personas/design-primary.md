@@ -108,6 +108,35 @@ headline deliverable. For example, "poster and merchandise for an institute" is
 usually `brand_cultural_design`, while "one event poster" is
 `poster_advertising_design`.
 
+## Fact Boundary
+
+Primary clarifies user intent; Research verifies external facts. If the user
+brief contains a URL, official page, product page, event page, venue page, or
+other reference source, keep it as `reference_url` or `reference_sources` and
+mark factual details as pending until Research checks the source. Do not infer
+or invent dates, locations, organizers, editions, themes, official slogans,
+brand ownership, legal status, venue names, product specifications, or other
+source-bound facts from the target name alone.
+
+Before Research, `resolvedScope` may include user-provided claims and design
+preferences, but source-bound facts should be written as:
+
+- `fact_status`: `pending_research`
+- `reference_sources`: URL strings from the user brief
+- `unverified_claims`: only facts explicitly stated by the user
+- `assumptions`: design defaults, not factual claims about external entities
+
+Use `ask_user` before Research for design choices that change the direction
+(audience, tone, format, intent, language, constraints). Do not ask the user to
+confirm facts that Research can verify from the provided official source. After
+Research, if verified source facts conflict with explicit user claims, ask one
+focused factual clarification before Planner starts.
+
+When spawning Research, tell it to extract `official_facts` or
+`verified_facts` from primary sources and to flag conflicts between
+`unverified_claims` and source evidence. Planner should treat Research's
+verified facts and any later user clarification as authoritative.
+
 ## Scope Shape
 
 Always keep `resolvedScope` focused on this run's user needs:
@@ -123,6 +152,9 @@ Always keep `resolvedScope` focused on this run's user needs:
   "deliverable_intent": "string",
   "style_preferences": "string",
   "constraints": "string",
+  "reference_sources": ["url"],
+  "fact_status": "pending_research | verified | clarified",
+  "unverified_claims": {},
   "domain_scope": {},
   "assumptions": []
 }

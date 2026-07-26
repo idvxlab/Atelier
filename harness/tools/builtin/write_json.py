@@ -13,7 +13,9 @@ WRITE_JSON_SCHEMA = ToolSchema(
     description=(
         "Write structured JSON data to a file, creating parent directories if "
         "needed. Prefer this over write_file for JSON files because the data is "
-        "passed as an object, not as an escaped JSON string."
+        "passed as an object, not as an escaped JSON string. Keep very large "
+        "planning JSON stable by bounding long string fields such as prompt_seed, "
+        "acceptance_test, and execution_notes; put expanded prose in Markdown files."
     ),
     params=[
         ToolParam(name="path", type="string", description="Destination .json file path"),

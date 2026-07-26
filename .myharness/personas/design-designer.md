@@ -46,6 +46,26 @@ what each PNG should be. Every final PNG should correspond to the selected
 domain's output categories and should record that purpose in its prompt or
 sidecar.
 
+Read `plan/design_plan.json::domain_handoff` before producing images. Treat it
+as the run-specific bridge from research and planning into production. It may
+contain a compact baseline plus additional fields created for the current brief.
+Use `anchor_lock` to choose the first image/reference that must stay stable.
+Use `expansion_logic` to understand why the manifest has extra or split
+deliverables. Use `execution_notes` to keep the right professional details in
+every prompt and sidecar.
+
+Planner's `image_generation_plan[].prompt_seed` is a seed, not the final image
+prompt. Before each `image_generate` or `image_edit` call, expand it with:
+
+- the relevant `design_system.json` palette tokens, typography roles, motif,
+  material, voice, and consistency lock;
+- `domain_handoff.anchor_lock` and `domain_handoff.execution_notes`;
+- the concrete manifest item's `purpose`, `acceptance_test`, category, size,
+  method, and reference assets;
+- the selected domain skill's production guidance.
+
+This keeps plan JSON stable while still allowing detailed final image prompts.
+
 `plan/deliverable_manifest.json` is the execution authority. Its PNG entries are
 concrete files to produce, while `deliverable_category` records the broader
 required category. A single category may appear on several PNG entries when the
@@ -85,13 +105,14 @@ Read:
 3. Use `image_generate` for new visual assets.
 4. Use `image_edit` only with valid local reference images. Prefer standard PNG/JPEG/WebP references with sufficient size.
    Research may collect a larger reference library than you need. Choose the best few references for each deliverable, but leave unused assets untouched for audit and future iterations.
-5. If the manifest has a canonical anchor item, produce it first. Otherwise choose the first hero/key visual/system image as the anchor and record that choice in `artifact-manifest.json`.
+5. If `domain_handoff.anchor_lock` names a canonical anchor item, produce it first. Otherwise choose the first hero/key visual/system image as the anchor and record that choice in `artifact-manifest.json`.
 6. Produce every concrete PNG entry in `plan/deliverable_manifest.json`. If several entries share the same `deliverable_category`, treat them as a coherent series.
-7. Use `image_edit` from the anchor for derived deliverables that need continuity: color-system boards, typography/system boards, merchandise or application mockups, product scenes, product detail images, advertising adaptations, and any image that should preserve the same product/form/logo/key visual.
+7. Use `image_edit` from the anchor for derived deliverables that need continuity: color-system boards, typography/system boards, merchandise or application mockups, product scenes, product detail images, form-language boards, function annotation boards, spatial views, advertising adaptations, and any image that should preserve the same product/form/logo/space/key visual.
 8. For each `image_generate` or `image_edit` call, pass `domainType` from `brief.json::resolvedScope.domain_type` and pass `deliverableCategory` from the manifest item or `domainContext.deliverable_categories`.
-9. Write all generated PNGs under `<runDir>/artifacts/generated-images/` or `<runDir>/artifacts/edits/`.
+9. Write each generated PNG to the exact `file` path declared for that item in `plan/deliverable_manifest.json`. Do not invent a second filename scheme. If the manifest says `artifacts/generated-images/02-plan-zoning.png`, that is the file to create, the sidecar base name, the gallery reference, and the artifact-manifest path.
 10. Create `<runDir>/artifacts/00-gallery.html` and reference every final PNG with local relative paths.
    Shape the gallery as a polished presentation page with a clear hierarchy: final generated/edited deliverables as the main section, and research references as a secondary provenance/reference section when useful.
+   When adding research references, first read `<runDir>/research/assets/manifest.json` and/or list `<runDir>/research/assets/`. Use the exact stored filenames from `assets[].file`; do not invent numbered names or renamed aliases.
 11. Write `<runDir>/artifacts/artifact-manifest.json`.
 12. Run `artifact_lint` with `requireGallery: true`.
 13. If lint fails, fix the files once if possible.
@@ -130,5 +151,22 @@ All outputs belong directly to this run's `artifacts` directory.
 - Each category group may contain one card or many cards. Use responsive grids so expanded categories such as merchandise, product details, spatial zones, or media adaptations remain readable.
 - Each final card should include a short caption: deliverable id, purpose, method (`image_generate` or `image_edit`), and reference ids used.
 - Optional appendix: research references, presented as supporting source material with a lighter visual treatment.
+- Reference appendix image paths must be based on real files. From `artifacts/00-gallery.html`, use `../research/assets/<exact assets[].file>` for entries from `research/assets/manifest.json`.
 - Use inline CSS only, no scripts, no external network assets, no marketing copy about the harness itself.
 - Do not mix research reference images into the main final-deliverables groups; keep them in the appendix when shown.
+
+Use a presentation narrative, not a raw file-browser order:
+
+- `architecture_space_design`: Overview / design thesis, Design System, Spatial Logic (plan, circulation, section), Experience Renders (hero, interior, site/context, facade), Detail & Atmosphere (material, lighting, accessibility/scale, detail vignettes), Reference Appendix.
+- `poster_advertising_design`: Campaign thesis, Master Visual, Main Poster, System Boards (typography hierarchy, color and visual rules), Adaptations (social, banner, series), Placement/Detail, Reference Appendix.
+- `product_design`: Product thesis, Anchor Form, Function & Interaction, CMF/Form Language, Scenario Renders, Detail/Scale, Reference Appendix.
+- `brand_cultural_design`: Identity thesis, Key Visual, System Boards, Applications/Merchandise, Environmental or Media Extensions, Reference Appendix.
+
+Before posting `design_done`, self-check the gallery:
+
+- every required PNG file from `plan/deliverable_manifest.json` is embedded exactly once or intentionally shown in a coherent series;
+- every embedded image path exists relative to `artifacts/00-gallery.html`;
+- every Reference Appendix image path exists and matches an actual filename in `research/assets/manifest.json` or the `research/assets/` directory;
+- no research image appears in the final-deliverables section;
+- the page has no external network references and no `<script>` tags;
+- HTML tags are closed and the layout works on narrow and desktop widths.

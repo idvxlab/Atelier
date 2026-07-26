@@ -59,6 +59,15 @@ being designed, for whom, in what language, with what intent, style preference,
 and constraints. It must include `domain_type`, but it should not become a
 general professional rulebook.
 
+Primary must keep source-bound facts separate from design intent. When the
+brief includes a URL or official reference, save the URL in `reference_sources`
+and set `fact_status` to `pending_research`. Before Research verifies the
+source, do not fill dates, locations, organizers, editions, themes, official
+slogans, brand ownership, venue names, product specs, or other external facts
+by inference. Put only user-explicit facts in `unverified_claims`. Design
+defaults can go in `assumptions`, but factual claims about real entities should
+wait for Research.
+
 Recommended shape:
 
 ```json
@@ -72,6 +81,9 @@ Recommended shape:
   "deliverable_intent": "string",
   "style_preferences": "string",
   "constraints": "string",
+  "reference_sources": ["url"],
+  "fact_status": "pending_research | verified | clarified",
+  "unverified_claims": {},
   "domain_scope": {}
 }
 ```
@@ -100,7 +112,9 @@ Recommended shape:
   "required_outputs": ["string"],
   "optional_outputs": ["string"],
   "conditional_outputs": ["string"],
+  "anchor_candidates": ["string"],
   "consistency_anchor": ["string"],
+  "handoff_focus": ["string"],
   "evaluation_focus": ["string"],
   "research_keywords": ["string"],
   "common_outputs": ["string"]
@@ -122,6 +136,10 @@ function annotation board; public communication needs can add a poster or
 marketing visual; interaction-heavy concepts can add an interaction flow; and
 spatial sequence complexity can add a circulation or sequence diagram.
 
+`anchor_candidates` lists the strongest first images or references for visual
+continuity. Choose only one or two per run. Examples: product three-view,
+brand key visual, architecture key spatial view, or poster main visual.
+
 `consistency_anchor` names the stable visual subject for the whole run. The
 anchor changes by domain: product form and CMF for product design,
 logo/motif/identity for brand-cultural design, spatial language and material
@@ -130,6 +148,21 @@ for poster-advertising design. Planner records the anchor in
 `design_system.json`; Designer should establish a canonical anchor image or
 reference set early, then use `image_edit` from that anchor whenever a later
 deliverable needs visual continuity.
+
+`handoff_focus` lists the domain-specific information that should travel from
+Research to Planner to Designer. It is not a rigid schema. Research should
+record evidence under these headings when available. Planner should turn them
+into a run-specific `domain_handoff` object in `design_system.json` and
+`design_plan.json`. Designer should read that object before generating images.
+
+Domain outputs are a starting framework, not a closed checklist. For each run,
+Planner should first satisfy the selected domain's required outputs, then reason
+from the concrete brief and research evidence to expand, merge, or specialize
+deliverables. The expansion decision should be explicit: what was added, what
+was intentionally omitted, and why. For example, a simple product may not need
+an exploded view, while a multi-module device should add one; a poster with
+several media formats should expand adaptations; a spatial brief with vertical
+organization should add a section perspective.
 
 Initial domain-context table:
 
@@ -140,11 +173,13 @@ Initial domain-context table:
     "description": "Brand, institutional identity, cultural merchandise, and applied visual systems.",
     "professional_factors": ["identity recognition", "cultural translation", "visual-system coherence", "audience fit", "application consistency"],
     "reference_strategy": ["official identity assets", "cultural context", "peer brand systems", "merchandise and application examples"],
-    "deliverable_categories": ["key visual", "color system board", "typography system board", "application and merchandise", "visual-system board"],
-    "required_outputs": ["key visual PNG", "color system board PNG", "typography system board PNG", "application/merchandise PNG set", "visual-system board PNG", "gallery HTML"],
+    "deliverable_categories": ["key visual", "color system board", "typography system board", "motif/system board", "application and merchandise", "visual-system board"],
+    "required_outputs": ["key visual PNG", "color system board PNG", "typography system board PNG", "motif/system board PNG", "application/merchandise PNG set", "gallery HTML"],
     "optional_outputs": ["poster series PNG", "social media card PNG", "environmental application PNG", "motif/detail board PNG"],
     "conditional_outputs": ["add separate merchandise mockups when named by the user", "add poster or campaign visuals when the brief has a communication goal", "add signage/environmental applications when the identity appears in space"],
+    "anchor_candidates": ["key visual", "official or derived logo/mark", "core motif"],
     "consistency_anchor": ["official or derived logo/mark", "core motif", "palette tokens", "typography roles", "layout rhythm"],
+    "handoff_focus": ["identity lock", "motif lock", "palette and type roles", "application matrix", "protected official assets"],
     "evaluation_focus": ["recognizability", "cultural fit", "system consistency", "reference grounding", "production readiness"],
     "research_keywords": ["official site", "logo", "visual identity", "brand guideline", "cultural symbol", "merchandise"],
     "common_outputs": ["key visual PNG", "color system board PNG", "typography system board PNG", "application/merchandise PNG set", "visual-system board PNG", "gallery HTML"]
@@ -152,13 +187,15 @@ Initial domain-context table:
   "product_design": {
     "label": "Product Design",
     "description": "Product and industrial-design concepts expressed as renderings and usage visuals.",
-    "professional_factors": ["user scenario", "core function", "form language", "CMF", "ergonomics", "manufacturing plausibility"],
-    "reference_strategy": ["competing products", "usage scenarios", "materials and finishes", "details and mechanisms", "lifestyle context"],
-    "deliverable_categories": ["hero render", "three-view", "usage scene", "detail render", "CMF board"],
-    "required_outputs": ["hero product render PNG", "three-view PNG", "usage scene PNG", "detail render PNG", "CMF board PNG", "gallery HTML"],
-    "optional_outputs": ["exploded view PNG", "scale reference PNG", "interaction flow PNG", "form variation PNG", "packaging/display PNG"],
-    "conditional_outputs": ["add exploded view for complex structure or visible internal modules", "add function annotation board for multi-function products", "add interaction flow for screen, voice, gesture, or service interactions", "add poster/marketing visual when the brief asks for launch or promotion", "add scale reference when size matters to usage"],
+    "professional_factors": ["user scenario", "core function", "form language", "CMF", "ergonomics", "scale", "manufacturing plausibility"],
+    "reference_strategy": ["competing products", "usage scenarios", "materials and finishes", "details and mechanisms", "ergonomics and scale cues", "lifestyle context"],
+    "deliverable_categories": ["hero render", "three-view", "usage scene", "detail or interaction view", "CMF board", "form language board", "scale reference"],
+    "required_outputs": ["hero product render PNG", "three-view PNG", "usage scene PNG", "detail/interaction PNG", "CMF board PNG", "form language board PNG", "scale reference PNG", "gallery HTML"],
+    "optional_outputs": ["exploded view PNG", "function annotation board PNG", "interaction flow PNG", "form variation PNG", "packaging/display PNG", "marketing visual PNG"],
+    "conditional_outputs": ["add exploded view for complex structure or visible internal modules", "add function annotation board for multi-function products", "add interaction flow for screen, voice, gesture, or service interactions", "add poster/marketing visual when the brief asks for launch or promotion", "add multiple usage scenes when the brief names multiple environments"],
+    "anchor_candidates": ["three-view", "canonical product hero render"],
     "consistency_anchor": ["canonical product form", "three-view proportions", "CMF palette", "control/button placement", "surface texture and detail language"],
+    "handoff_focus": ["product form lock", "CMF lock", "function and interaction lock", "scenario matrix", "deliverable expansion reasons", "reference usage policy"],
     "evaluation_focus": ["function clarity", "user fit", "form-material coherence", "scale plausibility", "render completeness"],
     "research_keywords": ["product reference", "industrial design", "CMF", "ergonomics", "usage scenario", "detail design"],
     "common_outputs": ["hero product render PNG", "three-view PNG", "usage scene PNG", "detail render PNG", "CMF board PNG", "gallery HTML"]
@@ -167,29 +204,33 @@ Initial domain-context table:
     "label": "Architecture & Space Design",
     "description": "Architecture, interior, exhibition, and spatial concepts expressed as atmospheric renderings.",
     "professional_factors": ["site relationship", "program", "spatial sequence", "scale", "material atmosphere", "light"],
-    "reference_strategy": ["site/context images", "precedent spaces", "materials", "lighting atmosphere", "circulation and zoning examples"],
-    "deliverable_categories": ["exterior or arrival view", "interior key view", "plan or zoning diagram", "circulation or spatial sequence", "material atmosphere board"],
-    "required_outputs": ["exterior/arrival view PNG", "interior key view PNG", "plan/zoning diagram PNG", "circulation/spatial sequence PNG", "material atmosphere board PNG", "gallery HTML"],
-    "optional_outputs": ["site relation view PNG", "section perspective PNG", "facade/detail vignette PNG", "day-night atmosphere PNG", "human-scale scene PNG"],
-    "conditional_outputs": ["add site relation view when urban/context fit matters", "add section perspective when vertical organization matters", "add facade/detail vignette when envelope or craft is important", "add day-night atmosphere when lighting experience is central"],
+    "reference_strategy": ["site/context images", "precedent spaces", "plan and zoning examples", "section and circulation diagrams", "materials", "lighting atmosphere", "human-scale use scenes"],
+    "deliverable_categories": ["hero spatial render", "site/context relation", "plan or zoning diagram", "circulation or user journey", "section or sectional perspective", "interior key moment", "elevation or facade study", "material and lighting atmosphere board", "accessibility and scale board", "detail vignette", "presentation overview"],
+    "required_outputs": ["hero spatial render PNG", "plan/zoning diagram PNG", "circulation/user journey diagram PNG", "section or sectional perspective PNG", "material and lighting atmosphere board PNG", "accessibility and scale board PNG", "gallery HTML"],
+    "optional_outputs": ["site/context relation PNG", "interior key moment PNG", "elevation/facade study PNG", "detail vignette PNG", "day-night atmosphere pair PNG", "presentation overview PNG"],
+    "conditional_outputs": ["add site/context relation when urban, campus, landscape, or surrounding fit matters", "add elevation/facade study when exterior identity or entrance interface matters", "add interior key moment when the brief focuses on interior, retail, exhibition, or user experience", "add detail vignette when material junctions, display systems, furniture, or craft are important", "add day-night atmosphere pair when lighting experience is central", "add multiple interior/key views when several zones or rooms are named"],
+    "anchor_candidates": ["key spatial view", "massing or arrival view"],
     "consistency_anchor": ["massing or spatial concept", "material palette", "light atmosphere", "human scale cues", "circulation logic"],
+    "handoff_focus": ["spatial concept lock", "program and adjacency matrix", "site/context relationship", "circulation and user journey logic", "section/vertical organization logic", "material and light lock", "accessibility and scale logic", "scale and human activity cues", "view expansion reasons"],
     "evaluation_focus": ["spatial logic", "site fit", "atmosphere", "material coherence", "human scale"],
     "research_keywords": ["architecture precedent", "interior design", "exhibition design", "spatial atmosphere", "material palette", "site context"],
-    "common_outputs": ["exterior/arrival PNG", "interior key view PNG", "plan/zoning PNG", "circulation/sequence PNG", "material board PNG", "gallery HTML"]
+    "common_outputs": ["hero spatial render PNG", "plan/zoning PNG", "circulation/user journey PNG", "section/sectional perspective PNG", "material-light board PNG", "accessibility/scale board PNG", "gallery HTML"]
   },
   "poster_advertising_design": {
     "label": "Poster & Advertising Design",
     "description": "Posters, event key visuals, and campaign communication images.",
     "professional_factors": ["communication goal", "message hierarchy", "visual hook", "medium adaptation", "copy-image relationship"],
-    "reference_strategy": ["campaign references", "poster systems", "typographic hierarchy", "media formats", "audience mood"],
-    "deliverable_categories": ["main poster", "key visual", "color system board", "typography and hierarchy board", "social adaptation"],
-    "required_outputs": ["main poster PNG", "key visual PNG", "color system board PNG", "typography/hierarchy board PNG", "social adaptation PNG", "gallery HTML"],
-    "optional_outputs": ["poster series variation PNG", "banner adaptation PNG", "copy hierarchy detail PNG", "media placement mockup PNG"],
-    "conditional_outputs": ["add poster series variations for multi-message campaigns", "add banner or social adaptations when multiple media are requested", "add copy hierarchy detail when text density is high", "add placement mockup when media context matters"],
+    "reference_strategy": ["campaign references", "poster systems", "key visual systems", "typographic hierarchy", "media formats", "audience mood", "placement contexts"],
+    "deliverable_categories": ["main poster", "key visual or master visual", "typography and information hierarchy board", "color and visual rules board", "social square adaptation", "banner or horizontal adaptation", "media placement mockup", "poster series variation", "detail crop", "campaign asset overview"],
+    "required_outputs": ["main poster PNG", "key visual/master visual PNG", "typography and information hierarchy board PNG", "color and visual rules board PNG", "social adaptation PNG", "gallery HTML"],
+    "optional_outputs": ["banner/horizontal adaptation PNG", "poster series variation PNG", "media placement mockup PNG", "detail crop PNG", "campaign asset overview PNG"],
+    "conditional_outputs": ["add poster series variations for multi-message, multi-date, multi-speaker, or multi-phase campaigns", "add banner or horizontal adaptation when web, screen, or wide media are requested", "add media placement mockup when public placement, launch, or environmental media context matters", "add detail crop when typography, texture, illustration, or graphic device needs close reading", "add campaign asset overview when several formats need to be understood as one system"],
+    "anchor_candidates": ["main poster", "key visual"],
     "consistency_anchor": ["main key visual", "headline hierarchy", "palette tokens", "typography roles", "graphic device"],
+    "handoff_focus": ["message hierarchy lock", "key visual/master visual lock", "copy and typography lock", "color and visual rules", "format adaptation matrix", "media placement context", "campaign expansion reasons"],
     "evaluation_focus": ["message clarity", "visual impact", "hierarchy", "audience fit", "format readiness"],
     "research_keywords": ["poster design", "advertising campaign", "key visual", "event poster", "typographic hierarchy", "social media visual"],
-    "common_outputs": ["main poster PNG", "key visual PNG", "color system board PNG", "typography/hierarchy board PNG", "social adaptation PNG", "gallery HTML"]
+    "common_outputs": ["main poster PNG", "key visual/master visual PNG", "typography/hierarchy board PNG", "color/visual rules board PNG", "social adaptation PNG", "gallery HTML"]
   }
 }
 ```
@@ -203,12 +244,16 @@ itself is not a question. Ask at most one compact clarification card before
 Clarification flow:
 
 1. Infer `domain_type`.
-2. Build an initial `resolvedScope`.
-3. Select the fixed `domainContext`.
-4. Check missing common fields and the selected domain's `domain_scope`.
-5. If critical choices are missing, call `ask_user` once.
-6. Merge the answer into `resolvedScope`; fill remaining minor gaps with clear defaults.
-7. Call `run_init` with `brief`, JSON-stringified `resolvedScope`, and JSON-stringified `domainContext`.
+2. Build an initial `resolvedScope` from user intent and explicit user claims.
+3. If the brief includes URLs or official references, store them in
+   `reference_sources`, set `fact_status` to `pending_research`, and leave
+   source-bound facts for Research.
+4. Select the fixed `domainContext`.
+5. Check missing common fields and the selected domain's `domain_scope`.
+6. If critical design choices are missing, call `ask_user` once.
+7. Merge the answer into `resolvedScope`; fill remaining minor design gaps with
+   clear defaults, not unverified external facts.
+8. Call `run_init` with `brief`, JSON-stringified `resolvedScope`, and JSON-stringified `domainContext`.
 
 ## Run Directory
 
@@ -273,12 +318,19 @@ Use `evaluator_pass` and `evaluator_fail` for critic verdicts to stay compatible
 ## Done Conditions
 
 Research is done when evidence, notes, brand lock, asset validation, and the
-canonical `research_done` bus message are present. If the Research subagent
-returns `Error:`, Primary must not treat partial files as completion and must
-not start Planner until the same phase is retried/resumed or the run is
-reported blocked.
+canonical `research_done` bus message are present. Research should include
+`official_facts` or `verified_facts` for source-bound facts when official
+sources are available, and should explicitly flag conflicts between verified
+facts and `resolvedScope.unverified_claims`. If the Research subagent returns
+`Error:`, Primary must not treat partial files as completion and must not start
+Planner until the same phase is retried/resumed or the run is reported blocked.
 
-Research should usually save a broad reference image library in `research/assets/`, not only the exact assets expected to appear in the final design. Aim for enough official, environmental, application, and peer images that Designer can choose a smaller subset later. Unused but valid references remain useful for audit, critique, and later redesign.
+Research should save a compact but sufficient reference image library in
+`research/assets/`. Keep official logos, wordmarks, or protected application
+screenshots when the target has real identity assets. For other references, keep
+only images that directly support planning or generation: form, CMF, usage,
+site, spatial atmosphere, message hierarchy, format adaptation, cultural symbol,
+or application context. Unused generic inspiration images are not useful.
 
 Planning is done when design system, design plan, manifest, acceptance
 criteria, task breakdown, and the canonical `plan_done` bus message are present.
