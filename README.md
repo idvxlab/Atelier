@@ -43,19 +43,6 @@ Atelier is organized into five runtime layers:
 | Extension layer | Tools, skills, personas, commands, MCP bridge |
 | Storage layer | SQLite or in-memory backends for messages, plans, memory, and session metadata |
 
-## Execution Flow
-
-![Atelier workflow](docs/assets/atelier-workflow.svg)
-
-A typical task runs as follows:
-
-1. The user sends a request from the Web UI, CLI, or API.
-2. The engine assembles the system prompt, persona, skill descriptions, memory, plan state, and conversation history.
-3. The model either responds directly or requests one or more tool calls.
-4. Tool calls pass through the configured approval mode before execution.
-5. Tool results are written back into the session and streamed to the frontend over WebSocket.
-6. The engine continues for another model round when more work is required, or returns the final answer.
-
 ## Repository Layout
 
 ```text

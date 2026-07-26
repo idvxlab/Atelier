@@ -43,19 +43,6 @@ Atelier 可以分为五个运行时层级：
 | 扩展层 | tools、skills、personas、commands、MCP bridge |
 | 存储层 | SQLite 或内存后端，保存消息、计划、记忆和会话元数据 |
 
-## 运行流程
-
-![Atelier 工作流](docs/assets/atelier-workflow.svg)
-
-一次典型任务的执行过程如下：
-
-1. 用户从 Web UI、CLI 或 API 发送请求。
-2. 引擎组装系统提示、persona、skill 描述、memory、plan 状态和历史消息。
-3. 模型决定直接回复，或请求一个/多个工具调用。
-4. 工具调用在执行前经过当前审批模式处理。
-5. 工具结果写回会话，并通过 WebSocket 实时推送给前端。
-6. 如果还需要继续工作，引擎进入下一轮模型调用；否则返回最终回答。
-
 ## 仓库结构
 
 ```text
