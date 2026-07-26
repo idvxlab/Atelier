@@ -31,6 +31,58 @@ Atelier is designed for teams and researchers who need more than a single-turn a
 - Integrate existing model gateways, MCP servers, internal tools, or design-specific services into one tool registry.
 - Reuse the same backend runtime across a web workspace, CLI, and custom product interfaces.
 
+## Design Case Examples
+
+The repository includes selected full-resolution design run packages under [`example_outputs/runs/`](example_outputs/runs/). These examples are copied from local run outputs while keeping the working `outputs/` directory ignored. Each package preserves the exported `final/` folder, including the gallery page, generated images, research files, planning files, and critique records.
+
+### Brand and Cultural Merchandise: Jingju Guochao Series
+
+A cultural merchandise system inspired by Peking opera facial makeup, covering product overview, packaging, collectible details, and visual specification boards.  
+[Open final package](example_outputs/runs/jingju-guochao-merch/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/jingju-guochao-merch/final/artifacts/00-gallery.html)
+
+<p>
+  <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/01-product-overview.png" width="240" alt="Jingju merchandise product overview">
+  <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/07-packaging-application.png" width="240" alt="Jingju merchandise packaging application">
+  <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/10-series-overview.png" width="240" alt="Jingju merchandise series overview">
+  <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/design-spec/cultural-palette.png" width="240" alt="Jingju cultural palette board">
+</p>
+
+### Product Design: Elderly AI Companion Device
+
+A product concept for older adults living alone, covering the hero render, three-view form lock, home usage scenarios, interaction details, CMF, and scale references.  
+[Open final package](example_outputs/runs/elderly-ai-companion-device/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/elderly-ai-companion-device/final/artifacts/00-gallery.html)
+
+<p>
+  <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/01-hero-render.png" width="240" alt="Elderly AI companion hero render">
+  <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/02-three-view.png" width="240" alt="Elderly AI companion three-view">
+  <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/03-usage-scene-bedroom.png" width="240" alt="Elderly AI companion bedroom usage scene">
+  <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/06-cmf-board.png" width="240" alt="Elderly AI companion CMF board">
+</p>
+
+### Architecture and Space Design: Zhujiajiao Visitor Center
+
+A visitor-center concept for Zhujiajiao ancient town, covering site relationship, zoning, circulation, section perspective, key interior moments, facade study, material-light strategy, and accessibility analysis.  
+[Open final package](example_outputs/runs/zhujiajiao-visitor-center-space/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/00-gallery.html)
+
+<p>
+  <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/01-site-context-relation.png" width="240" alt="Zhujiajiao visitor center site context">
+  <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/02-master-plan-zoning.png" width="240" alt="Zhujiajiao visitor center zoning diagram">
+  <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/06-hero-entry-hall.png" width="240" alt="Zhujiajiao visitor center entry hall">
+  <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/11-material-light-board.png" width="240" alt="Zhujiajiao visitor center material and lighting board">
+</p>
+
+### Poster and Advertising Design: IEEE VIS 2026 Promotion System
+
+A conference promotion system covering a main poster, key visual, typography hierarchy, color rules, social media adaptations, badge/lanyard, and presentation template.  
+[Open final package](example_outputs/runs/ieee-vis-2026-promo/final/00-index.html) ? [Open artifact gallery](example_outputs/runs/ieee-vis-2026-promo/final/artifacts/00-gallery.html)
+
+<p>
+  <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/01-main-poster.png" width="240" alt="IEEE VIS 2026 main poster">
+  <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/03-typography-hierarchy-board.png" width="240" alt="IEEE VIS 2026 typography hierarchy board">
+  <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/05-social-twitter-post.png" width="240" alt="IEEE VIS 2026 social media adaptation">
+  <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/10-badge-lanyard.png" width="240" alt="IEEE VIS 2026 badge and lanyard">
+</p>
+
 ## Architecture
 
 Atelier is organized into five runtime layers:
