@@ -6,7 +6,7 @@ Atelier is a lightweight agent harness for building professional, design-oriente
 
 The current release focuses on the general-purpose runtime layer. It is suitable as the foundation for design agents, research workspaces, local automation assistants, and multi-agent systems that need predictable execution, tool governance, persistent sessions, and observable long-running work.
 
-![Atelier runtime architecture](docs/assets/atelier-runtime.svg)
+![Atelier runtime architecture](docs/assets/atelier-runtime-v4-clean-fresh-en.svg)
 
 ## Highlights
 

@@ -6,7 +6,7 @@ Atelier 是一个面向专业设计智能体的轻量级 Agent Harness。它不�
 
 当前版本聚焦通用运行时能力，适合作为设计智能体、研究型工作台、本地自动化助手，以及需要稳定执行、工具治理、持久化会话和可观察长任务的多智能体系统基础。
 
-![Atelier 运行时架构](docs/assets/atelier-runtime.svg)
+![Atelier 运行时架构](docs/assets/atelier-runtime-v4-clean-fresh-zh.svg)
 
 ## 核心亮点
 
