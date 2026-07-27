@@ -31,83 +31,83 @@ Atelier 面向需要“可执行智能体”而不只是“单轮聊天助手”
 - 将现有模型网关、MCP 服务、内部工具或设计领域服务接入统一工具注册体系。
 - 在 Web 工作台、CLI 和自定义产品界面之间复用同一套后端智能体能力。
 
-## ??????
+## 设计案例示例
 
-??????????????????????? [`example_outputs/runs/`](example_outputs/runs/)????????????????????? `outputs/` ?????????????????? `final/` ????????????????????????????????
+仓库中保留了一组选取后的完整设计运行案例，位于 [`example_outputs/runs/`](example_outputs/runs/)。这些案例来自本地运行输出，但工作目录中的 `outputs/` 仍然保持忽略。每个案例都保留了导出的 `final/` 文件夹，包括最终展示页、生成图片、调研文件、规划文件和评审记录。
 
-????????????? PNG ???README ???????????????????????????
+下方图片直接引用导出的原始 PNG 文件。README 只限制显示宽度，完整清晰图片仍保留在每个案例文件夹中。
 
-### ????????????
+### 品牌与文创：京剧国潮系列
 
-??????????????????????????????????????????
+一个面向文化传播与文创商品的品牌视觉案例，展示图形系统、应用物料、包装和系列化呈现。
 
-[??????](example_outputs/runs/jingju-guochao-merch/final/00-index.html) ? [??????](example_outputs/runs/jingju-guochao-merch/final/artifacts/00-gallery.html)
+[打开最终页面](example_outputs/runs/jingju-guochao-merch/final/00-index.html) · [打开成果画廊](example_outputs/runs/jingju-guochao-merch/final/artifacts/00-gallery.html)
 
-| ???? | ???? | ???? |
+| 产品系统 | 包装应用 | 系列总览 |
 | --- | --- | --- |
-| <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/01-product-overview.png" width="220" alt="????????"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/07-packaging-application.png" width="220" alt="????????"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/10-series-overview.png" width="220" alt="????????"> |
-| ???? | ???? | ???? |
-| <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/05-detail-closeup.png" width="220" alt="????????"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/06-lifestyle-use.png" width="220" alt="????????"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/design-spec/cultural-palette.png" width="220" alt="????????"> |
+| <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/01-product-overview.png" width="220" alt="京剧文创产品总览"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/07-packaging-application.png" width="220" alt="京剧文创包装应用"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/10-series-overview.png" width="220" alt="京剧文创系列总览"> |
+| 细节特写 | 使用场景 | 色彩系统 |
+| <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/05-detail-closeup.png" width="220" alt="京剧文创细节特写"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/generated-images/06-lifestyle-use.png" width="220" alt="京剧文创使用场景"> | <img src="example_outputs/runs/jingju-guochao-merch/final/artifacts/design-spec/cultural-palette.png" width="220" alt="京剧文创色彩系统"> |
 
-### ???????? IDVX ???
+### 品牌与文创：同济 IDVX 实验室
 
-??????????????????????????????????????????????
+一个面向实验室身份的周边案例，展示研究机构视觉如何延展到帆布袋、笔记本、徽章和校园应用场景。
 
-[??????](example_outputs/runs/tongji-idvx-lab-merch/final/00-index.html) ? [??????](example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/00-gallery.html)
+[打开最终页面](example_outputs/runs/tongji-idvx-lab-merch/final/00-index.html) · [打开成果画廊](example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/00-gallery.html)
 
-| ????? | ????? | ????? |
+| 帆布袋主图 | 帆布袋细节 | 笔记本封面 |
 | --- | --- | --- |
-| <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/01-tote-hero-front.png" width="220" alt="?? IDVX ?????"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/02-tote-detail-strap.png" width="220" alt="?? IDVX ?????"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/03-notebook-cover.png" width="220" alt="?? IDVX ?????"> |
-| ????? | ???? | ???? |
-| <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/04-notebook-open-spread.png" width="220" alt="?? IDVX ?????"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/05-badge-set-board.png" width="220" alt="?? IDVX ????"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/08-campus-application-scene.png" width="220" alt="?? IDVX ??????"> |
+| <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/01-tote-hero-front.png" width="220" alt="同济 IDVX 帆布袋主图"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/02-tote-detail-strap.png" width="220" alt="同济 IDVX 帆布袋细节"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/03-notebook-cover.png" width="220" alt="同济 IDVX 笔记本封面"> |
+| 笔记本展开 | 徽章系统 | 校园场景 |
+| <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/04-notebook-open-spread.png" width="220" alt="同济 IDVX 笔记本展开"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/05-badge-set-board.png" width="220" alt="同济 IDVX 徽章系统"> | <img src="example_outputs/runs/tongji-idvx-lab-merch/final/artifacts/generated-images/08-campus-application-scene.png" width="220" alt="同济 IDVX 校园应用场景"> |
 
-### ??????????? AI ????
+### 产品设计：面向老年人的 AI 陪伴设备
 
-???????????????????????????????????CMF ??????
+一个产品概念设计案例，覆盖主视觉渲染、三视图、居家使用场景、交互细节、CMF 和形态语言。
 
-[??????](example_outputs/runs/elderly-ai-companion-device/final/00-index.html) ? [??????](example_outputs/runs/elderly-ai-companion-device/final/artifacts/00-gallery.html)
+[打开最终页面](example_outputs/runs/elderly-ai-companion-device/final/00-index.html) · [打开成果画廊](example_outputs/runs/elderly-ai-companion-device/final/artifacts/00-gallery.html)
 
-| ????? | ??? | ???? |
+| 主视觉渲染 | 三视图 | 卧室场景 |
 | --- | --- | --- |
-| <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/01-hero-render.png" width="220" alt="AI ?????????"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/02-three-view.png" width="220" alt="AI ???????"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/03-usage-scene-bedroom.png" width="220" alt="AI ??????????"> |
-| ???? | CMF ? | ???? |
-| <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/05-detail-interaction.png" width="220" alt="AI ????????"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/06-cmf-board.png" width="220" alt="AI ???? CMF ???"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/07-form-language.png" width="220" alt="AI ?????????"> |
+| <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/01-hero-render.png" width="220" alt="AI 陪伴设备主视觉渲染"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/02-three-view.png" width="220" alt="AI 陪伴设备三视图"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/03-usage-scene-bedroom.png" width="220" alt="AI 陪伴设备卧室使用场景"> |
+| 交互细节 | CMF 板 | 形态语言 |
+| <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/05-detail-interaction.png" width="220" alt="AI 陪伴设备交互细节"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/06-cmf-board.png" width="220" alt="AI 陪伴设备 CMF 材料板"> | <img src="example_outputs/runs/elderly-ai-companion-device/final/artifacts/generated-images/07-form-language.png" width="220" alt="AI 陪伴设备形态语言板"> |
 
-### ?????????????
+### 建筑与空间：朱家角游客中心
 
-??????????????????????????????????????????????
+一个古镇游客中心空间概念案例，展示场地关系、总平面分区、流线、入口大厅、立面和材料光线策略。
 
-[??????](example_outputs/runs/zhujiajiao-visitor-center-space/final/00-index.html) ? [??????](example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/00-gallery.html)
+[打开最终页面](example_outputs/runs/zhujiajiao-visitor-center-space/final/00-index.html) · [打开成果画廊](example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/00-gallery.html)
 
-| ???? | ????? | ???? |
+| 场地关系 | 总平面分区 | 流线分析 |
 | --- | --- | --- |
-| <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/01-site-context-relation.png" width="220" alt="???????????"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/02-master-plan-zoning.png" width="220" alt="????????????"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/03-circulation-flow.png" width="220" alt="???????????"> |
-| ???? | ???? | ????? |
-| <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/06-hero-entry-hall.png" width="220" alt="???????????"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/10-facade-elevation.png" width="220" alt="???????????"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/11-material-light-board.png" width="220" alt="?????????????"> |
+| <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/01-site-context-relation.png" width="220" alt="朱家角游客中心场地关系"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/02-master-plan-zoning.png" width="220" alt="朱家角游客中心总平面分区"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/03-circulation-flow.png" width="220" alt="朱家角游客中心流线分析"> |
+| 入口大厅 | 立面设计 | 材料与光线 |
+| <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/06-hero-entry-hall.png" width="220" alt="朱家角游客中心入口大厅"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/10-facade-elevation.png" width="220" alt="朱家角游客中心立面设计"> | <img src="example_outputs/runs/zhujiajiao-visitor-center-space/final/artifacts/generated-images/11-material-light-board.png" width="220" alt="朱家角游客中心材料与光线板"> |
 
-### ??????IEEE VIS 2026 ????
+### 广告与海报：IEEE VIS 2026 宣传系统
 
-???????????????????????????????????????????
+一个会议传播物料案例，覆盖主海报、主视觉、字体层级、社交媒体适配、证件挂绳和演示模板。
 
-[??????](example_outputs/runs/ieee-vis-2026-promo/final/00-index.html) ? [??????](example_outputs/runs/ieee-vis-2026-promo/final/artifacts/00-gallery.html)
+[打开最终页面](example_outputs/runs/ieee-vis-2026-promo/final/00-index.html) · [打开成果画廊](example_outputs/runs/ieee-vis-2026-promo/final/artifacts/00-gallery.html)
 
-| ??? | ??? | ???? |
+| 主海报 | 主视觉 | 字体层级 |
 | --- | --- | --- |
-| <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/01-main-poster.png" width="220" alt="IEEE VIS 2026 ???"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/02-key-visual.png" width="220" alt="IEEE VIS 2026 ???"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/03-typography-hierarchy-board.png" width="220" alt="IEEE VIS 2026 ?????"> |
-| ???? | ???? | ???? |
-| <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/05-social-twitter-post.png" width="220" alt="IEEE VIS 2026 ???????"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/10-badge-lanyard.png" width="220" alt="IEEE VIS 2026 ??????"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/11-ppt-template.png" width="220" alt="IEEE VIS 2026 ????"> |
+| <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/01-main-poster.png" width="220" alt="IEEE VIS 2026 主海报"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/02-key-visual.png" width="220" alt="IEEE VIS 2026 主视觉"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/03-typography-hierarchy-board.png" width="220" alt="IEEE VIS 2026 字体层级板"> |
+| 社交媒体 | 证件挂绳 | 演示模板 |
+| <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/05-social-twitter-post.png" width="220" alt="IEEE VIS 2026 社交媒体宣传图"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/10-badge-lanyard.png" width="220" alt="IEEE VIS 2026 证件挂绳应用"> | <img src="example_outputs/runs/ieee-vis-2026-promo/final/artifacts/generated-images/11-ppt-template.png" width="220" alt="IEEE VIS 2026 演示模板"> |
 
-### ??????????????
+### 校园传播与周边：上海创智学院
 
-???????????????????????????? mockup ? moodboard?
+一个校园传播与周边系统案例，包含双语海报、社交卡片、周边 mockup 和 moodboard。
 
-[??????](example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/00-index.html) ? [??????](example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/00-gallery.html)
+[打开最终页面](example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/00-index.html) · [打开成果画廊](example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/00-gallery.html)
 
-| ?????? | ???? | ???? |
+| 标志应用海报 | 中文海报 | 英文海报 |
 | --- | --- | --- |
-| <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/01-logo-application-poster.png" width="220" alt="????????????"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/02-campaign-poster-zh.png" width="220" alt="??????????"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/03-campaign-poster-en.png" width="220" alt="??????????"> |
-| ???? | ?? mockup | Moodboard |
-| <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/04-social-card-announce.png" width="220" alt="??????????"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/07-merch-mockup.png" width="220" alt="???????? mockup"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/09-moodboard.png" width="220" alt="?????? moodboard"> |
+| <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/01-logo-application-poster.png" width="220" alt="上海创智学院标志应用海报"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/02-campaign-poster-zh.png" width="220" alt="上海创智学院中文海报"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/03-campaign-poster-en.png" width="220" alt="上海创智学院英文海报"> |
+| 宣传卡片 | 周边 mockup | Moodboard |
+| <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/04-social-card-announce.png" width="220" alt="上海创智学院宣传卡片"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/07-merch-mockup.png" width="220" alt="上海创智学院周边 mockup"> | <img src="example_outputs/runs/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/09-moodboard.png" width="220" alt="上海创智学院 moodboard"> |
 
 ## 产品架构
 
