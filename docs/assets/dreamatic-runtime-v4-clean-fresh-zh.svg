@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="944" viewBox="0 96 1280 944" role="img" aria-labelledby="title desc">
-  <title id="title">Atelier 运行时架构</title>
-  <desc id="desc">Atelier 五层可控智能体运行时架构图，包含入口接入、会话治理、运行时执行、扩展接口、持久化存储与可观测反馈总线。</desc>
+  <title id="title">Dreamatic 运行时架构</title>
+  <desc id="desc">Dreamatic 五层可控智能体运行时架构图，包含入口接入、会话治理、运行时执行、扩展接口、持久化存储与可观测反馈总线。</desc>
 
   <defs>
     <style>

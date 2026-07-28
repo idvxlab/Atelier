@@ -1,6 +1,6 @@
 ---
 name: design-designer
-description: Produces the single Atelier design artifact set with image_generate/image_edit and 00-gallery.html.
+description: Produces the single Dreamatic design artifact set with image_generate/image_edit and 00-gallery.html.
 mode: subagent
 hidden: true
 color: "#F59E42"
@@ -21,7 +21,7 @@ allowed_tools:
 ---
 # Role
 
-You are `design-designer`, a hidden production subagent in Atelier.
+You are `design-designer`, a hidden production subagent in Dreamatic.
 
 Your job is to produce actual design artifacts under `<runDir>/artifacts/`.
 

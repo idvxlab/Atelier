@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Atelier</title>
+    <title>Dreamatic</title>
     <style>
       /* ── Reset & Variables ────────────────────────────────────────────── */
       *,
@@ -5769,7 +5769,7 @@
           console.warn("[model-profile] failed to load profiles", e);
           if (!silent) {
             setModelProfileStatus(
-              "Backend settings API is unavailable. Restart the backend from D:\\GitHub\\Atelier, then reload this panel.",
+              "Backend settings API is unavailable. Restart the backend from the project root, then reload this panel.",
               true,
             );
             toast("Model settings load failed: " + e.message, true);
@@ -5994,18 +5994,18 @@
 
       function modelProfileFromEnvValues(values) {
         const name =
-          values.ATELIER_PROVIDER_NAME ||
+          values.DREAMATIC_PROVIDER_NAME ||
           values.HARNESS_DEFAULT_PROVIDER ||
-          values.ATELIER_ACTIVE_PROFILE ||
+          values.DREAMATIC_ACTIVE_PROFILE ||
           "Imported Provider";
         const baseUrl =
-          values.ATELIER_BASE_URL ||
+          values.DREAMATIC_BASE_URL ||
           values.OPENAI_HUB_BASE_URL ||
           values.OPENAI_BASE_URL ||
           values.THREE_SIX_ONE_BASE_URL ||
           "";
         const apiKey =
-          values.ATELIER_API_KEY ||
+          values.DREAMATIC_API_KEY ||
           values.OPENAI_HUB_API_KEY ||
           values.OPENAI_API_KEY ||
           values.THREE_SIX_ONE_API_KEY ||
@@ -6013,39 +6013,39 @@
           values.ANTHROPIC_API_KEY ||
           "";
         const imageBaseUrl =
-          values.ATELIER_IMAGE_BASE_URL ||
+          values.DREAMATIC_IMAGE_BASE_URL ||
           values.DESIGN_IMAGE_BASE_URL ||
-          values.ATELIER_BASE_URL ||
+          values.DREAMATIC_BASE_URL ||
           baseUrl;
         const imageApiKey =
-          values.ATELIER_IMAGE_API_KEY ||
+          values.DREAMATIC_IMAGE_API_KEY ||
           values.DESIGN_IMAGE_API_KEY ||
-          values.ATELIER_API_KEY ||
+          values.DREAMATIC_API_KEY ||
           values.API_CZ_KEY ||
           apiKey;
         const summaryBaseUrl =
-          values.ATELIER_SUMMARY_BASE_URL ||
+          values.DREAMATIC_SUMMARY_BASE_URL ||
           values.SUMMARY_BASE_URL ||
-          values.ATELIER_BASE_URL ||
+          values.DREAMATIC_BASE_URL ||
           baseUrl;
         const summaryApiKey =
-          values.ATELIER_SUMMARY_API_KEY ||
+          values.DREAMATIC_SUMMARY_API_KEY ||
           values.SUMMARY_API_KEY ||
-          values.ATELIER_API_KEY ||
+          values.DREAMATIC_API_KEY ||
           values.API_CZ_KEY ||
           apiKey;
         const searchProvider =
-          values.ATELIER_SEARCH_PROVIDER ||
+          values.DREAMATIC_SEARCH_PROVIDER ||
           (values.SERPER_API_KEY ? "serper" : "") ||
           (values.BRAVE_SEARCH_API_KEY ? "brave" : "");
         return {
-          id: values.ATELIER_ACTIVE_PROFILE || name,
+          id: values.DREAMATIC_ACTIVE_PROFILE || name,
           name,
-          provider_type: values.ATELIER_PROVIDER_TYPE || "openai-compatible",
+          provider_type: values.DREAMATIC_PROVIDER_TYPE || "openai-compatible",
           api_key: apiKey,
           base_url: baseUrl,
           model:
-            values.ATELIER_MODEL ||
+            values.DREAMATIC_MODEL ||
             values.OPENAI_HUB_MODEL ||
             values.OPENAI_MODEL ||
             values.THREE_SIX_ONE_MODEL ||
@@ -6054,30 +6054,30 @@
           summary_api_key: summaryApiKey,
           summary_base_url: summaryBaseUrl,
           summary_model:
-            values.ATELIER_SUMMARY_MODEL ||
+            values.DREAMATIC_SUMMARY_MODEL ||
             values.SUMMARY_MODEL ||
             "",
           image_api_key: imageApiKey,
           image_base_url: imageBaseUrl,
           image_model:
-            values.ATELIER_IMAGE_MODEL ||
+            values.DREAMATIC_IMAGE_MODEL ||
             values.DESIGN_IMAGE_MODEL ||
             "gpt-image-2",
           image_generation_endpoint:
-            values.ATELIER_IMAGE_GENERATION_ENDPOINT ||
+            values.DREAMATIC_IMAGE_GENERATION_ENDPOINT ||
             values.DESIGN_IMAGE_ENDPOINT ||
             "",
           image_edit_endpoint:
-            values.ATELIER_IMAGE_EDIT_ENDPOINT ||
+            values.DREAMATIC_IMAGE_EDIT_ENDPOINT ||
             values.DESIGN_IMAGE_EDIT_ENDPOINT ||
             "",
           image_default_size:
-            values.ATELIER_IMAGE_DEFAULT_SIZE ||
+            values.DREAMATIC_IMAGE_DEFAULT_SIZE ||
             values.DESIGN_IMAGE_DEFAULT_SIZE ||
             "1024x1024",
           search_provider: searchProvider,
           search_api_key:
-            values.ATELIER_SEARCH_API_KEY ||
+            values.DREAMATIC_SEARCH_API_KEY ||
             values.SERPER_API_KEY ||
             values.BRAVE_SEARCH_API_KEY ||
             "",

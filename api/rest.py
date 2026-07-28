@@ -79,26 +79,26 @@ _plan_store = InMemoryPlanStore()
 _cmd_system: CommandSystem | None = None
 
 ENV_SETTINGS_FILE = Path(__file__).resolve().parent.parent / ".env"
-ATELIER_SETTINGS_FILE = Path(__file__).resolve().parent.parent / ".atelier" / "settings.json"
+DREAMATIC_SETTINGS_FILE = Path(__file__).resolve().parent.parent / ".dreamatic" / "settings.json"
 MANAGED_ENV_KEYS = [
-    "ATELIER_ACTIVE_PROFILE",
-    "ATELIER_PROVIDER_NAME",
-    "ATELIER_PROVIDER_TYPE",
-    "ATELIER_API_KEY",
-    "ATELIER_BASE_URL",
-    "ATELIER_MODEL",
-    "ATELIER_SUMMARY_API_KEY",
-    "ATELIER_SUMMARY_BASE_URL",
-    "ATELIER_SUMMARY_MODEL",
-    "ATELIER_IMAGE_API_KEY",
-    "ATELIER_IMAGE_BASE_URL",
-    "ATELIER_IMAGE_MODEL",
-    "ATELIER_IMAGE_GENERATION_ENDPOINT",
-    "ATELIER_IMAGE_EDIT_ENDPOINT",
-    "ATELIER_IMAGE_BACKEND",
-    "ATELIER_IMAGE_DEFAULT_SIZE",
-    "ATELIER_SEARCH_PROVIDER",
-    "ATELIER_SEARCH_API_KEY",
+    "DREAMATIC_ACTIVE_PROFILE",
+    "DREAMATIC_PROVIDER_NAME",
+    "DREAMATIC_PROVIDER_TYPE",
+    "DREAMATIC_API_KEY",
+    "DREAMATIC_BASE_URL",
+    "DREAMATIC_MODEL",
+    "DREAMATIC_SUMMARY_API_KEY",
+    "DREAMATIC_SUMMARY_BASE_URL",
+    "DREAMATIC_SUMMARY_MODEL",
+    "DREAMATIC_IMAGE_API_KEY",
+    "DREAMATIC_IMAGE_BASE_URL",
+    "DREAMATIC_IMAGE_MODEL",
+    "DREAMATIC_IMAGE_GENERATION_ENDPOINT",
+    "DREAMATIC_IMAGE_EDIT_ENDPOINT",
+    "DREAMATIC_IMAGE_BACKEND",
+    "DREAMATIC_IMAGE_DEFAULT_SIZE",
+    "DREAMATIC_SEARCH_PROVIDER",
+    "DREAMATIC_SEARCH_API_KEY",
     "HARNESS_DEFAULT_PROVIDER",
     "OPENAI_HUB_API_KEY",
     "OPENAI_HUB_BASE_URL",
@@ -135,11 +135,11 @@ def _safe_profile_id(value: str) -> str:
     return (value or f"profile-{uuid.uuid4().hex[:8]}")[:80]
 
 
-def _load_atelier_settings() -> dict[str, Any]:
-    if not ATELIER_SETTINGS_FILE.exists():
+def _load_dreamatic_settings() -> dict[str, Any]:
+    if not DREAMATIC_SETTINGS_FILE.exists():
         return _settings_default()
     try:
-        data = json.loads(ATELIER_SETTINGS_FILE.read_text(encoding="utf-8"))
+        data = json.loads(DREAMATIC_SETTINGS_FILE.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return _settings_default()
     profiles = data.get("profiles", [])
@@ -151,9 +151,9 @@ def _load_atelier_settings() -> dict[str, Any]:
     }
 
 
-def _save_atelier_settings(settings: dict[str, Any]) -> None:
-    ATELIER_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    ATELIER_SETTINGS_FILE.write_text(
+def _save_dreamatic_settings(settings: dict[str, Any]) -> None:
+    DREAMATIC_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DREAMATIC_SETTINGS_FILE.write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -217,23 +217,23 @@ def _active_profile(settings: dict[str, Any]) -> dict[str, Any] | None:
 def _profile_to_env_values(profile: dict[str, Any]) -> dict[str, str]:
     image_base = profile.get("image_base_url") or profile.get("base_url") or ""
     return {
-        "ATELIER_ACTIVE_PROFILE": profile["id"],
-        "ATELIER_PROVIDER_NAME": profile["id"],
-        "ATELIER_PROVIDER_TYPE": profile["provider_type"],
-        "ATELIER_API_KEY": profile["api_key"],
-        "ATELIER_BASE_URL": profile["base_url"],
-        "ATELIER_MODEL": profile["model"],
-        "ATELIER_SUMMARY_API_KEY": profile.get("summary_api_key") or profile["api_key"],
-        "ATELIER_SUMMARY_BASE_URL": profile.get("summary_base_url") or profile["base_url"],
-        "ATELIER_SUMMARY_MODEL": profile.get("summary_model", ""),
-        "ATELIER_IMAGE_API_KEY": profile.get("image_api_key") or profile["api_key"],
-        "ATELIER_IMAGE_BASE_URL": image_base,
-        "ATELIER_IMAGE_MODEL": profile.get("image_model", ""),
-        "ATELIER_IMAGE_GENERATION_ENDPOINT": profile.get("image_generation_endpoint", ""),
-        "ATELIER_IMAGE_EDIT_ENDPOINT": profile.get("image_edit_endpoint", ""),
-        "ATELIER_IMAGE_DEFAULT_SIZE": profile.get("image_default_size", ""),
-        "ATELIER_SEARCH_PROVIDER": profile.get("search_provider", ""),
-        "ATELIER_SEARCH_API_KEY": profile.get("search_api_key", ""),
+        "DREAMATIC_ACTIVE_PROFILE": profile["id"],
+        "DREAMATIC_PROVIDER_NAME": profile["id"],
+        "DREAMATIC_PROVIDER_TYPE": profile["provider_type"],
+        "DREAMATIC_API_KEY": profile["api_key"],
+        "DREAMATIC_BASE_URL": profile["base_url"],
+        "DREAMATIC_MODEL": profile["model"],
+        "DREAMATIC_SUMMARY_API_KEY": profile.get("summary_api_key") or profile["api_key"],
+        "DREAMATIC_SUMMARY_BASE_URL": profile.get("summary_base_url") or profile["base_url"],
+        "DREAMATIC_SUMMARY_MODEL": profile.get("summary_model", ""),
+        "DREAMATIC_IMAGE_API_KEY": profile.get("image_api_key") or profile["api_key"],
+        "DREAMATIC_IMAGE_BASE_URL": image_base,
+        "DREAMATIC_IMAGE_MODEL": profile.get("image_model", ""),
+        "DREAMATIC_IMAGE_GENERATION_ENDPOINT": profile.get("image_generation_endpoint", ""),
+        "DREAMATIC_IMAGE_EDIT_ENDPOINT": profile.get("image_edit_endpoint", ""),
+        "DREAMATIC_IMAGE_DEFAULT_SIZE": profile.get("image_default_size", ""),
+        "DREAMATIC_SEARCH_PROVIDER": profile.get("search_provider", ""),
+        "DREAMATIC_SEARCH_API_KEY": profile.get("search_api_key", ""),
         "SERPER_API_KEY": (
             profile.get("search_api_key", "")
             if profile.get("search_provider") == "serper"
@@ -247,28 +247,28 @@ def _profile_to_env_values(profile: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _profile_from_atelier_env() -> dict[str, Any] | None:
+def _profile_from_dreamatic_env() -> dict[str, Any] | None:
     values = _read_managed_env_values()
-    if not values.get("ATELIER_API_KEY") and not values.get("ATELIER_MODEL"):
+    if not values.get("DREAMATIC_API_KEY") and not values.get("DREAMATIC_MODEL"):
         return None
     return _normalize_profile({
-        "id": values.get("ATELIER_ACTIVE_PROFILE") or values.get("ATELIER_PROVIDER_NAME") or "atelier-env",
-        "name": values.get("ATELIER_PROVIDER_NAME") or "Atelier Env",
-        "provider_type": values.get("ATELIER_PROVIDER_TYPE") or "openai-compatible",
-        "api_key": values.get("ATELIER_API_KEY", ""),
-        "base_url": values.get("ATELIER_BASE_URL", ""),
-        "model": values.get("ATELIER_MODEL", "gpt-4o"),
-        "summary_api_key": values.get("ATELIER_SUMMARY_API_KEY", ""),
-        "summary_base_url": values.get("ATELIER_SUMMARY_BASE_URL", ""),
-        "summary_model": values.get("ATELIER_SUMMARY_MODEL", ""),
-        "image_api_key": values.get("ATELIER_IMAGE_API_KEY", ""),
-        "image_base_url": values.get("ATELIER_IMAGE_BASE_URL", ""),
-        "image_model": values.get("ATELIER_IMAGE_MODEL", ""),
-        "image_generation_endpoint": values.get("ATELIER_IMAGE_GENERATION_ENDPOINT", ""),
-        "image_edit_endpoint": values.get("ATELIER_IMAGE_EDIT_ENDPOINT", ""),
-        "image_default_size": values.get("ATELIER_IMAGE_DEFAULT_SIZE", ""),
-        "search_provider": values.get("ATELIER_SEARCH_PROVIDER", ""),
-        "search_api_key": values.get("ATELIER_SEARCH_API_KEY", ""),
+        "id": values.get("DREAMATIC_ACTIVE_PROFILE") or values.get("DREAMATIC_PROVIDER_NAME") or "dreamatic-env",
+        "name": values.get("DREAMATIC_PROVIDER_NAME") or "Dreamatic Env",
+        "provider_type": values.get("DREAMATIC_PROVIDER_TYPE") or "openai-compatible",
+        "api_key": values.get("DREAMATIC_API_KEY", ""),
+        "base_url": values.get("DREAMATIC_BASE_URL", ""),
+        "model": values.get("DREAMATIC_MODEL", "gpt-4o"),
+        "summary_api_key": values.get("DREAMATIC_SUMMARY_API_KEY", ""),
+        "summary_base_url": values.get("DREAMATIC_SUMMARY_BASE_URL", ""),
+        "summary_model": values.get("DREAMATIC_SUMMARY_MODEL", ""),
+        "image_api_key": values.get("DREAMATIC_IMAGE_API_KEY", ""),
+        "image_base_url": values.get("DREAMATIC_IMAGE_BASE_URL", ""),
+        "image_model": values.get("DREAMATIC_IMAGE_MODEL", ""),
+        "image_generation_endpoint": values.get("DREAMATIC_IMAGE_GENERATION_ENDPOINT", ""),
+        "image_edit_endpoint": values.get("DREAMATIC_IMAGE_EDIT_ENDPOINT", ""),
+        "image_default_size": values.get("DREAMATIC_IMAGE_DEFAULT_SIZE", ""),
+        "search_provider": values.get("DREAMATIC_SEARCH_PROVIDER", ""),
+        "search_api_key": values.get("DREAMATIC_SEARCH_API_KEY", ""),
     })
 
 
@@ -328,7 +328,7 @@ def _write_managed_env_values(values: dict[str, str]) -> None:
     output = preserved[:]
     if output and output[-1].strip():
         output.append("")
-    output.append("# Atelier runtime settings")
+    output.append("# Dreamatic runtime settings")
     for key in MANAGED_ENV_KEYS:
         output.append(f"{key}={_quote_env_value(managed.get(key, ''))}")
 
@@ -357,22 +357,22 @@ def _derive_env_defaults(values: dict[str, str]) -> dict[str, str]:
             next_values["DESIGN_IMAGE_EDIT_ENDPOINT"] = f"{image_base}/images/edits"
     if not next_values["DESIGN_IMAGE_API_KEY"]:
         next_values["DESIGN_IMAGE_API_KEY"] = next_values["OPENAI_HUB_API_KEY"]
-    if not next_values["ATELIER_SUMMARY_BASE_URL"]:
-        next_values["ATELIER_SUMMARY_BASE_URL"] = next_values["ATELIER_BASE_URL"]
-    if not next_values["ATELIER_SUMMARY_API_KEY"]:
-        next_values["ATELIER_SUMMARY_API_KEY"] = next_values["ATELIER_API_KEY"]
-    if not next_values["ATELIER_SEARCH_PROVIDER"]:
+    if not next_values["DREAMATIC_SUMMARY_BASE_URL"]:
+        next_values["DREAMATIC_SUMMARY_BASE_URL"] = next_values["DREAMATIC_BASE_URL"]
+    if not next_values["DREAMATIC_SUMMARY_API_KEY"]:
+        next_values["DREAMATIC_SUMMARY_API_KEY"] = next_values["DREAMATIC_API_KEY"]
+    if not next_values["DREAMATIC_SEARCH_PROVIDER"]:
         if next_values["SERPER_API_KEY"]:
-            next_values["ATELIER_SEARCH_PROVIDER"] = "serper"
-            next_values["ATELIER_SEARCH_API_KEY"] = next_values["SERPER_API_KEY"]
+            next_values["DREAMATIC_SEARCH_PROVIDER"] = "serper"
+            next_values["DREAMATIC_SEARCH_API_KEY"] = next_values["SERPER_API_KEY"]
         elif next_values["BRAVE_SEARCH_API_KEY"]:
-            next_values["ATELIER_SEARCH_PROVIDER"] = "brave"
-            next_values["ATELIER_SEARCH_API_KEY"] = next_values["BRAVE_SEARCH_API_KEY"]
-    if not next_values["ATELIER_SEARCH_API_KEY"]:
-        if next_values["ATELIER_SEARCH_PROVIDER"] == "serper":
-            next_values["ATELIER_SEARCH_API_KEY"] = next_values["SERPER_API_KEY"]
-        elif next_values["ATELIER_SEARCH_PROVIDER"] == "brave":
-            next_values["ATELIER_SEARCH_API_KEY"] = next_values["BRAVE_SEARCH_API_KEY"]
+            next_values["DREAMATIC_SEARCH_PROVIDER"] = "brave"
+            next_values["DREAMATIC_SEARCH_API_KEY"] = next_values["BRAVE_SEARCH_API_KEY"]
+    if not next_values["DREAMATIC_SEARCH_API_KEY"]:
+        if next_values["DREAMATIC_SEARCH_PROVIDER"] == "serper":
+            next_values["DREAMATIC_SEARCH_API_KEY"] = next_values["SERPER_API_KEY"]
+        elif next_values["DREAMATIC_SEARCH_PROVIDER"] == "brave":
+            next_values["DREAMATIC_SEARCH_API_KEY"] = next_values["BRAVE_SEARCH_API_KEY"]
     return next_values
 
 
@@ -415,9 +415,9 @@ def _profile_to_summary_provider_config(profile: dict[str, Any]) -> ProviderConf
 
 
 def _apply_model_profiles_to_config(cfg: HarnessConfig) -> None:
-    settings = _load_atelier_settings()
+    settings = _load_dreamatic_settings()
     profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
-    env_profile = _profile_from_atelier_env()
+    env_profile = _profile_from_dreamatic_env()
     if env_profile and all(p["id"] != env_profile["id"] for p in profiles):
         profiles.append(env_profile)
 
@@ -437,9 +437,9 @@ def _apply_model_profiles_to_config(cfg: HarnessConfig) -> None:
 
 
 def _profile_for_provider_name(provider_name: str) -> dict[str, Any] | None:
-    settings = _load_atelier_settings()
+    settings = _load_dreamatic_settings()
     profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
-    env_profile = _profile_from_atelier_env()
+    env_profile = _profile_from_dreamatic_env()
     if env_profile and all(p["id"] != env_profile["id"] for p in profiles):
         profiles.append(env_profile)
     for profile in profiles:
@@ -459,8 +459,8 @@ def _session_config_for_provider(cfg: HarnessConfig, provider_name: str) -> Harn
     search_provider = str(profile.get("search_provider") or "").strip()
     search_api_key = str(profile.get("search_api_key") or "").strip()
     if search_provider and search_api_key:
-        os.environ["ATELIER_SEARCH_PROVIDER"] = search_provider
-        os.environ["ATELIER_SEARCH_API_KEY"] = search_api_key
+        os.environ["DREAMATIC_SEARCH_PROVIDER"] = search_provider
+        os.environ["DREAMATIC_SEARCH_API_KEY"] = search_api_key
         if search_provider == "serper":
             os.environ["SERPER_API_KEY"] = search_api_key
         elif search_provider == "brave":
@@ -469,9 +469,9 @@ def _session_config_for_provider(cfg: HarnessConfig, provider_name: str) -> Harn
 
 
 def _model_profile_provider_names() -> list[str]:
-    settings = _load_atelier_settings()
+    settings = _load_dreamatic_settings()
     profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
-    env_profile = _profile_from_atelier_env()
+    env_profile = _profile_from_dreamatic_env()
     if env_profile and all(p["id"] != env_profile["id"] for p in profiles):
         profiles.append(env_profile)
     return [p["id"] for p in profiles]
@@ -1537,19 +1537,19 @@ async def api_get_runtime_env_settings() -> dict[str, Any]:
 @app.get("/settings/model-profiles")
 async def api_get_model_profiles() -> dict[str, Any]:
     api_logger.info("settings model profiles requested")
-    settings = _load_atelier_settings()
+    settings = _load_dreamatic_settings()
     profiles = [_profile_public(_normalize_profile(p)) for p in settings.get("profiles", [])]
     return {
         "profiles": profiles,
         "active_profile_id": "",
-        "settings_path": str(ATELIER_SETTINGS_FILE.as_posix()),
+        "settings_path": str(DREAMATIC_SETTINGS_FILE.as_posix()),
     }
 
 
 @app.post("/settings/model-profiles")
 async def api_save_model_profile(req: ModelProfileRequest) -> dict[str, Any]:
     api_logger.info("settings model profile save requested activate=%s", req.activate)
-    settings = _load_atelier_settings()
+    settings = _load_dreamatic_settings()
     profile = _normalize_profile(req.profile)
     profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
     replaced = False
@@ -1561,7 +1561,7 @@ async def api_save_model_profile(req: ModelProfileRequest) -> dict[str, Any]:
     if not replaced:
         profiles.append(profile)
     settings["profiles"] = profiles
-    _save_atelier_settings(settings)
+    _save_dreamatic_settings(settings)
     _reload_runtime_config()
     cfg = _require_config()
     return {
@@ -1576,7 +1576,7 @@ async def api_save_model_profile(req: ModelProfileRequest) -> dict[str, Any]:
 @app.post("/settings/model-profiles/activate")
 async def api_activate_model_profile(req: ActivateProfileRequest) -> dict[str, Any]:
     api_logger.info("settings model profile activate requested profile_id=%s", req.profile_id)
-    settings = _load_atelier_settings()
+    settings = _load_dreamatic_settings()
     profile_id = str(req.profile_id or "").strip()
     if profile_id:
         profile = None
@@ -1591,7 +1591,7 @@ async def api_activate_model_profile(req: ActivateProfileRequest) -> dict[str, A
         _write_managed_env_values({**_read_managed_env_values(), **_profile_to_env_values(profile)})
     else:
         settings["active_profile_id"] = ""
-    _save_atelier_settings(settings)
+    _save_dreamatic_settings(settings)
     _reload_runtime_config()
     cfg = _require_config()
     return {
@@ -1605,7 +1605,7 @@ async def api_activate_model_profile(req: ActivateProfileRequest) -> dict[str, A
 @app.delete("/settings/model-profiles/{profile_id}", status_code=204)
 async def api_delete_model_profile(profile_id: str):
     api_logger.info("settings model profile delete requested profile_id=%s", profile_id)
-    settings = _load_atelier_settings()
+    settings = _load_dreamatic_settings()
     profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
     next_profiles = [p for p in profiles if p["id"] != profile_id]
     if len(next_profiles) == len(profiles):
@@ -1613,7 +1613,7 @@ async def api_delete_model_profile(profile_id: str):
     settings["profiles"] = next_profiles
     if settings.get("active_profile_id") == profile_id:
         settings["active_profile_id"] = ""
-    _save_atelier_settings(settings)
+    _save_dreamatic_settings(settings)
     _reload_runtime_config()
 
 
@@ -1621,13 +1621,13 @@ async def api_delete_model_profile(profile_id: str):
 async def api_import_model_profile_from_env(req: RuntimeEnvImportRequest) -> dict[str, Any]:
     api_logger.info("settings model profile env import requested chars=%s", len(req.content or ""))
     parsed = _parse_env_content(req.content)
-    name = parsed.get("ATELIER_PROVIDER_NAME") or parsed.get("HARNESS_DEFAULT_PROVIDER") or "Imported Provider"
+    name = parsed.get("DREAMATIC_PROVIDER_NAME") or parsed.get("HARNESS_DEFAULT_PROVIDER") or "Imported Provider"
     profile = _normalize_profile({
-        "id": parsed.get("ATELIER_ACTIVE_PROFILE") or name,
+        "id": parsed.get("DREAMATIC_ACTIVE_PROFILE") or name,
         "name": name,
-        "provider_type": parsed.get("ATELIER_PROVIDER_TYPE") or "openai-compatible",
+        "provider_type": parsed.get("DREAMATIC_PROVIDER_TYPE") or "openai-compatible",
         "api_key": (
-            parsed.get("ATELIER_API_KEY")
+            parsed.get("DREAMATIC_API_KEY")
             or parsed.get("OPENAI_HUB_API_KEY")
             or parsed.get("OPENAI_API_KEY")
             or parsed.get("THREE_SIX_ONE_API_KEY")
@@ -1636,8 +1636,8 @@ async def api_import_model_profile_from_env(req: RuntimeEnvImportRequest) -> dic
             or ""
         ),
         "base_url": (
-            parsed.get("ATELIER_BASE_URL")
-            or parsed.get("ATELIER_PROVIDER_BASE_URL")
+            parsed.get("DREAMATIC_BASE_URL")
+            or parsed.get("DREAMATIC_PROVIDER_BASE_URL")
             or parsed.get("OPENAI_HUB_BASE_URL")
             or parsed.get("OPENAI_BASE_URL")
             or parsed.get("THREE_SIX_ONE_BASE_URL")
@@ -1645,7 +1645,7 @@ async def api_import_model_profile_from_env(req: RuntimeEnvImportRequest) -> dic
             or ""
         ),
         "model": (
-            parsed.get("ATELIER_MODEL")
+            parsed.get("DREAMATIC_MODEL")
             or parsed.get("OPENAI_HUB_MODEL")
             or parsed.get("OPENAI_MODEL")
             or parsed.get("THREE_SIX_ONE_MODEL")
@@ -1654,55 +1654,55 @@ async def api_import_model_profile_from_env(req: RuntimeEnvImportRequest) -> dic
             or "gpt-4o"
         ),
         "summary_api_key": (
-            parsed.get("ATELIER_SUMMARY_API_KEY")
+            parsed.get("DREAMATIC_SUMMARY_API_KEY")
             or parsed.get("SUMMARY_API_KEY")
-            or parsed.get("ATELIER_API_KEY")
+            or parsed.get("DREAMATIC_API_KEY")
             or parsed.get("API_CZ_KEY")
             or ""
         ),
         "summary_base_url": (
-            parsed.get("ATELIER_SUMMARY_BASE_URL")
+            parsed.get("DREAMATIC_SUMMARY_BASE_URL")
             or parsed.get("SUMMARY_BASE_URL")
-            or parsed.get("ATELIER_BASE_URL")
+            or parsed.get("DREAMATIC_BASE_URL")
             or parsed.get("API_CZ_BASE_URL")
             or ""
         ),
         "summary_model": (
-            parsed.get("ATELIER_SUMMARY_MODEL")
+            parsed.get("DREAMATIC_SUMMARY_MODEL")
             or parsed.get("SUMMARY_MODEL")
             or ""
         ),
-        "image_api_key": parsed.get("ATELIER_IMAGE_API_KEY") or parsed.get("DESIGN_IMAGE_API_KEY") or "",
-        "image_base_url": parsed.get("ATELIER_IMAGE_BASE_URL") or parsed.get("DESIGN_IMAGE_BASE_URL") or "",
-        "image_model": parsed.get("ATELIER_IMAGE_MODEL") or parsed.get("DESIGN_IMAGE_MODEL") or "",
+        "image_api_key": parsed.get("DREAMATIC_IMAGE_API_KEY") or parsed.get("DESIGN_IMAGE_API_KEY") or "",
+        "image_base_url": parsed.get("DREAMATIC_IMAGE_BASE_URL") or parsed.get("DESIGN_IMAGE_BASE_URL") or "",
+        "image_model": parsed.get("DREAMATIC_IMAGE_MODEL") or parsed.get("DESIGN_IMAGE_MODEL") or "",
         "image_generation_endpoint": (
-            parsed.get("ATELIER_IMAGE_GENERATION_ENDPOINT")
+            parsed.get("DREAMATIC_IMAGE_GENERATION_ENDPOINT")
             or parsed.get("DESIGN_IMAGE_ENDPOINT")
             or ""
         ),
         "image_edit_endpoint": (
-            parsed.get("ATELIER_IMAGE_EDIT_ENDPOINT")
+            parsed.get("DREAMATIC_IMAGE_EDIT_ENDPOINT")
             or parsed.get("DESIGN_IMAGE_EDIT_ENDPOINT")
             or ""
         ),
-        "image_default_size": parsed.get("ATELIER_IMAGE_DEFAULT_SIZE") or parsed.get("DESIGN_IMAGE_DEFAULT_SIZE") or "",
+        "image_default_size": parsed.get("DREAMATIC_IMAGE_DEFAULT_SIZE") or parsed.get("DESIGN_IMAGE_DEFAULT_SIZE") or "",
         "search_provider": (
-            parsed.get("ATELIER_SEARCH_PROVIDER")
+            parsed.get("DREAMATIC_SEARCH_PROVIDER")
             or ("serper" if parsed.get("SERPER_API_KEY") else "")
             or ("brave" if parsed.get("BRAVE_SEARCH_API_KEY") else "")
         ),
         "search_api_key": (
-            parsed.get("ATELIER_SEARCH_API_KEY")
+            parsed.get("DREAMATIC_SEARCH_API_KEY")
             or parsed.get("SERPER_API_KEY")
             or parsed.get("BRAVE_SEARCH_API_KEY")
             or ""
         ),
     })
-    settings = _load_atelier_settings()
+    settings = _load_dreamatic_settings()
     profiles = [_normalize_profile(p) for p in settings.get("profiles", [])]
     profiles = [p for p in profiles if p["id"] != profile["id"]] + [profile]
     settings["profiles"] = profiles
-    _save_atelier_settings(settings)
+    _save_dreamatic_settings(settings)
     return {
         "status": "imported",
         "profile": _profile_public(profile),

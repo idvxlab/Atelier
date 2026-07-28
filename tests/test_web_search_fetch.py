@@ -108,11 +108,11 @@ async def test_serper_takes_priority_over_brave(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_atelier_search_profile_can_select_serper(monkeypatch):
+async def test_dreamatic_search_profile_can_select_serper(monkeypatch):
     monkeypatch.delenv("SERPER_API_KEY", raising=False)
     monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
-    monkeypatch.setenv("ATELIER_SEARCH_PROVIDER", "serper")
-    monkeypatch.setenv("ATELIER_SEARCH_API_KEY", "atelier-serper-key")
+    monkeypatch.setenv("DREAMATIC_SEARCH_PROVIDER", "serper")
+    monkeypatch.setenv("DREAMATIC_SEARCH_API_KEY", "dreamatic-serper-key")
 
     with respx.mock:
         serper_route = respx.post("https://google.serper.dev/search").mock(

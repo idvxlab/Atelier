@@ -1,6 +1,6 @@
 ---
 name: product-design
-description: "Product and industrial-design domain guidance for Atelier: user scenarios, functions, form language, CMF, render deliverables, and critique focus."
+description: "Product and industrial-design domain guidance for Dreamatic: user scenarios, functions, form language, CMF, render deliverables, and critique focus."
 license: MIT
 metadata:
   audience: design-research, design-planner, design-designer, design-critic

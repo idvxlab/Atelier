@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="944" viewBox="0 96 1280 944" role="img" aria-labelledby="title desc">
-  <title id="title">Atelier Runtime Architecture</title>
-  <desc id="desc">Publication-style architecture flowchart of the Atelier five-layer controllable agent runtime, including entry interfaces, session governance, runtime execution, extension interfaces, persistent stores, and the observability feedback bus.</desc>
+  <title id="title">Dreamatic Runtime Architecture</title>
+  <desc id="desc">Publication-style architecture flowchart of the Dreamatic five-layer controllable agent runtime, including entry interfaces, session governance, runtime execution, extension interfaces, persistent stores, and the observability feedback bus.</desc>
 
   <defs>
     <style>

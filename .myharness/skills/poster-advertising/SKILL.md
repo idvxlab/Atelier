@@ -1,6 +1,6 @@
 ---
 name: poster-advertising
-description: "Poster, advertising, event key-visual, and campaign communication guidance for Atelier: message hierarchy, visual hook, media adaptation, and critique focus."
+description: "Poster, advertising, event key-visual, and campaign communication guidance for Dreamatic: message hierarchy, visual hook, media adaptation, and critique focus."
 license: MIT
 metadata:
   audience: design-research, design-planner, design-designer, design-critic

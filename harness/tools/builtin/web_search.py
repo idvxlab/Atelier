@@ -16,7 +16,7 @@ WEB_SEARCH_SCHEMA = ToolSchema(
     description=(
         "Search the public web and return structured search results with title, URL, "
         "snippet, rank, and provider metadata. Provider priority: "
-        "1) Atelier search profile (ATELIER_SEARCH_PROVIDER + ATELIER_SEARCH_API_KEY), "
+        "1) Dreamatic search profile (DREAMATIC_SEARCH_PROVIDER + DREAMATIC_SEARCH_API_KEY), "
         "2) Serper (Google results, requires SERPER_API_KEY), "
         "3) Brave Search (requires BRAVE_SEARCH_API_KEY), "
         "4) DuckDuckGo Instant Answer (free fallback, only answers factual/definition queries)."
@@ -112,17 +112,17 @@ async def web_search_tool(query: str, max_results: int = DEFAULT_SEARCH_RESULTS)
             }
         )
 
-    atelier_search_provider = (os.getenv("ATELIER_SEARCH_PROVIDER") or "").strip().casefold()
-    atelier_search_api_key = os.getenv("ATELIER_SEARCH_API_KEY") or ""
+    dreamatic_search_provider = (os.getenv("DREAMATIC_SEARCH_PROVIDER") or "").strip().casefold()
+    dreamatic_search_api_key = os.getenv("DREAMATIC_SEARCH_API_KEY") or ""
     brave_api_key = os.getenv("BRAVE_SEARCH_API_KEY")
     serper_api_key = os.getenv("SERPER_API_KEY")
 
-    if atelier_search_api_key and atelier_search_provider == "serper":
-        serper_api_key = atelier_search_api_key
-    elif atelier_search_api_key and atelier_search_provider == "brave":
-        brave_api_key = atelier_search_api_key
-    elif atelier_search_api_key and not atelier_search_provider:
-        serper_api_key = atelier_search_api_key
+    if dreamatic_search_api_key and dreamatic_search_provider == "serper":
+        serper_api_key = dreamatic_search_api_key
+    elif dreamatic_search_api_key and dreamatic_search_provider == "brave":
+        brave_api_key = dreamatic_search_api_key
+    elif dreamatic_search_api_key and not dreamatic_search_provider:
+        serper_api_key = dreamatic_search_api_key
 
     if serper_api_key:
         return await _serper_web_search(

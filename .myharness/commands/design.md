@@ -1,13 +1,13 @@
 ---
-description: Run the Atelier AI Design Agent Harness for a design brief. Use `/design <natural-language brief>`.
+description: Run the Dreamatic AI Design Agent Harness for a design brief. Use `/design <natural-language brief>`.
 agent: design-primary
 ---
-You are entering the Atelier AI Design Agent Harness.
+You are entering the Dreamatic AI Design Agent Harness.
 
 User brief:
 $ARGUMENTS
 
-Run the Atelier design workflow as a single-path design production process.
+Run the Dreamatic design workflow as a single-path design production process.
 Run the phases serially: spawn one subagent, wait for its result, inspect the
 phase output, then spawn the next subagent. Do not parallelize the workflow.
 

@@ -115,8 +115,8 @@ def _sha256(data: bytes) -> str:
 def _api_key() -> str:
     _load_project_env_once()
     return (
-        os.getenv("ATELIER_IMAGE_API_KEY")
-        or os.getenv("ATELIER_API_KEY")
+        os.getenv("DREAMATIC_IMAGE_API_KEY")
+        or os.getenv("DREAMATIC_API_KEY")
         or os.getenv("DESIGN_IMAGE_API_KEY")
         or os.getenv("OPENAI_HUB_API_KEY")
         or ""
@@ -126,8 +126,8 @@ def _api_key() -> str:
 def _base_url() -> str:
     _load_project_env_once()
     return (
-        os.getenv("ATELIER_IMAGE_BASE_URL")
-        or os.getenv("ATELIER_BASE_URL")
+        os.getenv("DREAMATIC_IMAGE_BASE_URL")
+        or os.getenv("DREAMATIC_BASE_URL")
         or os.getenv("DESIGN_IMAGE_BASE_URL")
         or os.getenv("OPENAI_HUB_BASE_URL")
         or "https://api.openai.com/v1"
@@ -137,7 +137,7 @@ def _base_url() -> str:
 def _generation_endpoint() -> str:
     _load_project_env_once()
     return (
-        os.getenv("ATELIER_IMAGE_GENERATION_ENDPOINT")
+        os.getenv("DREAMATIC_IMAGE_GENERATION_ENDPOINT")
         or os.getenv("DESIGN_IMAGE_ENDPOINT")
         or f"{_base_url()}/images/generations"
     )
@@ -146,7 +146,7 @@ def _generation_endpoint() -> str:
 def _edit_endpoint() -> str:
     _load_project_env_once()
     return (
-        os.getenv("ATELIER_IMAGE_EDIT_ENDPOINT")
+        os.getenv("DREAMATIC_IMAGE_EDIT_ENDPOINT")
         or os.getenv("DESIGN_IMAGE_EDIT_ENDPOINT")
         or f"{_base_url()}/images/edits"
     )
@@ -156,7 +156,7 @@ def _model(model: str | None) -> str:
     _load_project_env_once()
     return (
         model
-        or os.getenv("ATELIER_IMAGE_MODEL")
+        or os.getenv("DREAMATIC_IMAGE_MODEL")
         or os.getenv("DESIGN_IMAGE_MODEL")
         or os.getenv("OPENAI_HUB_IMAGE_MODEL")
         or "gpt-image-2"
@@ -165,7 +165,7 @@ def _model(model: str | None) -> str:
 
 def _backend() -> str:
     _load_project_env_once()
-    return (os.getenv("ATELIER_IMAGE_BACKEND") or os.getenv("DESIGN_IMAGE_BACKEND") or "codex").lower()
+    return (os.getenv("DREAMATIC_IMAGE_BACKEND") or os.getenv("DESIGN_IMAGE_BACKEND") or "codex").lower()
 
 
 def _coerce_count(value: int | None) -> int:
@@ -179,7 +179,7 @@ def _coerce_count(value: int | None) -> int:
 def _coerce_size(value: str | None) -> str:
     size = (
         value
-        or os.getenv("ATELIER_IMAGE_DEFAULT_SIZE")
+        or os.getenv("DREAMATIC_IMAGE_DEFAULT_SIZE")
         or os.getenv("DESIGN_IMAGE_DEFAULT_SIZE")
         or "1024x1024"
     ).strip()
@@ -315,7 +315,7 @@ async def image_generate_tool(
 
     key = _api_key()
     if not key:
-        return _json({"ok": False, "error": "Missing ATELIER_IMAGE_API_KEY, ATELIER_API_KEY, DESIGN_IMAGE_API_KEY, or OPENAI_HUB_API_KEY"})
+        return _json({"ok": False, "error": "Missing DREAMATIC_IMAGE_API_KEY, DREAMATIC_API_KEY, DESIGN_IMAGE_API_KEY, or OPENAI_HUB_API_KEY"})
 
     payload: dict[str, Any] = {
         "model": _model(model),
@@ -431,7 +431,7 @@ async def image_edit_tool(
 
     key = _api_key()
     if not key:
-        return _json({"ok": False, "error": "Missing ATELIER_IMAGE_API_KEY, ATELIER_API_KEY, DESIGN_IMAGE_API_KEY, or OPENAI_HUB_API_KEY"})
+        return _json({"ok": False, "error": "Missing DREAMATIC_IMAGE_API_KEY, DREAMATIC_API_KEY, DESIGN_IMAGE_API_KEY, or OPENAI_HUB_API_KEY"})
 
     form = {
         "model": _model(model),

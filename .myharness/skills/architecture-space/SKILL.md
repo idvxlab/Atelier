@@ -1,6 +1,6 @@
 ---
 name: architecture-space
-description: "Architecture, interior, exhibition, and spatial-design domain guidance for Atelier: site, program, spatial sequence, atmosphere, material, and presentation render deliverables."
+description: "Architecture, interior, exhibition, and spatial-design domain guidance for Dreamatic: site, program, spatial sequence, atmosphere, material, and presentation render deliverables."
 license: MIT
 metadata:
   audience: design-research, design-planner, design-designer, design-critic

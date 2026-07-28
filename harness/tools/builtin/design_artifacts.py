@@ -357,7 +357,7 @@ def _render_index(run_id: str, brief: str, final_dir: Path, items: list[dict[str
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Atelier Design Package · {_esc(run_id)}</title>
+  <title>Dreamatic Design Package · {_esc(run_id)}</title>
   <style>
     :root {{ --ink:#171717; --muted:#666; --line:#dcd8ce; --paper:#f7f5ef; --card:#fffdfa; --accent:#184b82; }}
     * {{ box-sizing: border-box; }}
@@ -386,7 +386,7 @@ def _render_index(run_id: str, brief: str, final_dir: Path, items: list[dict[str
 <body>
   <main>
     <header>
-      <p class="eyebrow">Atelier Design Package</p>
+      <p class="eyebrow">Dreamatic Design Package</p>
       <h1>{_esc(run_id)}</h1>
       <p class="brief"><strong>Brief:</strong> {_esc(brief)}</p>
     </header>

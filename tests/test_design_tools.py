@@ -224,22 +224,22 @@ async def test_research_asset_discover_finds_page_images(monkeypatch, tmp_path):
     )
 
     async def fake_fetch(url: str, max_bytes: int):
-        return html.read_text(encoding="utf-8"), "https://atelier.test/index.html"
+        return html.read_text(encoding="utf-8"), "https://dreamatic.test/index.html"
 
     monkeypatch.setattr("harness.tools.builtin.design_research._fetch_text", fake_fetch)
 
     payload = json.loads(
         await research_asset_discover_tool(
             runId="r1",
-            pageUrl="https://atelier.test/index.html",
+            pageUrl="https://dreamatic.test/index.html",
             includeCss=False,
         )
     )
 
     assert payload["ok"] is True
     urls = {c["url"] for c in payload["candidates"]}
-    assert "https://atelier.test/logo.png" in urls
-    assert "https://atelier.test/hero.png" in urls
+    assert "https://dreamatic.test/logo.png" in urls
+    assert "https://dreamatic.test/hero.png" in urls
 
 
 @pytest.mark.asyncio
@@ -274,7 +274,7 @@ async def test_research_asset_fetch_and_validate(monkeypatch, tmp_path):
             runId="r1",
             runDir=str(run_dir),
             id="cmf-reference",
-            url="https://atelier.test/logo.png",
+            url="https://dreamatic.test/logo.png",
             kind="cmf",
         )
     )

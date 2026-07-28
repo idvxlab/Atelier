@@ -1,6 +1,6 @@
 ---
 name: design-harness-protocol
-description: "Simplified Atelier design workflow protocol: run layout, bus messages, handoff contracts, and package rules."
+description: "Simplified Dreamatic design workflow protocol: run layout, bus messages, handoff contracts, and package rules."
 license: MIT
 metadata:
   audience: design-primary, design-research, design-planner, design-designer, design-critic
@@ -8,7 +8,7 @@ metadata:
 ---
 # Design Harness Protocol
 
-This skill defines the simplified Atelier design workflow.
+This skill defines the simplified Dreamatic design workflow.
 
 ## Runtime Mapping
 
@@ -21,7 +21,7 @@ This skill defines the simplified Atelier design workflow.
 - `artifact_lint`: validation.
 - `export_package`: final package.
 
-Use the Atelier runtime tools named above when coordinating the workflow.
+Use the Dreamatic runtime tools named above when coordinating the workflow.
 For this design workflow, subagent execution is serial: Research finishes before
 Planner starts, Planner finishes before Designer starts, and Designer finishes
 before Critic starts.
@@ -36,7 +36,7 @@ Each `/design` request produces one run with one final curated artifact set.
 
 ## Design Domains
 
-Atelier uses a small fixed domain set for the current workflow. `design-primary`
+Dreamatic uses a small fixed domain set for the current workflow. `design-primary`
 infers `domain_type` automatically from the brief; do not ask the user to choose
 or confirm it unless the user explicitly corrects the classification later.
 

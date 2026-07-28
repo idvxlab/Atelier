@@ -186,9 +186,11 @@ cp .env.example .env
 Fill in the provider credentials you want to use. Example for the default OpenAI-compatible route:
 
 ```env
-OPENAI_HUB_API_KEY=your-api-key
-OPENAI_HUB_BASE_URL=https://your-openai-compatible-endpoint/v1
-OPENAI_HUB_MODEL=gpt-4o
+DREAMATIC_PROVIDER_NAME=my-provider
+DREAMATIC_PROVIDER_TYPE=openai-compatible
+DREAMATIC_API_KEY=your-api-key
+DREAMATIC_BASE_URL=https://your-openai-compatible-endpoint/v1
+DREAMATIC_MODEL=gpt-4o
 HARNESS_DEFAULT_PROVIDER=openai-hub
 ```
 
@@ -202,12 +204,12 @@ BRAVE_SEARCH_API_KEY=your-brave-key
 For image generation and editing:
 
 ```env
-DESIGN_IMAGE_API_KEY=your-image-api-key
-DESIGN_IMAGE_BASE_URL=https://your-image-endpoint/v1
-DESIGN_IMAGE_MODEL=gpt-image-2
-DESIGN_IMAGE_ENDPOINT=https://your-image-endpoint/v1/images/generations
-DESIGN_IMAGE_EDIT_ENDPOINT=https://your-image-endpoint/v1/images/edits
-DESIGN_IMAGE_DEFAULT_SIZE=1024x1024
+DREAMATIC_IMAGE_API_KEY=your-image-api-key
+DREAMATIC_IMAGE_BASE_URL=https://your-image-endpoint/v1
+DREAMATIC_IMAGE_MODEL=gpt-image-2
+DREAMATIC_IMAGE_GENERATION_ENDPOINT=https://your-image-endpoint/v1/images/generations
+DREAMATIC_IMAGE_EDIT_ENDPOINT=https://your-image-endpoint/v1/images/edits
+DREAMATIC_IMAGE_DEFAULT_SIZE=1024x1024
 ```
 
 ### 3. Start the Web Workspace

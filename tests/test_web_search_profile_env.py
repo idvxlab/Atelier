@@ -7,11 +7,11 @@ from harness.tools.builtin import web_search
 
 
 @pytest.mark.asyncio
-async def test_atelier_search_profile_selects_serper(monkeypatch):
+async def test_dreamatic_search_profile_selects_serper(monkeypatch):
     monkeypatch.delenv("SERPER_API_KEY", raising=False)
     monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
-    monkeypatch.setenv("ATELIER_SEARCH_PROVIDER", "serper")
-    monkeypatch.setenv("ATELIER_SEARCH_API_KEY", "atelier-serper-key")
+    monkeypatch.setenv("DREAMATIC_SEARCH_PROVIDER", "serper")
+    monkeypatch.setenv("DREAMATIC_SEARCH_API_KEY", "dreamatic-serper-key")
     calls = []
 
     async def fake_serper(**kwargs):
@@ -34,7 +34,7 @@ async def test_atelier_search_profile_selects_serper(monkeypatch):
             "serper",
             {
                 "query": "hello",
-                "api_key": "atelier-serper-key",
+                "api_key": "dreamatic-serper-key",
                 "max_results": web_search.DEFAULT_SEARCH_RESULTS,
             },
         )
@@ -42,11 +42,11 @@ async def test_atelier_search_profile_selects_serper(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_atelier_search_profile_selects_brave(monkeypatch):
+async def test_dreamatic_search_profile_selects_brave(monkeypatch):
     monkeypatch.delenv("SERPER_API_KEY", raising=False)
     monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
-    monkeypatch.setenv("ATELIER_SEARCH_PROVIDER", "brave")
-    monkeypatch.setenv("ATELIER_SEARCH_API_KEY", "atelier-brave-key")
+    monkeypatch.setenv("DREAMATIC_SEARCH_PROVIDER", "brave")
+    monkeypatch.setenv("DREAMATIC_SEARCH_API_KEY", "dreamatic-brave-key")
     calls = []
 
     async def fake_serper(**kwargs):
@@ -69,7 +69,7 @@ async def test_atelier_search_profile_selects_brave(monkeypatch):
             "brave",
             {
                 "query": "hello",
-                "api_key": "atelier-brave-key",
+                "api_key": "dreamatic-brave-key",
                 "max_results": web_search.DEFAULT_SEARCH_RESULTS,
             },
         )
