@@ -10,7 +10,7 @@ Dreamatic is a controllable agent runtime that goes beyond simple chat. Agents c
 
 The current release focuses on a general-purpose runtime layer suitable for design agents, research workspaces, local automation assistants, and multi-agent systems requiring predictable execution, tool governance, and observable long-running work.
 
-![Dreamatic runtime architecture](docs/assets/dreamatic-runtime-v4-clean-fresh-en.svg)
+![Dreamatic runtime architecture](docs/assets/dreamatic-architect.png)
 
 ## Quick Start
 
@@ -84,17 +84,99 @@ python cli.py --persona builder
 
 ## Architecture
 
-Dreamatic has five runtime layers:
+Dreamatic is organized into six runtime layers. See [`docs/architecture-overview.md`](docs/architecture-overview.md) for the full system diagram with component details.
+
+```mermaid
+graph TB
+    classDef entry fill:#e3f2fd,stroke:#1976d2
+    classDef session fill:#eceff1,stroke:#546e7a
+    classDef runtime fill:#bbdefb,stroke:#1976d2
+    classDef tool fill:#e0f2f1,stroke:#00897b
+    classDef llm fill:#fff3e0,stroke:#f57c00
+    classDef ext fill:#e0f2f1,stroke:#00897b
+    classDef store fill:#f3e5f5,stroke:#7b1fa2
+    classDef observe fill:#fce4ec,stroke:#c62828
+
+    subgraph Entry["ENTRY — Web UI / CLI / REST / WebSocket"]
+        WebUI("Web Workspace&lt;br/&gt;SPA · sessions · preview"):::entry
+        CLI("Interactive CLI&lt;br/&gt;REPL · personas · commands"):::entry
+        API("REST + WebSocket API&lt;br/&gt;FastAPI · 30+ endpoints"):::entry
+    end
+
+    subgraph Session["SESSION — Lifecycle &amp; governance"]
+        SessLife("create · restore · archive · delete"):::session
+        SessMeta("metadata · title · tags · lineage"):::session
+        SessMode("question_mode · approval_mode"):::session
+    end
+
+    subgraph Runtime["AGENT RUNTIME — Core execution engine"]
+        StateM("State Machine&lt;br/&gt;6 states: WAITING_INPUT → RUNNING →&lt;br/&gt;WAITING_CONFIRMATION / WAITING_INTERRUPT →&lt;br/&gt;COMPLETED / ERROR"):::runtime
+        React("ReAct Controller&lt;br/&gt;1. cancel check 2. compress 3. repair 4. load schemas&lt;br/&gt;5. LLM call 6. loop detect 7. confirm gate&lt;br/&gt;8. execute tools 9. append 10. check interrupt"):::runtime
+        Prompt("Prompt Assembly&lt;br/&gt;system · persona · skills · memory · plan · history"):::runtime
+        Context("Context Manager&lt;br/&gt;compression · prompt cache · micro + auto"):::runtime
+        Approve("Approval Gate&lt;br/&gt;ask · auto · full"):::runtime
+        Cancel("Cancel &amp; Recovery&lt;br/&gt;auto-retry · interrupt signal"):::runtime
+    end
+
+    subgraph ToolProvider["TOOL &amp; PROVIDER"]
+        ToolReg("ToolRegistry&lt;br/&gt;30+ tools · schema + handler"):::tool
+        ToolExec("ToolExecutor&lt;br/&gt;async gather · overflow store"):::tool
+        Tools("File · Search · Shell · Web&lt;br/&gt;Image · Agent · Design · Core"):::tool
+        OpenAI("OpenAI Provider&lt;br/&gt;stream_chat · tool use"):::llm
+        Anthropic("Anthropic Provider&lt;br/&gt;extended thinking"):::llm
+    end
+
+    subgraph Extension["EXTENSION — Plugins &amp; customization"]
+        Personas("Personas&lt;br/&gt;builder · planner · reviewer"):::ext
+        Skills("Skills&lt;br/&gt;reusable procedures"):::ext
+        Commands("Commands&lt;br/&gt;slash shortcuts"):::ext
+        MCP("MCP Bridge&lt;br/&gt;stdio · HTTP transport"):::ext
+    end
+
+    subgraph Storage["STORAGE — Persistence"]
+        SessSt("SessionStore&lt;br/&gt;messages · metadata"):::store
+        MemSt("MemoryStore&lt;br/&gt;long-term memory"):::store
+        PlanSt("PlanStore&lt;br/&gt;plans · checkpoints"):::store
+        Backend("SQLite / In-Memory"):::store
+    end
+
+    subgraph Observe["OBSERVABILITY — Streaming &amp; audit"]
+        Events("EventEmitter&lt;br/&gt;structured JSON logs"):::observe
+        WSStream("WebSocket Stream&lt;br/&gt;token · state · question.*"):::observe
+        Hooks("Hook System&lt;br/&gt;before/after LLM &amp; tool"):::observe
+    end
+
+    API -->|"send_message()"| React
+    CLI -->|"asyncio.run"| React
+    React -->|"state transitions"| StateM
+    React -->|"stream_chat()"| OpenAI
+    React -->|"stream_chat()"| Anthropic
+    OpenAI -->|"ToolCallBlock"| React
+    React -->|"execute"| ToolExec
+    ToolExec -->|"dispatch"| ToolReg
+    ToolReg -->|"call"| Tools
+    ToolExec -.->|"hooks"| Hooks
+    React -->|"save/load"| SessSt
+    React -->|"read/write"| MemSt
+    React -.->|"emit"| Events
+    Events -.->|"push"| WSStream
+    Personas -.->|"restrict"| ToolReg
+    MCP -.->|"register"| ToolReg
+    SessSt -.->|"backed by"| Backend
+    MemSt -.->|"backed by"| Backend
+    PlanSt -.->|"backed by"| Backend
+```
 
 | Layer | Responsibility |
-| --- | --- |
+|---|---|
 | Entry | Web UI, CLI, REST API, WebSocket streaming |
-| Session | Create, restore, rename, pin/archive, parent-child relationships |
-| Agent runtime | Prompt assembly, model calls, tool execution, approval gates, state machine |
-| Extension | Tools, skills, personas, commands, MCP bridge |
-| Storage | SQLite or in-memory backends for messages, plans, memory, metadata |
+| Session | Create, restore, rename, pin/archive, parent-child relationships, runtime modes |
+| Agent runtime | State machine (6 states), ReAct controller, prompt assembly, context compression, prompt cache |
+| Tool & Provider | 30+ built-in tools, OpenAI-compatible & Anthropic LLM providers, MCP bridge |
+| Extension | Personas (roles), Skills (procedures), Commands (shortcuts), MCP bridge |
+| Storage | SQLite or in-memory backends for SessionStore, MemoryStore, PlanStore, CheckpointStore |
 
-**Execution flow**: User sends a request → engine assembles prompt (system + persona + skills + memory + plan + history) → model responds or requests tool calls → tools pass through approval → results stream to frontend → loop continues or final answer returned.
+**Execution flow**: User sends a request → engine assembles prompt (system + persona + skills + memory + plan + history) → model responds or requests tool calls → tools pass through approval gate → results stream to frontend → loop continues or final answer returned.
 
 ## Design Examples
 
