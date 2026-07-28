@@ -222,7 +222,7 @@ Conference promotion — posters, social media, badges, templates. [Open package
 |---|---|---|
 | <img src="examples/ieee-vis-2026-promo/final/artifacts/generated-images/01-main-poster.png" width="220"> | <img src="examples/ieee-vis-2026-promo/final/artifacts/generated-images/02-key-visual.png" width="220"> | <img src="examples/ieee-vis-2026-promo/final/artifacts/generated-images/05-social-twitter-post.png" width="220"> |
 
-### Campus Campaign: Shanghai Chuangzhi College
+### Campus Campaign: Shanghai Innovation Institute
 
 Bilingual campaign with merch mockups and moodboards. [Open package](examples/shanghai-chuangzhi-college-merch-system/final/00-index.html)
 
