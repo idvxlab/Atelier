@@ -84,7 +84,7 @@ python cli.py --persona builder
 
 Dreamatic is organized into six runtime layers.
 
-![Dreamatic hero illustration](docs/assets/dreamatic-architct-v2.png)
+![Dreamatic hero illustration](docs/assets/dreamatic-architect-v2.png)
 
 | Layer | Responsibility |
 |---|---|
