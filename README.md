@@ -1,12 +1,12 @@
-# Atelier
+# Dreamatic
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Atelier is a lightweight agent harness for building professional, design-oriented AI agents. It is not a thin chat wrapper around a model API. It is a controllable runtime foundation where agents can understand a request, plan work, call tools, persist context, request human approval, spawn sub-agents, and stream the execution process back to the user in real time.
+Dreamatic is a lightweight agent harness for building professional, design-oriented AI agents. It is not a thin chat wrapper around a model API. It is a controllable runtime foundation where agents can understand a request, plan work, call tools, persist context, request human approval, spawn sub-agents, and stream the execution process back to the user in real time.
 
 The current release focuses on the general-purpose runtime layer. It is suitable as the foundation for design agents, research workspaces, local automation assistants, and multi-agent systems that need predictable execution, tool governance, persistent sessions, and observable long-running work.
 
-![Atelier runtime architecture](docs/assets/atelier-runtime-v4-clean-fresh-en.svg)
+![Dreamatic runtime architecture](docs/assets/dreamatic-runtime-v4-clean-fresh-en.svg)
 
 ## Highlights
 
@@ -23,7 +23,7 @@ The current release focuses on the general-purpose runtime layer. It is suitable
 
 ## Use Cases
 
-Atelier is designed for teams and researchers who need more than a single-turn assistant:
+Dreamatic is designed for teams and researchers who need more than a single-turn assistant:
 
 - Build agents for design research, visual production, critique, prototyping, and artifact-oriented workflows.
 - Run local AI workspaces where agents can read and edit project files under controlled permissions.
@@ -111,7 +111,7 @@ A campus-facing communication and merchandise system with bilingual posters, soc
 
 ## Architecture
 
-Atelier is organized into five runtime layers:
+Dreamatic is organized into five runtime layers:
 
 | Layer | Responsibility |
 | --- | --- |
@@ -318,7 +318,7 @@ The Web Workspace is backed by FastAPI and WebSocket events. It supports:
 
 ## Question Mode
 
-Atelier supports two session-level question modes:
+Dreamatic supports two session-level question modes:
 
 | Mode | Behavior | Best for |
 | --- | --- | --- |
@@ -365,7 +365,7 @@ WebSocket events include tokens, messages, state snapshots, tool results, and qu
 
 ## Security and Permissions
 
-Atelier is a local research harness. It includes practical safety controls, but production or multi-user deployment requires additional review.
+Dreamatic is a local research harness. It includes practical safety controls, but production or multi-user deployment requires additional review.
 
 Built-in controls include:
 
@@ -376,7 +376,7 @@ Built-in controls include:
 - The web-fetch tool includes basic SSRF protection.
 - Runtime state transitions are controlled by an explicit state machine.
 
-Before exposing Atelier to untrusted users:
+Before exposing Dreamatic to untrusted users:
 
 - Use least-privilege personas.
 - Disable shell-like tools when they are not required.
@@ -452,8 +452,8 @@ Set `allowed_tools` in the persona and disable unnecessary tools in `config.yaml
 
 ## Project Status
 
-Atelier is an evolving research-oriented product foundation. The general agent runtime, tool system, persistent sessions, Web/CLI entry points, and basic multi-agent capabilities are implemented. Design-domain tooling, artifact management, permission hardening, and production deployment are still under active development.
+Dreamatic is an evolving research-oriented product foundation. The general agent runtime, tool system, persistent sessions, Web/CLI entry points, and basic multi-agent capabilities are implemented. Design-domain tooling, artifact management, permission hardening, and production deployment are still under active development.
 
 ## License
 
-Atelier is released under the [MIT License](LICENSE).
+Dreamatic is released under the [MIT License](LICENSE).
