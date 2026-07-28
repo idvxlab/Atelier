@@ -4,6 +4,8 @@
 
 **Harness for Professional Design Agents** — Direct creativity, orchestrate intelligence, deliver professional design.
 
+![Dreamatic hero illustration](docs/assets/dreamatic-hero.png)
+
 Dreamatic is a controllable agent runtime that goes beyond simple chat. Agents can understand requests, plan work, call tools, persist context, request human approval, spawn sub-agents, and stream execution in real time — all within persistent sessions.
 
 The current release focuses on a general-purpose runtime layer suitable for design agents, research workspaces, local automation assistants, and multi-agent systems requiring predictable execution, tool governance, and observable long-running work.
@@ -32,6 +34,24 @@ DREAMATIC_API_KEY=your-api-key
 DREAMATIC_BASE_URL=https://your-endpoint/v1
 DREAMATIC_MODEL=gpt-4o
 HARNESS_DEFAULT_PROVIDER=openai-hub
+```
+
+For full web search:
+
+```env
+SERPER_API_KEY=your-serper-key
+BRAVE_SEARCH_API_KEY=your-brave-key
+```
+
+For image generation and editing:
+
+```env
+DREAMATIC_IMAGE_API_KEY=your-image-api-key
+DREAMATIC_IMAGE_BASE_URL=https://your-image-endpoint/v1
+DREAMATIC_IMAGE_MODEL=gpt-image-2
+DREAMATIC_IMAGE_GENERATION_ENDPOINT=https://your-image-endpoint/v1/images/generations
+DREAMATIC_IMAGE_EDIT_ENDPOINT=https://your-image-endpoint/v1/images/edits
+DREAMATIC_IMAGE_DEFAULT_SIZE=1024x1024
 ```
 
 ### 3. Start Web UI
