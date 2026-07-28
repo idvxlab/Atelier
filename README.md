@@ -2,7 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-## Dreamatic - Harness Professional Design Agents (Direct creativity, Orchestrate intelligence, Deliver professional design).
+## Dreamatic - Harness Professional Design Agents
+Direct creativity, Orchestrate intelligence, Deliver professional design
 
 ![Dreamatic hero illustration](docs/assets/dreamatic-hero.png)
 
