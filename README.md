@@ -12,13 +12,24 @@ The current release focuses on a general-purpose runtime layer suitable for desi
 
 ## Quick Start
 
-### 1. Install
+### 1. Create virtual environment (recommended)
+
+Dreamatic requires **Python >= 3.11**.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # macOS/Linux
+# .venv\Scripts\activate         # Windows
+pip install --upgrade pip
+```
+
+### 2. Install
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-### 2. Configure
+### 3. Configure
 
 ```bash
 cp .env.example .env
@@ -52,14 +63,16 @@ DREAMATIC_IMAGE_EDIT_ENDPOINT=https://your-image-endpoint/v1/images/edits
 DREAMATIC_IMAGE_DEFAULT_SIZE=1024x1024
 ```
 
-### 3. Start Web UI
+### 4. Start Web UI
 
 ```bash
-uvicorn api.rest:app --port 8000
+python -m uvicorn api.rest:app --port 8000
 # Open http://localhost:8000
 ```
 
-### 4. Or use CLI
+> Use `python -m uvicorn` instead of the raw `uvicorn` command to ensure it runs within the current virtual environment. Avoid `--reload` as agent file writes can trigger restart and interrupt sessions.
+
+### 5. Or use CLI
 
 ```bash
 python cli.py --persona builder
@@ -266,6 +279,8 @@ python scripts/loc.py               # Count lines of code
 **Provider not found?** — Check provider names in `config.yaml` and `HARNESS_DEFAULT_PROVIDER` in `.env`.
 
 **Web search empty?** — Set `SERPER_API_KEY` or `BRAVE_SEARCH_API_KEY`; fallback is limited DuckDuckGo.
+
+**Should I use `uvicorn` or `python -m uvicorn`?** — Always use `python -m uvicorn`. The raw `uvicorn` command may invoke a system-wide installation (e.g. from pipx) that uses a different Python path and won't find project dependencies installed in the virtual environment.
 
 **Avoid `uvicorn --reload`?** — File writes from agents can trigger restart and interrupt sessions.
 

@@ -164,13 +164,24 @@ Dreamatic 可以分为五个运行时层级：
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 创建虚拟环境（推荐）
+
+Dreamatic 需要 **Python >= 3.11**。
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # macOS/Linux
+# .venv\Scripts\activate         # Windows
+pip install --upgrade pip
+```
+
+### 2. 安装依赖
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-### 2. 配置环境变量
+### 3. 配置环境变量
 
 创建本地环境文件：
 
@@ -207,10 +218,10 @@ DREAMATIC_IMAGE_EDIT_ENDPOINT=https://your-image-endpoint/v1/images/edits
 DREAMATIC_IMAGE_DEFAULT_SIZE=1024x1024
 ```
 
-### 3. 启动 Web Workspace
+### 4. 启动 Web Workspace
 
 ```bash
-uvicorn api.rest:app --port 8000
+python -m uvicorn api.rest:app --port 8000
 ```
 
 浏览器打开：
@@ -219,9 +230,9 @@ uvicorn api.rest:app --port 8000
 http://localhost:8000
 ```
 
-长任务或会写文件的智能体任务不建议使用 `--reload`。文件变化可能触发服务重启，从而中断当前会话。
+> 务必使用 `python -m uvicorn` 而非裸 `uvicorn` 命令，以确保在当前的虚拟环境中运行。不建议使用 `--reload`，文件变化可能触发服务重启，从而中断当前会话。
 
-### 4. 使用 CLI
+### 5. 使用 CLI
 
 ```bash
 python cli.py
@@ -415,7 +426,7 @@ python scripts/loc.py
 - [ ] `.env.example` 已覆盖必要配置，真实 `.env` 未提交。
 - [ ] `config.yaml` 默认 Provider 与文档中的环境变量一致。
 - [ ] 高风险工具已列入 `tools.confirm_tools`。
-- [ ] Web UI 可通过 `uvicorn api.rest:app --port 8000` 启动。
+- [ ] Web UI 可通过 `python -m uvicorn api.rest:app --port 8000` 启动。
 - [ ] CLI 可通过 `python cli.py --persona builder` 启动。
 - [ ] 核心测试通过。
 - [ ] README 图片链接、命令和接口说明与当前代码一致。
@@ -439,6 +450,10 @@ python scripts/loc.py
 **为什么网页搜索没有有效结果？**
 
 如果没有配置 `SERPER_API_KEY` 或 `BRAVE_SEARCH_API_KEY`，`web_search` 会降级到能力有限的 DuckDuckGo instant-answer fallback。完整网页搜索建议配置 Serper 或 Brave。
+
+**为什么需要使用 `python -m uvicorn` 而不是直接 `uvicorn`？**
+
+直接 `uvicorn` 可能调用的是系统全局（如 pipx）安装的版本，会使用系统 Python 路径，导致找不到虚拟环境中已安装的项目依赖。务必使用 `python -m uvicorn` 来确保在虚拟环境中运行。
 
 **为什么不建议使用 `uvicorn --reload`？**
 
