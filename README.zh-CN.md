@@ -1,12 +1,12 @@
-# Atelier
+# Dreamatic
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Atelier 是一个面向专业设计智能体的轻量级 Agent Harness。它不是单纯的大模型聊天页面，而是一套可控制、可观察、可审批、可持久化、可扩展的智能体运行底座：智能体可以在同一个会话中理解需求、规划任务、调用工具、保存上下文、请求人工确认、生成子智能体，并通过 WebSocket 把执行过程实时呈现给用户。
+Dreamatic 是一个面向专业设计智能体的轻量级 Agent Harness。它不是单纯的大模型聊天页面，而是一套可控制、可观察、可审批、可持久化、可扩展的智能体运行底座：智能体可以在同一个会话中理解需求、规划任务、调用工具、保存上下文、请求人工确认、生成子智能体，并通过 WebSocket 把执行过程实时呈现给用户。
 
 当前版本聚焦通用运行时能力，适合作为设计智能体、研究型工作台、本地自动化助手，以及需要稳定执行、工具治理、持久化会话和可观察长任务的多智能体系统基础。
 
-![Atelier 运行时架构](docs/assets/atelier-runtime-v4-clean-fresh-zh.svg)
+![Dreamatic 运行时架构](docs/assets/dreamatic-runtime-v4-clean-fresh-zh.svg)
 
 ## 核心亮点
 
@@ -23,7 +23,7 @@ Atelier 是一个面向专业设计智能体的轻量级 Agent Harness。它不�
 
 ## 适用场景
 
-Atelier 面向需要“可执行智能体”而不只是“单轮聊天助手”的团队与研究者：
+Dreamatic 面向需要“可执行智能体”而不只是“单轮聊天助手”的团队与研究者：
 
 - 构建设计调研、视觉产物生成、方案评审、原型迭代和面向产物工作流的专业设计智能体。
 - 搭建可本地运行的 AI 工作台，让智能体在可控权限下读取和修改项目文件。
@@ -111,7 +111,7 @@ Atelier 面向需要“可执行智能体”而不只是“单轮聊天助手”
 
 ## 产品架构
 
-Atelier 可以分为五个运行时层级：
+Dreamatic 可以分为五个运行时层级：
 
 | 层级 | 职责 |
 | --- | --- |
@@ -318,7 +318,7 @@ Web Workspace 由 FastAPI 后端和 WebSocket 事件驱动，主要支持：
 
 ## 提问模式
 
-Atelier 支持两种会话级提问模式：
+Dreamatic 支持两种会话级提问模式：
 
 | 模式 | 行为 | 适用场景 |
 | --- | --- | --- |
@@ -365,7 +365,7 @@ WebSocket 事件包括 token、message、state、tool result、question asked/re
 
 ## 安全与权限
 
-Atelier 是本地研究型 Agent Harness。它已经包含实用的安全控制，但生产部署或多用户场景仍需要额外审查。
+Dreamatic 是本地研究型 Agent Harness。它已经包含实用的安全控制，但生产部署或多用户场景仍需要额外审查。
 
 已有控制包括：
 
@@ -452,8 +452,8 @@ python scripts/loc.py
 
 ## 项目状态
 
-Atelier 是一个持续迭代中的研究型产品底座。通用智能体运行时、工具系统、持久化会话、Web/CLI 入口和基础多智能体能力已经实现；设计领域工具、产物管理、权限加固和生产部署能力仍在持续开发中。
+Dreamatic 是一个持续迭代中的研究型产品底座。通用智能体运行时、工具系统、持久化会话、Web/CLI 入口和基础多智能体能力已经实现；设计领域工具、产物管理、权限加固和生产部署能力仍在持续开发中。
 
 ## License
 
-Atelier 使用 [MIT License](LICENSE) 开源。
+Dreamatic 使用 [MIT License](LICENSE) 开源。
