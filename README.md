@@ -10,8 +10,6 @@ Dreamatic is a controllable agent runtime that goes beyond simple chat. Agents c
 
 The current release focuses on a general-purpose runtime layer suitable for design agents, research workspaces, local automation assistants, and multi-agent systems requiring predictable execution, tool governance, and observable long-running work.
 
-![Dreamatic runtime architecture](docs/assets/dreamatic-architect.png)
-
 ## Quick Start
 
 ### 1. Install
