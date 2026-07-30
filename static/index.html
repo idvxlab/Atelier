@@ -461,100 +461,6 @@
         background: var(--surface);
       }
 
-      #composer-persona-wrap {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        height: 38px;
-        padding: 0 12px;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        background: #11161d;
-        flex-shrink: 0;
-        position: relative;
-      }
-
-      #composer-persona-wrap label {
-        font-size: 12px;
-        color: var(--text-muted);
-        white-space: nowrap;
-      }
-
-      #composer-persona {
-        position: relative;
-      }
-
-      #composer-persona-trigger {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: 100%;
-        min-width: 156px;
-        padding: 0 8px;
-        border: none;
-        outline: none;
-        background: transparent;
-        color: var(--text);
-        font-family: var(--font);
-        font-size: 14px;
-        cursor: pointer;
-        white-space: nowrap;
-      }
-
-      #composer-persona-trigger .chevron {
-        font-size: 10px;
-        color: var(--text-muted);
-        transition: transform 0.15s;
-        margin-left: auto;
-      }
-
-      #composer-persona-trigger.open .chevron {
-        transform: rotate(180deg);
-      }
-
-      #composer-persona-dropdown {
-        position: absolute;
-        bottom: calc(100% + 6px);
-        left: 0;
-        right: 0;
-        min-width: 180px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        box-shadow:
-          0 8px 24px rgba(0, 0, 0, 0.5),
-          0 0 0 1px rgba(255, 255, 255, 0.04);
-        padding: 4px;
-        z-index: 50;
-        display: none;
-        flex-direction: column;
-      }
-
-      #composer-persona-dropdown.open {
-        display: flex;
-      }
-
-      .persona-option {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 13px;
-        color: var(--text);
-        transition: background 0.1s;
-      }
-
-      .persona-option:hover {
-        background: var(--surface2);
-      }
-
-      .persona-option.selected {
-        background: var(--accent-dim);
-        color: var(--accent);
-      }
-
       .clarify-card {
         margin: 8px 0;
         padding: 14px 16px;
@@ -2258,9 +2164,9 @@
           <!-- Messages or empty state -->
           <div id="messages-wrap">
             <div id="empty-state">
-              <p>直接在下方输入即可开始，默认使用 Builder 智能体</p>
+              <p>直接在下方输入即可开始，默认使用 Dreamatic 设计智能体</p>
               <button class="btn btn-primary" onclick="openNewSession()">
-                选择智能体创建会话
+                创建设计会话
               </button>
             </div>
             <div id="messages" class="hidden"></div>
@@ -2359,20 +2265,6 @@
               onkeydown="handleInputKey(event)"
               oninput="autoGrow(this)"
             ></textarea>
-            <div id="composer-persona-wrap">
-              <label>智能体</label>
-              <div id="composer-persona">
-                <button
-                  id="composer-persona-trigger"
-                  onclick="togglePersonaDropdown(event)"
-                  aria-label="选择智能体"
-                >
-                  <span id="composer-persona-text">builder</span>
-                  <span class="chevron">▾</span>
-                </button>
-                <div id="composer-persona-dropdown"></div>
-              </div>
-            </div>
             <button
               class="btn btn-primary"
               onclick="sendMessage()"
@@ -2632,19 +2524,6 @@
           <select id="sel-provider"></select>
         </div>
         <div class="form-group">
-          <label>智能体（身份与权限）</label>
-          <select id="sel-persona"></select>
-          <div
-            id="persona-desc"
-            style="
-              font-size: 12px;
-              color: var(--text-muted);
-              margin-top: 4px;
-              min-height: 16px;
-            "
-          ></div>
-        </div>
-        <div class="form-group">
           <label>权限模式（本次会话）</label>
           <select id="sel-approval-mode">
             <option value="ask">询问给权限（每次高危操作需手动确认）</option>
@@ -2730,7 +2609,7 @@
       let currentQuestionMode = "question";
       let selectedCmdIndex = -1; // index in filteredCommands
       let menuSessionId = null; // which session's menu is open
-      let composerPersonaDraft = "builder";
+      const DEFAULT_DESIGN_PERSONA = "design-primary";
       const LAST_SESSION_KEY = "myharness:last-session-id";
       // Poll deduplication: at most one doPoll in-flight + one queued
       let doPollInFlight = false;
@@ -2889,7 +2768,6 @@
           await loadModelProfiles({ silent: true });
           renderSidebar();
           populateModal();
-          populateComposerPersona();
         } catch (e) {
           toast("加载配置失败: " + e.message, true);
         }
@@ -2900,14 +2778,13 @@
           const r = await api("/sessions");
           allSessions = r.sessions || [];
           renderSessionsList();
-          populateComposerPersona();
         } catch (e) {}
       }
 
       // ── Render Sidebar ───────────────────────────────────────────────────
       function renderSidebar() {
         // Sidebar focuses on sessions only. Skills/personas still load for
-        // config editing, new-session modal, and composer persona switching.
+        // config editing and internal design workflow profiles.
       }
 
       function getSessionLabel(s) {
@@ -2915,7 +2792,8 @@
         if (manual) return manual;
         const title = (s.title || "").trim();
         if (title) return title;
-        if (s.persona) return s.persona;
+        if (s.persona && s.persona !== DEFAULT_DESIGN_PERSONA) return s.persona;
+        if (s.persona === DEFAULT_DESIGN_PERSONA) return "Dreamatic Design";
         if ((s.spawn_depth || 0) > 0) return `sub ${s.session_id.slice(4, 12)}`;
         return s.session_id.slice(0, 8);
       }
@@ -3100,185 +2978,20 @@
           provSel.appendChild(opt);
         });
 
-        const persSel = document.getElementById("sel-persona");
-        const selectablePersonas = getSelectablePersonas();
-        const modalDefaultPersona = selectablePersonas.some(
-          (p) => p.name === composerPersonaDraft,
-        )
-          ? composerPersonaDraft
-          : "builder";
-        persSel.innerHTML = "";
-        selectablePersonas.forEach((p) => {
-          const opt = document.createElement("option");
-          opt.value = p.name;
-          opt.textContent = p.description
-            ? p.name + " - " + p.description
-            : p.name;
-          opt.dataset.desc = p.description || "";
-          if (p.name === modalDefaultPersona) opt.selected = true;
-          persSel.appendChild(opt);
-        });
-
-        // Show agent description on change
-        persSel.onchange = () => {
-          const selected = persSel.options[persSel.selectedIndex];
-          const descEl = document.getElementById("persona-desc");
-          if (descEl)
-            descEl.textContent = selected ? selected.dataset.desc || "" : "";
-          const persona = overview.personas.find(
-            (p) => p.name === persSel.value,
-          );
-          const approvalSel = document.getElementById("sel-approval-mode");
-          if (approvalSel && persona && persona.default_approval_mode) {
-            approvalSel.value = persona.default_approval_mode;
-          }
-        };
-        persSel.dispatchEvent(new Event("change"));
-      }
-
-      function getSelectablePersonas() {
-        return (overview.personas || []).filter((p) => {
-          if (!p || p.hidden) return false;
-          return !p.mode || p.mode === "primary" || p.mode === "all";
-        });
-      }
-
-      function populateComposerPersona() {
-        const dropdown = document.getElementById("composer-persona-dropdown");
-        const triggerText = document.getElementById("composer-persona-text");
-        if (!dropdown || !triggerText) return;
-
-        const selectablePersonas = getSelectablePersonas();
-        const names = selectablePersonas.map((p) => p.name);
-        const current = allSessions.find(
-          (s) => s.session_id === currentSessionId,
+        const approvalSel = document.getElementById("sel-approval-mode");
+        const designPersona = (overview.personas || []).find(
+          (p) => p.name === DEFAULT_DESIGN_PERSONA,
         );
-        const previousValue = currentSessionId
-          ? (current && current.persona) || composerPersonaDraft || "builder"
-          : composerPersonaDraft || "builder";
-        const activePersona = names.includes(previousValue)
-          ? previousValue
-          : "builder";
-
-        triggerText.textContent = activePersona;
-        composerPersonaDraft = activePersona;
-
-        dropdown.innerHTML = "";
-        selectablePersonas.forEach((p) => {
-          const opt = document.createElement("div");
-          opt.className =
-            "persona-option" + (p.name === activePersona ? " selected" : "");
-          opt.innerHTML = "<span>" + escHtml(p.name) + "</span>";
-          opt.title = p.description || p.name;
-          opt.onclick = (e) => {
-            e.stopPropagation();
-            selectPersona(p.name);
-          };
-          dropdown.appendChild(opt);
-        });
-      }
-
-      function syncComposerPersonaControl(persona = "") {
-        const triggerText = document.getElementById("composer-persona-text");
-        if (!triggerText) return;
-        const names = getSelectablePersonas().map((p) => p.name);
-        const fallback = names.includes("builder")
-          ? "builder"
-          : names[0] || "builder";
-        const activePersona = currentSessionId
-          ? names.includes(persona)
-            ? persona
-            : fallback
-          : names.includes(composerPersonaDraft)
-            ? composerPersonaDraft
-            : fallback;
-        triggerText.textContent = activePersona;
-        composerPersonaDraft = activePersona;
-        const trigger = document.getElementById("composer-persona-trigger");
-        if (trigger) {
-          trigger.title = currentSessionId
-            ? "\u5207\u6362\u5f53\u524d\u4f1a\u8bdd\u7684\u667a\u80fd\u4f53"
-            : "\u9009\u62e9\u65b0\u4f1a\u8bdd\u4f7f\u7528\u7684\u667a\u80fd\u4f53";
+        if (approvalSel && designPersona && designPersona.default_approval_mode) {
+          approvalSel.value = designPersona.default_approval_mode;
         }
       }
 
-      function togglePersonaDropdown(e) {
-        e.stopPropagation();
-        const dropdown = document.getElementById("composer-persona-dropdown");
-        const trigger = document.getElementById("composer-persona-trigger");
-        if (!dropdown || !trigger) return;
-        const isOpen = dropdown.classList.contains("open");
-        if (isOpen) {
-          closePersonaDropdown();
-        } else {
-          dropdown.classList.add("open");
-          trigger.classList.add("open");
-          setTimeout(
-            () =>
-              document.addEventListener("click", closePersonaDropdown, {
-                once: true,
-              }),
-            0,
-          );
-        }
-      }
-
-      function closePersonaDropdown() {
-        const dropdown = document.getElementById("composer-persona-dropdown");
-        const trigger = document.getElementById("composer-persona-trigger");
-        if (dropdown) dropdown.classList.remove("open");
-        if (trigger) trigger.classList.remove("open");
-      }
-
-      async function selectPersona(name) {
-        const names = getSelectablePersonas().map((p) => p.name);
-        const nextPersona = names.includes(name)
-          ? name
-          : names.includes("builder")
-            ? "builder"
-            : names[0] || "builder";
-        composerPersonaDraft = nextPersona;
-        closePersonaDropdown();
-        populateComposerPersona();
-        if (currentSessionId) {
-          try {
-            const r = await api("/sessions/" + currentSessionId, "PATCH", {
-              persona: nextPersona,
-            });
-            toast(
-              "\u5df2\u5207\u6362\u667a\u80fd\u4f53: " +
-                (r.persona || nextPersona),
-            );
-            await refreshSessions();
-          } catch (e) {
-            toast(
-              "\u5207\u6362\u667a\u80fd\u4f53\u5931\u8d25: " + e.message,
-              true,
-            );
-          }
-        }
-      }
-      function openNewSession(prePersona = "") {
+      function openNewSession() {
         document.getElementById("modal-overlay").classList.remove("hidden");
-        const select = document.getElementById("sel-persona");
-        const names = getSelectablePersonas().map((p) => p.name);
-        const desired = prePersona || composerPersonaDraft || "builder";
-        const nextPersona = names.includes(desired)
-          ? desired
-          : names.includes("builder")
-            ? "builder"
-            : names[0] || "";
-        if (select && nextPersona) {
-          select.value = nextPersona;
-          select.dispatchEvent(new Event("change"));
-        }
       }
       function closeModal() {
         document.getElementById("modal-overlay").classList.add("hidden");
-        const select = document.getElementById("sel-persona");
-        if (select) select.value = composerPersonaDraft || "builder";
-        const descEl = document.getElementById("persona-desc");
-        if (descEl) descEl.textContent = "";
       }
 
       async function createSession() {
@@ -3287,7 +3000,6 @@
         btn.disabled = true;
         btn.textContent = "创建中…";
 
-        const persona = document.getElementById("sel-persona").value;
         const provider = document.getElementById("sel-provider").value;
         const approvalMode = document.getElementById("sel-approval-mode").value;
         if (!provider) {
@@ -3297,8 +3009,11 @@
           return;
         }
 
-        const body = { provider, approval_mode: approvalMode };
-        if (persona) body.persona = persona;
+        const body = {
+          provider,
+          approval_mode: approvalMode,
+          persona: DEFAULT_DESIGN_PERSONA,
+        };
 
         try {
           const r = await api("/sessions", "POST", body);
@@ -3315,13 +3030,7 @@
       }
 
       async function createDefaultSession() {
-        const names = getSelectablePersonas().map((p) => p.name);
-        const persona = names.includes(composerPersonaDraft)
-          ? composerPersonaDraft
-          : names.includes("builder")
-            ? "builder"
-            : names[0] || "builder";
-        const body = { persona };
+        const body = { persona: DEFAULT_DESIGN_PERSONA };
         const r = await api("/sessions", "POST", body);
         await refreshSessions();
         await switchSession(r.session_id);
@@ -4639,11 +4348,10 @@
         if (Object.prototype.hasOwnProperty.call(meta, "persona"))
           headerInfo.persona = meta.persona;
         if (meta.provider) headerInfo.provider = meta.provider;
-        syncComposerPersonaControl(headerInfo.persona || "");
         titleEl.textContent = getSessionLabel(headerInfo);
         const parts = [];
         if (meta.skill) parts.push(`Skill: <strong>${meta.skill}</strong>`);
-        if (meta.persona)
+        if (meta.persona && meta.persona !== DEFAULT_DESIGN_PERSONA)
           parts.push(`\u667a\u80fd\u4f53: <strong>${meta.persona}</strong>`);
         if (headerInfo.provider) parts.push(renderProviderSelector(headerInfo.provider, snap.is_running));
         if (parts.length) {

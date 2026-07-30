@@ -545,7 +545,7 @@ async def _mount_static() -> None:
 class CreateSessionRequest(BaseModel):
     session_id: str = ""       # optional; pass to restore after server reload
     provider: str = ""
-    persona: str = ""           # load from personas/{name}.md (preferred)
+    persona: str = "design-primary"  # load from personas/{name}.md (preferred)
     system_prompt: str = ""     # fallback if no persona
     allowed_tools: list[str] | None = None
     approval_mode: str = ""     # "ask" | "auto" | "full" — picked at session start
