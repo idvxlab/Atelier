@@ -162,6 +162,14 @@ Bilingual campaign with merch mockups and moodboards. [Open package](examples/sh
 |---|---|---|
 | <img src="examples/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/01-logo-application-poster.png" width="220"> | <img src="examples/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/02-campaign-poster-zh.png" width="220"> | <img src="examples/shanghai-chuangzhi-college-merch-system/final/artifacts/generated-images/07-merch-mockup.png" width="220"> |
 
+### Product Design: VibeCoding Creative Compact Input
+
+A dedicated input device for creative professionals working with AI-native workflows. [Open package](examples/vibecoding-creative-compact-input/final/00-index.html)
+
+| Hero render | Usage scene | Form language |
+|---|---|---|
+| <img src="examples/vibecoding-creative-compact-input/final/artifacts/generated-images/01-hero-render.png" width="220"> | <img src="examples/vibecoding-creative-compact-input/final/artifacts/generated-images/03-usage-scene.png" width="220"> | <img src="examples/vibecoding-creative-compact-input/final/artifacts/generated-images/05-exploded-view.png" width="220"> |
+
 ## Repository Layout
 
 ```
