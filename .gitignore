@@ -34,3 +34,7 @@ outputs/
 ai-design-harness-folder
 
 env-profiles/
+
+# Server logs
+server.log
+*.log

@@ -27,6 +27,9 @@ from harness.tools.builtin.design_image import (
     IMAGE_GENERATE_SCHEMA, image_generate_tool,
     IMAGE_EDIT_SCHEMA, image_edit_tool,
 )
+from harness.tools.builtin.design_video import (
+    VIDEO_GENERATE_SCHEMA, video_generate_tool,
+)
 from harness.tools.builtin.design_run import (
     RUN_INIT_SCHEMA, run_init_tool,
     DESIGN_BUS_POST_SCHEMA, design_bus_post_tool,
@@ -68,6 +71,7 @@ __all__ = [
     "background_task_tool", "BACKGROUND_TASK_SCHEMA",
     "IMAGE_GENERATE_SCHEMA", "image_generate_tool",
     "IMAGE_EDIT_SCHEMA", "image_edit_tool",
+    "VIDEO_GENERATE_SCHEMA", "video_generate_tool",
     "RUN_INIT_SCHEMA", "run_init_tool",
     "DESIGN_BUS_POST_SCHEMA", "design_bus_post_tool",
     "DESIGN_BUS_READ_SCHEMA", "design_bus_read_tool",

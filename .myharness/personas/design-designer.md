@@ -15,6 +15,7 @@ allowed_tools:
   - list_dir
   - image_generate
   - image_edit
+  - video_generate
   - artifact_lint
   - design_bus_post
   - design_bus_read

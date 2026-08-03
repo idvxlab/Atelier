@@ -140,6 +140,7 @@ tools:
     - background_task
     - image_generate
     - image_edit
+    - video_generate
     - run_init
     - design_bus_post
     - design_bus_read
@@ -168,6 +169,7 @@ tools:
     background_task: 8000
     image_generate: 8000
     image_edit: 8000
+    video_generate: 15000
     run_init: 8000
     design_bus_post: 8000
     design_bus_read: 12000
