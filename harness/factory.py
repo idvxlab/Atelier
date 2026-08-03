@@ -35,6 +35,7 @@ from harness.tools.builtin import (
     SEARCH_SCHEMA, search_tool,
     SHELL_SCHEMA, shell_tool,
     USE_SKILL_SCHEMA, use_skill_tool,
+    LIST_SKILLS_SCHEMA, list_skills_tool,
     GLOB_SCHEMA, glob_tool,
     GREP_SCHEMA, grep_tool,
     POWERSHELL_SCHEMA, powershell_tool,
@@ -374,9 +375,11 @@ def build_engine(
         else:
             logger.warning("[build_engine] tool '%s' in tools_to_load but NOT in ALL_TOOLS — skipped", name)
 
-    # use_skill is always available if skills exist (not controlled by allowed_tools)
-    if skills:
-        registry.register(USE_SKILL_SCHEMA, use_skill_tool)
+    # Skill discovery/loading remains available even when the session started
+    # with no Skills, so a Skill installed later can be found without rebuilding
+    # the engine. These read-only tools are not controlled by persona allowlists.
+    registry.register(USE_SKILL_SCHEMA, use_skill_tool)
+    registry.register(LIST_SKILLS_SCHEMA, list_skills_tool)
 
     # spawn_agent / spawn_agents: registered conditionally by depth (not via ALL_TOOLS
     # because they need runtime dependencies passed as closure args)

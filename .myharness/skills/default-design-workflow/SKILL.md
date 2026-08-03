@@ -1,14 +1,11 @@
 ---
-name: design-harness-protocol
-description: "Simplified Dreamatic design workflow protocol: run layout, bus messages, handoff contracts, and package rules."
+name: default-design-workflow
+description: "Dreamatic's stable default workflow for full design runs. Use when the user asks for a complete design deliverable and does not explicitly select another workflow; lightweight operations do not need this workflow."
 license: MIT
-metadata:
-  audience: design-primary, design-research, design-planner, design-designer, design-critic
-  workflow: ai-design-harness
 ---
-# Design Harness Protocol
+# Default Design Workflow
 
-This skill defines the simplified Dreamatic design workflow.
+This skill defines Dreamatic's stable built-in workflow for full design runs. It is the fallback only when the user asks for a complete design deliverable and does not explicitly select another workflow Skill. Lightweight design operations do not need this Skill or a run directory.
 
 ## Runtime Mapping
 
@@ -32,13 +29,66 @@ Use this single-path chain:
 
 `design-primary -> design-research -> design-planner -> design-designer -> design-critic -> export_package`
 
-Each `/design` request produces one run with one final curated artifact set.
+Each full design run produces one run with one final curated artifact set. Lightweight `/design` operations may be handled without this Skill and without a run directory.
 
-## Design Domains
+Each child must load this workflow Skill and its detailed default stage Skill:
 
-Dreamatic uses a small fixed domain set for the current workflow. `design-primary`
-infers `domain_type` automatically from the brief; do not ask the user to choose
-or confirm it unless the user explicitly corrects the classification later.
+- `design-research` loads `default-research-stage`.
+- `design-planner` loads `default-planning-stage`.
+- `design-designer` loads `default-production-stage`.
+- `design-critic` loads `default-critique-stage`.
+
+Primary must include both Skill names in each child task. The stage Skills own
+the detailed default file schemas, research budget, production procedure, and
+critique rules. The base personas only provide reusable role behavior.
+
+### Primary orchestration
+
+1. If the user explicitly named a professional Skill for a design area outside
+   the built-in domains, use that Skill as the professional authority and skip
+   built-in domain classification. Otherwise infer exactly one supported
+   `domain_type`; do not ask the user to confirm the classification.
+2. Select the matching fixed `domainContext` only for a built-in domain.
+3. Build `resolvedScope` from the brief and separate source-bound facts from
+   design preferences.
+4. Use `ask_user` once when a missing design choice materially changes the
+   direction. Merge the answer and record minor inferred defaults.
+5. Derive a readable lowercase ASCII run slug.
+6. Call `run_init` once with the raw brief, `workflowSkill:
+   "default-design-workflow"`, `resolvedScope`, optional built-in
+   `domainContext`, and the slug as `runIdOverride`.
+7. Capture the exact returned run paths.
+8. Spawn `design-research`. Its task must name `default-design-workflow`,
+   `default-research-stage`, and the selected domain Skill, and must include the
+   run paths, brief, `resolvedScope`, optional `domainContext`, expected
+   research files, and `research_done` completion signal.
+9. Verify both the Research outputs and `research_done`. A child error or
+   partial files do not complete the stage.
+10. Spawn `design-planner` with `default-design-workflow`,
+    `default-planning-stage`, the selected domain Skill, Research outputs, and
+    the five required plan files. Verify the files and `plan_done`.
+11. Spawn `design-designer` with `default-design-workflow`,
+    `default-production-stage`, the selected domain Skill, research/plan paths,
+    and the required artifact contract. Verify PNG artifacts,
+    `artifacts/00-gallery.html`, lint result, and `design_done`.
+12. Spawn `design-critic` with `default-design-workflow`,
+    `default-critique-stage`, the selected domain Skill, artifact paths, and
+    review requirements.
+13. If Critic posts `evaluator_fail`, allow one Designer repair invocation with
+    the critique, followed by one more Critic invocation.
+14. Call `export_package`.
+15. Report run name, run id, domain type, final folder, deliverables, verdict,
+    and remaining risks.
+
+The stages are serial. Do not spawn the next dependent stage until the current
+child has returned successfully and its required files and completion message
+exist.
+
+## Built-In Design Domains
+
+When the user has not explicitly selected another professional Skill,
+`design-primary` infers one built-in `domain_type` from the brief. Do not ask
+the user to choose or confirm it unless the user later corrects the result.
 
 Supported `domain_type` values:
 
@@ -46,6 +96,19 @@ Supported `domain_type` values:
 - `product_design`: product or industrial-design concepts, including product appearance, usage scenes, CMF, and detail renders.
 - `architecture_space_design`: architecture, interior, spatial, exhibition, retail, and environmental concept design.
 - `poster_advertising_design`: poster, advertising, event key visual, and campaign communication design.
+
+When the user explicitly selects an installed professional Skill outside these
+four domains:
+
+- do not force the brief into the closest built-in domain;
+- add the Skill name to `resolvedScope.professional_skills`;
+- allow `domain_type` and `domainContext` to be absent;
+- pass the Skill name to every stage;
+- use its instructions for clarification, research focus, planning factors,
+  production guidance, deliverables, and critique;
+- keep this default workflow's serial stages, run layout, planning compatibility
+  files, image-set production, gallery, review, and packaging unless the Skill
+  explicitly narrows an output.
 
 The final deliverable shape is always a curated PNG image set plus one polished
 `artifacts/00-gallery.html`. The harness produces concept/effect images and
@@ -56,8 +119,9 @@ or construction documents.
 
 `resolvedScope` stores the clarified user request. It should answer: what is
 being designed, for whom, in what language, with what intent, style preference,
-and constraints. It must include `domain_type`, but it should not become a
-general professional rulebook.
+and constraints. For a built-in domain it includes `domain_type`; for an
+explicit external professional Skill it includes `professional_skills`
+instead. It should not become a general professional rulebook.
 
 Primary must keep source-bound facts separate from design intent. When the
 brief includes a URL or official reference, save the URL in `reference_sources`
@@ -74,7 +138,8 @@ Recommended shape:
 {
   "run_name": "short-ascii-slug",
   "human_title": "Human-readable title",
-  "domain_type": "brand_cultural_design | product_design | architecture_space_design | poster_advertising_design",
+  "domain_type": "optional built-in domain id",
+  "professional_skills": ["optional explicitly selected Skill name"],
   "target": "string",
   "audience": "string",
   "language": "zh | en | mixed",
@@ -88,16 +153,17 @@ Recommended shape:
 }
 ```
 
-`domain_scope` is domain-specific:
+For built-in domains, `domain_scope` is domain-specific:
 
 - `brand_cultural_design`: `mind_identity`, `behavior_identity`, `visual_identity`.
 - `product_design`: `user_context`, `function_experience`, `form_material`.
 - `architecture_space_design`: `site_context`, `program_spatial`, `atmosphere_material`.
 - `poster_advertising_design`: `communication_goal`, `message_hierarchy`, `visual_direction`.
 
-`domainContext` stores the fixed professional context for the chosen domain. It
-is selected from the harness domain table, saved beside `resolvedScope`, and
-passed through bus payloads and subagent task prompts.
+`domainContext` stores the fixed professional context for a built-in domain. It
+is selected from the table below, saved beside `resolvedScope`, and passed
+through bus payloads and subagent task prompts. An external professional Skill
+does not need to produce this structure.
 
 Recommended shape:
 
@@ -243,17 +309,22 @@ itself is not a question. Ask at most one compact clarification card before
 
 Clarification flow:
 
-1. Infer `domain_type`.
+1. Use explicitly selected professional Skills when present; otherwise infer a
+   built-in `domain_type`.
 2. Build an initial `resolvedScope` from user intent and explicit user claims.
 3. If the brief includes URLs or official references, store them in
    `reference_sources`, set `fact_status` to `pending_research`, and leave
    source-bound facts for Research.
-4. Select the fixed `domainContext`.
-5. Check missing common fields and the selected domain's `domain_scope`.
+4. Select the fixed `domainContext` for a built-in domain, or use the external
+   professional Skill instructions directly.
+5. Check missing common fields and the selected built-in domain's
+   `domain_scope`, or the external Skill's clarification guidance.
 6. If critical design choices are missing, call `ask_user` once.
 7. Merge the answer into `resolvedScope`; fill remaining minor design gaps with
    clear defaults, not unverified external facts.
-8. Call `run_init` with `brief`, JSON-stringified `resolvedScope`, and JSON-stringified `domainContext`.
+8. Call `run_init` with `brief`, `workflowSkill:
+   "default-design-workflow"`, JSON-stringified `resolvedScope`, and the
+   JSON-stringified `domainContext` only when one exists.
 
 ## Run Directory
 

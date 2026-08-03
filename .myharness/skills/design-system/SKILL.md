@@ -25,7 +25,7 @@ Reference assets are broader than final assets. Research may save many useful im
 
 ## 2. The canonical schema
 
-The schema is defined verbatim in `design-harness-protocol` SKILL §10. Required top-level keys:
+The schema is defined in `default-design-workflow`. Required top-level keys:
 
 - `schema_version` (SemVer string)
 - `runId`

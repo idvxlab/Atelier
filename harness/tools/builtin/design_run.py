@@ -14,21 +14,34 @@ from harness.types.tools import ToolParam, ToolSchema
 RUN_INIT_SCHEMA = ToolSchema(
     name="run_init",
     description=(
-        "Initialize a design harness run. Creates the run directory, standard "
-        "subdirectories, brief.json, and an empty bus.jsonl."
+        "Initialize a Dreamatic workflow run. Creates a stable run workspace, "
+        "brief.json, and an empty bus.jsonl. Custom workflows may use any subset "
+        "of the standard subdirectories."
     ),
     params=[
         ToolParam(name="brief", type="string", description="Raw user design brief."),
         ToolParam(
+            name="workflowSkill",
+            type="string",
+            description="Selected workflow Skill name.",
+            required=False,
+        ),
+        ToolParam(
+            name="context",
+            type="string",
+            description="Optional JSON-stringified workflow-defined context.",
+            required=False,
+        ),
+        ToolParam(
             name="resolvedScope",
             type="string",
-            description="Optional JSON string with clarified scope / identity answers.",
+            description="Legacy/default-workflow JSON string with clarified scope.",
             required=False,
         ),
         ToolParam(
             name="domainContext",
             type="string",
-            description="Optional JSON string with the selected design domain context.",
+            description="Legacy/default-workflow JSON string with domain context.",
             required=False,
         ),
         ToolParam(name="runIdOverride", type="string", description="Optional explicit run id.", required=False),
@@ -79,7 +92,7 @@ DESIGN_BUS_READ_SCHEMA = ToolSchema(
 )
 
 
-SENDER_AGENTS = {
+LEGACY_COORDINATION_AGENTS = {
     "design-primary",
     "design-research",
     "design-planner",
@@ -87,33 +100,10 @@ SENDER_AGENTS = {
     "design-critic",
     "design-evaluator",
 }
-RECIPIENT_AGENTS = SENDER_AGENTS | {"all"}
-CANONICAL_TYPES = {
-    "kickoff",
-    "research_done",
-    "research_followup",
-    "plan_done",
-    "plan_clarification",
-    "plan_amendment",
-    "design_done",
-    "evaluator_pass",
-    "evaluator_fail",
-    "status",
-}
-CANONICAL_PHASES = {
-    "INTAKE",
-    "CLARIFY",
-    "RESEARCH",
-    "PLAN",
-    "DESIGN",
-    "EVALUATE",
-    "PACKAGE",
-    "REPORT",
-}
-
-
 async def run_init_tool(
     brief: str,
+    workflowSkill: str | None = None,
+    context: str | None = None,
     resolvedScope: str | None = None,
     domainContext: str | None = None,
     runIdOverride: str | None = None,
@@ -142,6 +132,13 @@ async def run_init_tool(
         (run_dir / subdir).mkdir(parents=True, exist_ok=True)
     final_dir = output_dir / "final"
     final_dir.mkdir(parents=True, exist_ok=True)
+
+    workflow_context: Any = None
+    if context and context.strip():
+        try:
+            workflow_context = json.loads(context)
+        except json.JSONDecodeError as exc:
+            return _json({"ok": False, "error": f"context is not valid JSON: {exc}"})
 
     scope: Any = None
     if resolvedScope and resolvedScope.strip():
@@ -174,6 +171,8 @@ async def run_init_tool(
         "runId": run_id,
         "createdAt": _now_iso(),
         "brief": brief,
+        "workflowSkill": (workflowSkill or "").strip(),
+        "context": workflow_context,
         "resolvedScope": scope,
         "domainContext": domain_context,
         "paths": paths,
@@ -181,7 +180,16 @@ async def run_init_tool(
     (run_dir / "brief.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     (run_dir / "bus.jsonl").touch()
 
-    return _json({"ok": True, "runId": run_id, "runDir": str(run_dir), "outputDir": str(output_dir), "paths": paths})
+    return _json(
+        {
+            "ok": True,
+            "runId": run_id,
+            "runDir": str(run_dir),
+            "outputDir": str(output_dir),
+            "workflowSkill": (workflowSkill or "").strip(),
+            "paths": paths,
+        }
+    )
 
 
 async def design_bus_post_tool(
@@ -200,14 +208,24 @@ async def design_bus_post_tool(
     replyTo: str | None = None,
 ) -> str:
     warnings: list[str] = []
-    if from_agent not in SENDER_AGENTS:
-        return _json({"ok": False, "error": f"invalid from_agent: {from_agent}", "allowed": sorted(SENDER_AGENTS)})
-    if to not in RECIPIENT_AGENTS:
-        return _json({"ok": False, "error": f"invalid to: {to}", "allowed": sorted(RECIPIENT_AGENTS)})
-    if type not in CANONICAL_TYPES:
-        warnings.append(f"type {type!r} is not canonical")
-    if phase and phase not in CANONICAL_PHASES:
-        warnings.append(f"phase {phase!r} is not canonical")
+    coordination_agents = _coordination_agents()
+    if from_agent not in coordination_agents:
+        return _json(
+            {
+                "ok": False,
+                "error": f"invalid from_agent: {from_agent}",
+                "allowed": sorted(coordination_agents),
+            }
+        )
+    recipients = coordination_agents | {"all"}
+    if to not in recipients:
+        return _json(
+            {
+                "ok": False,
+                "error": f"invalid to: {to}",
+                "allowed": sorted(recipients),
+            }
+        )
     sev = severity or "low"
     if sev not in {"low", "medium", "high", "critical"}:
         return _json({"ok": False, "error": f"invalid severity: {sev}"})
@@ -251,8 +269,15 @@ async def design_bus_read_tool(
     includeAll: bool | None = None,
     limit: int | None = None,
 ) -> str:
-    if agent not in RECIPIENT_AGENTS:
-        return _json({"ok": False, "error": f"invalid agent: {agent}", "allowed": sorted(RECIPIENT_AGENTS)})
+    recipients = _coordination_agents() | {"all"}
+    if agent not in recipients:
+        return _json(
+            {
+                "ok": False,
+                "error": f"invalid agent: {agent}",
+                "allowed": sorted(recipients),
+            }
+        )
     path = _bus_path(runDir)
     if not path.exists():
         return _json({"ok": True, "runId": runId, "count": 0, "messages": []})
@@ -313,6 +338,21 @@ def _bus_path(run_dir: str) -> Path:
     path = Path(run_dir)
     path.mkdir(parents=True, exist_ok=True)
     return path / "bus.jsonl"
+
+
+def _coordination_agents() -> set[str]:
+    """Return registered agent ids while preserving legacy bus compatibility."""
+    agents = set(LEGACY_COORDINATION_AGENTS)
+    try:
+        from harness.agents import list_agent_profiles  # noqa: PLC0415
+
+        for profile in list_agent_profiles(include_hidden=True):
+            agent_id = str(profile.get("agent_id") or profile.get("name") or "").strip()
+            if agent_id:
+                agents.add(agent_id)
+    except Exception:
+        pass
+    return agents
 
 
 def _json(payload: dict[str, Any]) -> str:

@@ -290,25 +290,30 @@ def list_skills(
 def build_skill_system_addendum(skills: list[dict[str, str]]) -> str:
     """Build text appended to system prompt listing available skills.
 
-    Skill descriptions let the agent decide when to call use_skill().
-    Full skill content is only loaded on demand.
+    Names and descriptions let the agent decide when to call use_skill().
+    Skills are intentionally unclassified; full content is loaded on demand.
     """
     if not skills:
         return ""
     lines = [
         "",
-        "## Skills (Workflow Presets)",
-        "Skills are predefined workflow instructions, NOT executable tools.",
-        "A skill tells you *how* to approach a certain type of task.",
-        "Only call `use_skill` when the user's request clearly matches a",
-        "specialized workflow below and the extra instructions will materially",
-        "change your approach.",
+        "## Available Skills",
+        "Skills are on-demand instruction packages, NOT executable tools.",
+        "A Skill may provide professional knowledge, a method, a rubric, a",
+        "protocol, a complete workflow, or several of these at once.",
+        "Skills do not need a category. Use each name and description to decide",
+        "whether its full instructions are relevant to the current task.",
+        "When the user explicitly names an installed Skill, load it unless the",
+        "request clearly says not to use it.",
+        "Otherwise call `use_skill` only when the description clearly matches",
+        "the task and the instructions will materially change your approach.",
         "Do NOT call `use_skill` for simple questions, small edits, ordinary",
         "debugging, or tasks you can already complete with the base tools.",
         "Do NOT repeatedly load the same skill in one session unless the user",
         "changes the task enough that the skill instructions need to be refreshed.",
-        "When you call `use_skill`, have a concrete reason tied to the skill",
-        "description; otherwise proceed without it.",
+        "Do not treat every Skill as a workflow. A Skill controls orchestration",
+        "only when the user selects it for that purpose or its loaded",
+        "instructions explicitly define the workflow being followed.",
         "Your actual executable tools (read_file, shell, web_search, etc.) are",
         "listed separately in your function-calling interface.",
         "",
