@@ -40,7 +40,8 @@ knowledge and workflow behavior come from Skills loaded for the current run.
 
 - `design-research`: evidence, references, source validation, and research assets.
 - `design-planner`: executable design direction, constraints, deliverables, and acceptance criteria.
-- `design-designer`: production of inspectable design artifacts.
+- `design-designer`: production of inspectable 2D design artifacts and, when
+  explicitly requested, supplementary 3D assets through `hunyuan3d`.
 - `design-critic`: linting, professional review, verdict, and repair guidance.
 
 Each registered persona owns its tools and permissions. A Skill may decide when
@@ -159,6 +160,30 @@ For compatibility with `default-design-workflow`, also pass its requested
 Capture the returned `runId`, `runDir`, and final/output paths and use the exact
 returned paths in every child task and tool call.
 
+## Optional 3D Assets
+
+The default final deliverable remains the selected workflow's flat artifact set,
+gallery, and package. A generated 3D model is a supplementary asset and must not
+replace or reduce any required PNG deliverable.
+
+Enable optional 3D production when the user explicitly requests a 3D model,
+downloadable 3D file, or a format such as GLB, OBJ, FBX, STL, or USDZ. Record the
+decision and requested input mode in the workflow context or
+`resolvedScope.optional_3d` when using `default-design-workflow`.
+
+Delegate 3D production explicitly with
+`spawn_agent(agent="design-designer", task="...")`. A 3D child task must contain:
+
+- the exact `runId` and canonical `runDir` returned by `run_init`;
+- `inputMode`: `text`, `single_view`, or `multi_view`;
+- the prompt for text mode, or exact local reference paths for image modes;
+- a stable output id and any requested generation settings;
+- completion conditions requiring real model, preview, and metadata paths.
+
+Do not omit the `agent` field or `runDir`. Do not reject a 3D request merely
+because no dedicated 3D Skill exists: `hunyuan3d` is an executable tool owned by
+`design-designer`.
+
 ## Stage Execution
 
 Before starting, translate the loaded workflow into a visible plan with
@@ -209,6 +234,7 @@ Completion:
 Constraints:
 - Do not spawn another agent.
 - Keep all files inside the provided run directory unless the workflow says otherwise.
+- For workflow `hunyuan3d` calls, pass the exact provided runDir; never use the standalone fallback directory.
 ```
 
 Do not require `domain_type`, `resolvedScope`, `domainContext`, five planning

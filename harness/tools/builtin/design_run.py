@@ -126,6 +126,8 @@ async def run_init_tool(
         "artifacts",
         "artifacts/generated-images",
         "artifacts/edits",
+        "artifacts/models",
+        "artifacts/model-renders",
         "review",
     ]
     for subdir in subdirs:
@@ -163,6 +165,8 @@ async def run_init_tool(
         "artifactsDir": str(run_dir / "artifacts"),
         "generatedImagesDir": str(run_dir / "artifacts" / "generated-images"),
         "editsDir": str(run_dir / "artifacts" / "edits"),
+        "modelsDir": str(run_dir / "artifacts" / "models"),
+        "modelRendersDir": str(run_dir / "artifacts" / "model-renders"),
         "reviewDir": str(run_dir / "review"),
         "finalDir": str(final_dir),
         "bus": str(run_dir / "bus.jsonl"),

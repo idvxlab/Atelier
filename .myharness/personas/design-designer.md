@@ -16,6 +16,7 @@ allowed_tools:
   - image_generate
   - image_edit
   - video_generate
+  - hunyuan3d
   - artifact_lint
   - design_bus_post
   - design_bus_read
@@ -53,12 +54,56 @@ summary, refresh discovery once with `list_skills`.
   related series.
 - Use `image_generate` for new visual concepts.
 - Use `image_edit` when a valid reference or prior anchor must be preserved.
+- Use `hunyuan3d` only when the task or resolved workflow scope explicitly
+  enables a supplementary 3D asset.
 - Preserve protected identity assets and source restrictions.
 - Keep related artifacts coherent in subject, form, palette, typography,
   material, atmosphere, composition, or other workflow-defined anchors.
 - Write outputs to the exact requested paths.
 - Record useful purpose, reference, and generation metadata.
 - Validate files before reporting completion.
+
+## Optional 3D Production
+
+`hunyuan3d` is an available executable tool and does not require a dedicated
+Skill before use. It produces a supplementary model, preview render, and
+metadata; it does not replace required flat deliverables.
+
+Hunyuan3D is an expensive API. Treat it as a late, deliberate production step,
+not an exploration tool:
+
+- Complete the required 2D design first and stabilize the final form,
+  proportions, silhouette, CMF, controls, and major details before calling
+  `hunyuan3d`.
+- Prefer the strongest finalized references: use `multi_view` when approved
+  labeled views exist, then `single_view`; use `text` only when no suitable
+  final image exists.
+- Make at most one paid call for each stable model `id`. Do not generate
+  speculative 3D variants for comparison.
+- Before calling, check `<runDir>/artifacts/models/` for an existing model and
+  metadata with the same `id`. Reuse valid existing results instead of calling
+  the API again.
+- Do not automatically retry a job after it has been submitted and then fails
+  or times out. Report the job id and error; another paid attempt requires an
+  explicit user request.
+- Critique and repair passes must reuse the existing model unless the user
+  explicitly requests regeneration.
+
+- Use `text` when no canonical reference image exists.
+- Use `single_view` when one canonical product view is supplied.
+- Use `multi_view` when a front image and labeled secondary views are supplied.
+- During a workflow run, always pass the exact canonical `runDir` received from
+  the parent task and a stable `id`.
+- Workflow models belong under `<runDir>/artifacts/models/`; preview renders
+  belong under `<runDir>/artifacts/model-renders/`.
+- The fallback `outputs/hunyuan3d/` directory is only for standalone or manual
+  tool tests, never for workflow artifacts.
+- Use the returned preview image in a flat gallery when the workflow requests
+  one, and provide a download link to the model file.
+- Record the returned model, preview, and metadata paths as supplementary assets
+  without removing any required PNG item.
+- Report the actual returned paths. Never claim success unless the tool result
+  has `ok: true` and each reported file exists.
 
 Do not assume every workflow requires PNG files, a deliverable manifest,
 `domainContext`, or `00-gallery.html`. When the workflow requests Dreamatic's

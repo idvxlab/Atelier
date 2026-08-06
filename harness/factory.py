@@ -62,6 +62,7 @@ from harness.tools.builtin import (
     RESEARCH_ASSET_VALIDATE_SCHEMA, research_asset_validate_tool,
     ARTIFACT_LINT_SCHEMA, artifact_lint_tool,
     EXPORT_PACKAGE_SCHEMA, export_package_tool,
+    HUNYUAN3D_SCHEMA, hunyuan3d_tool,
 )
 from harness.tools.executor import ToolExecutor
 from harness.tools.overflow import OverflowStore
@@ -176,6 +177,7 @@ ALL_TOOLS: dict[str, tuple] = {
     "image_generate": (IMAGE_GENERATE_SCHEMA, image_generate_tool),
     "image_edit": (IMAGE_EDIT_SCHEMA, image_edit_tool),
     "video_generate": (VIDEO_GENERATE_SCHEMA, video_generate_tool),
+    "hunyuan3d": (HUNYUAN3D_SCHEMA, hunyuan3d_tool),
     "run_init": (RUN_INIT_SCHEMA, run_init_tool),
     "design_bus_post": (DESIGN_BUS_POST_SCHEMA, design_bus_post_tool),
     "design_bus_read": (DESIGN_BUS_READ_SCHEMA, design_bus_read_tool),

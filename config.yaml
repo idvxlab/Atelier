@@ -141,6 +141,7 @@ tools:
     - image_generate
     - image_edit
     - video_generate
+    - hunyuan3d
     - run_init
     - design_bus_post
     - design_bus_read
@@ -170,6 +171,7 @@ tools:
     image_generate: 8000
     image_edit: 8000
     video_generate: 15000
+    hunyuan3d: 12000
     run_init: 8000
     design_bus_post: 8000
     design_bus_read: 12000

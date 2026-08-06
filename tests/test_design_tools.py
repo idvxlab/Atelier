@@ -130,6 +130,8 @@ async def test_run_init_and_design_bus_round_trip(monkeypatch, tmp_path):
     )
     assert init["ok"] is True
     assert Path(init["paths"]["bus"]).exists()
+    assert Path(init["paths"]["modelsDir"]).is_dir()
+    assert Path(init["paths"]["modelRendersDir"]).is_dir()
     brief_json = json.loads(Path(init["runDir"], "brief.json").read_text(encoding="utf-8"))
     assert brief_json["resolvedScope"]["domain_type"] == "architecture_space_design"
     assert brief_json["domainContext"]["label"] == "Architecture & Space Design"

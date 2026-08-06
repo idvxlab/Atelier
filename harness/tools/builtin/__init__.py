@@ -35,6 +35,9 @@ from harness.tools.builtin.design_image import (
 from harness.tools.builtin.design_video import (
     VIDEO_GENERATE_SCHEMA, video_generate_tool,
 )
+from harness.tools.builtin.hunyuan3d import (
+    HUNYUAN3D_SCHEMA, hunyuan3d_tool,
+)
 from harness.tools.builtin.design_run import (
     RUN_INIT_SCHEMA, run_init_tool,
     DESIGN_BUS_POST_SCHEMA, design_bus_post_tool,
@@ -78,6 +81,7 @@ __all__ = [
     "IMAGE_GENERATE_SCHEMA", "image_generate_tool",
     "IMAGE_EDIT_SCHEMA", "image_edit_tool",
     "VIDEO_GENERATE_SCHEMA", "video_generate_tool",
+    "HUNYUAN3D_SCHEMA", "hunyuan3d_tool",
     "RUN_INIT_SCHEMA", "run_init_tool",
     "DESIGN_BUS_POST_SCHEMA", "design_bus_post_tool",
     "DESIGN_BUS_READ_SCHEMA", "design_bus_read_tool",

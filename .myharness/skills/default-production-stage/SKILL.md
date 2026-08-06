@@ -113,6 +113,33 @@ Read:
 13. If lint fails, fix the files once if possible.
 14. Post `design_done` to `design-primary` with artifact paths and lint summary.
 
+## Optional 3D Supplement
+
+The default production contract remains a curated PNG set plus a flat gallery.
+Run this supplementary step only when `resolvedScope.optional_3d.enabled` is
+true or the parent task explicitly requires a 3D model. A 3D model must not
+replace, reduce, or delay production of required PNG deliverables.
+
+When optional 3D production is enabled:
+
+1. Call `hunyuan3d` as a supplementary production step.
+2. Always pass the exact canonical `runDir` supplied by `design-primary`, along
+   with `runId` and a stable `id`. Never use `outputs/hunyuan3d/` for a workflow
+   run.
+3. Choose `text`, `single_view`, or `multi_view` from the resolved request. Use
+   only real local reference paths for image modes.
+4. Keep returned models under `<runDir>/artifacts/models/`, preview renders under
+   `<runDir>/artifacts/model-renders/`, and metadata under
+   `<runDir>/artifacts/models/`.
+5. Confirm the tool result has `ok: true` and every returned model, preview, and
+   metadata path exists before reporting completion.
+6. Add the returned preview to `00-gallery.html` as a supplementary 3D preview
+   card and add a local download link to the model file. The gallery remains a
+   flat review surface; an interactive viewer is not required.
+7. Record the model, preview, metadata, method (`hunyuan3d`), and input mode in
+   `artifact-manifest.json::supplementary_assets`.
+8. Include the supplementary paths in the `design_done` bus message.
+
 ## Image Rules
 
 - The output must be inspectable files, not only text.
@@ -132,6 +159,10 @@ Required artifact set:
 - one self-contained `00-gallery.html`
 - one `artifact-manifest.json`
 
+When optional 3D production is enabled, additionally include the real model,
+preview render, and metadata as `supplementary_assets`. These do not change the
+required PNG count used by `artifact_lint`.
+
 Use `write_json` for `artifact-manifest.json` and any side metadata you write
 manually. Use `write_file` for `00-gallery.html` and other plain text files.
 
@@ -143,6 +174,9 @@ All outputs belong directly to this run's `artifacts` directory.
 
 - First section: run title, short brief, design-system summary, palette swatches if available.
 - Main section: final generated/edited deliverables, grouped by `deliverable_category` from the manifest and sidecars.
+- Optional supplementary section: show each 3D preview render and provide a
+  local download link to its model file; do not present the model as a required
+  PNG deliverable.
 - Each category group may contain one card or many cards. Use responsive grids so expanded categories such as merchandise, product details, spatial zones, or media adaptations remain readable.
 - Each final card should include a short caption: deliverable id, purpose, method (`image_generate` or `image_edit`), and reference ids used.
 - Optional appendix: research references, presented as supporting source material with a lighter visual treatment.
